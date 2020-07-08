@@ -3,8 +3,9 @@ package mongodb
 const (
 	tbSyncInfo     string = "SyncInfo"
 	tbBlocks       string = "Blocks"
-	tbTransactions string = "PairsTxns"
-	tbTrades       string = "PairsTables"
+	tbTransactions string = "Transactions"
+	tbLiquidity    string = "Liquidity"
+	tbVolume       string = "Volume"
 
 	// KeyOfLatestSyncInfo key
 	KeyOfLatestSyncInfo string = "latest"
@@ -49,20 +50,42 @@ type MgoTransaction struct {
 	Status           uint64 `bson:"status"`
 	Timestamp        uint64 `bson:"timestamp"`
 
-	Pairs           string `bson:"pairs,omitempty"`  // symbol pairs
-	Tokens          string `bson:"tokens,omitempty"` // address pairs
-	Type            string `bson:"txnsType,omitempty"`
-	TotalValue      string `bson:"totalValue,omitempty"`
-	TokenFromAmount string `bson:"tokenFromAmount,omitempty"`
-	TokenToAmount   string `bson:"tokenToAmount,omitempty"`
+	ExchangeReceipts []*ExchangeReceipt `bson:"exchangeReceipts,omitempty"`
 }
 
-// MgoTrade trade
-type MgoTrade struct {
-	Key       string `bson:"_id"` // pairs
-	Pairs     string `bson:"pairs"`
-	Liquidity string `bson:"liquidity"`
-	Volume24h string `bson:"volume24h"`
-	Volume7d  string `bson:"volume7d,omitempty"`
-	Fees24h   string `bson:"fees24h,omitempty"`
+// ExchangeReceipt exchange tx receipt
+type ExchangeReceipt struct {
+	Exchange        string `bson:"exchange"`
+	Pairs           string `bson:"pairs"`
+	LogType         string `bson:"txnsType"`
+	Address         string `bson:"address"`
+	TokenFromAmount string `bson:"tokenFromAmount"`
+	TokenToAmount   string `bson:"tokenToAmount"`
+}
+
+// MgoLiquidity liquidity
+type MgoLiquidity struct {
+	Key         string `bson:"_id"` // exchange + Timestamp's day begin
+	Exchange    string `bson:"exchange"`
+	Pairs       string `bson:"pairs"`
+	Coin        string `bson:"coin"`
+	Token       string `bson:"token"`
+	Liquidity   string `bson:"liquidity"`
+	BlockNumber uint64 `bson:"blockNumber"`
+	BlockHash   string `bson:"blockHash"`
+	Timestamp   uint64 `bson:"timestamp"`
+}
+
+// MgoVolume volumn
+type MgoVolume struct {
+	Key            string `bson:"_id"` // exchange + Timestamp's day begin
+	Exchange       string `bson:"exchange"`
+	Pairs          string `bson:"pairs"`
+	CoinVolume24h  string `bson:"cvolume24h"`
+	TokenVolume24h string `bson:"tvolume24h"`
+	CoinVolume7d   string `bson:"cvolume7d"`
+	TokenVolume7d  string `bson:"tvolume7d"`
+	BlockNumber    uint64 `bson:"blockNumber"`
+	BlockHash      string `bson:"blockHash"`
+	Timestamp      uint64 `bson:"timestamp"`
 }

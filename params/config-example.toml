@@ -15,3 +15,15 @@ Start = 0 # 0 means the latest synced
 End = 0 # 0 means endless
 
 [Distribute]
+
+[[Distribute.Exchanges]]
+Exchange = "0x1111111111111111111111111111111111111111"
+Token = "0x2222222222222222222222222222222222222222"
+Symbol = "XXX"
+Percentage = 40.0
+
+[[Distribute.Exchanges]]
+Exchange = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+Token = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+Symbol = "YYY"
+Percentage = 60.0

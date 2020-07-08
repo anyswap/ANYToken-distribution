@@ -1,6 +1,7 @@
 package mongodb
 
 import (
+	"github.com/anyswap/ANYToken-distribution/log"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -9,7 +10,8 @@ var (
 	collectionBlock       *mgo.Collection
 	collectionTransaction *mgo.Collection
 	collectionSyncInfo    *mgo.Collection
-	collectionTrades      *mgo.Collection
+	collectionLiquidity   *mgo.Collection
+	collectionVolume      *mgo.Collection
 )
 
 // do this when reconnect to the database
@@ -17,7 +19,8 @@ func deinintCollections() {
 	collectionBlock = nil
 	collectionTransaction = nil
 	collectionSyncInfo = nil
-	collectionTrades = nil
+	collectionLiquidity = nil
+	collectionVolume = nil
 }
 
 func initCollections() {
@@ -28,11 +31,14 @@ func initCollections() {
 	)
 }
 
-func getOrInitCollection(table string, collection **mgo.Collection, indexKey string) *mgo.Collection {
+func getOrInitCollection(table string, collection **mgo.Collection, indexKey ...string) *mgo.Collection {
 	if *collection == nil {
 		*collection = database.C(table)
-		if indexKey != "" {
-			_ = (*collection).EnsureIndexKey(indexKey)
+		if len(indexKey) != 0 && indexKey[0] != "" {
+			err := (*collection).EnsureIndexKey(indexKey...)
+			if err != nil {
+				log.Error("EnsureIndexKey error", "table", table, "indexKey", indexKey)
+			}
 		}
 	}
 	return *collection
@@ -46,8 +52,10 @@ func getCollection(table string) *mgo.Collection {
 		return getOrInitCollection(table, &collectionTransaction, "blockNumber")
 	case tbSyncInfo:
 		return getOrInitCollection(table, &collectionSyncInfo, "")
-	case tbTrades:
-		return getOrInitCollection(table, &collectionTrades, "pairs")
+	case tbLiquidity:
+		return getOrInitCollection(table, &collectionLiquidity, "exchange", "blockNumber")
+	case tbVolume:
+		return getOrInitCollection(table, &collectionVolume, "exchange", "blockNumber")
 	}
 	panic("unknown talbe " + table)
 }
@@ -76,13 +84,34 @@ func AddTransaction(mt *MgoTransaction, overwrite bool) error {
 	return getCollection(tbTransactions).Insert(mt)
 }
 
-// AddTrade add tx
-func AddTrade(mt *MgoTrade, overwrite bool) error {
+// AddLiquidity add liquidity
+func AddLiquidity(ml *MgoLiquidity, overwrite bool) (err error) {
 	if overwrite {
-		_, err := getCollection(tbTrades).UpsertId(mt.Key, mt)
-		return err
+		_, err = getCollection(tbLiquidity).UpsertId(ml.Key, ml)
+	} else {
+		err = getCollection(tbLiquidity).Insert(ml)
 	}
-	return getCollection(tbTrades).Insert(mt)
+	if err == nil {
+		log.Info("AddLiquidity success", "liquidity", ml)
+	} else {
+		log.Info("AddLiquidity failed", "liquidity", ml, "err", err)
+	}
+	return err
+}
+
+// AddVolume add volume
+func AddVolume(mv *MgoVolume, overwrite bool) (err error) {
+	if overwrite {
+		_, err = getCollection(tbVolume).UpsertId(mv.Key, mv)
+	} else {
+		err = getCollection(tbVolume).Insert(mv)
+	}
+	if err == nil {
+		log.Info("AddVolume success", "volume", mv)
+	} else {
+		log.Info("AddVolume failed", "volume", mv, "err", err)
+	}
+	return err
 }
 
 // --------------- update ---------------------------------

@@ -84,6 +84,16 @@ func initConfig() {
 	overwrite = syncCfg.Overwrite
 
 	applyArguments()
+
+	log.Info("init sync parameters finished",
+		"serverURL", serverURL,
+		"overwrite", overwrite,
+		"jobCount", jobCount,
+		"waitInterval", waitInterval,
+		"stableHeight", stableHeight,
+		"startHeight", startHeight,
+		"endHeight", endHeight,
+	)
 }
 
 func applyArguments() {

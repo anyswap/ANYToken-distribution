@@ -114,7 +114,7 @@ func InitSyncArguments(ctx *cli.Context) {
 		SyncArgs.SyncEndHeight = &end
 	}
 	if ctx.IsSet(OverwriteFlag.Name) {
-		overwrite := ctx.Uint64(OverwriteFlag.Name)
-		SyncArgs.SyncStartHeight = &overwrite
+		overwrite := ctx.Bool(OverwriteFlag.Name)
+		SyncArgs.SyncOverwrite = &overwrite
 	}
 }

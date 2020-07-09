@@ -2,6 +2,7 @@ package params
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -11,11 +12,14 @@ import (
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 )
 
+const defaultBlockTime uint64 = 13
+
 var config *Config
 
 // Config config
 type Config struct {
 	MongoDB    *MongoDBConfig
+	Gateway    *GatewayConfig
 	Sync       *SyncConfig
 	Distribute *DistributeConfig
 }
@@ -28,9 +32,23 @@ type MongoDBConfig struct {
 	Password string `json:"-"`
 }
 
+// GatewayConfig struct
+type GatewayConfig struct {
+	APIAddress       string
+	AverageBlockTime uint64
+}
+
+// GetAverageBlockTime average block time
+func GetAverageBlockTime() uint64 {
+	avg := config.Gateway.AverageBlockTime
+	if avg == 0 {
+		avg = defaultBlockTime
+	}
+	return avg
+}
+
 // SyncConfig sync config
 type SyncConfig struct {
-	ServerURL    string
 	Overwrite    bool
 	JobCount     uint64
 	WaitInterval uint64
@@ -41,10 +59,11 @@ type SyncConfig struct {
 
 // ExchangeConfig exchange config
 type ExchangeConfig struct {
-	Exchange   string
-	Token      string
-	Symbol     string
-	Percentage float64
+	Pairs          string
+	Exchange       string
+	Token          string
+	Percentage     float64
+	CreationHeight uint64
 }
 
 // DistributeConfig distribute config
@@ -52,17 +71,17 @@ type DistributeConfig struct {
 	Exchanges []*ExchangeConfig
 }
 
-// GetTokenSymbol get token symbol from config
-func GetTokenSymbol(exchange string) string {
+// GetExchangePairs get pairs from config
+func GetExchangePairs(exchange string) string {
 	for _, ex := range config.Distribute.Exchanges {
 		if strings.EqualFold(ex.Exchange, exchange) {
-			return ex.Symbol
+			return ex.Pairs
 		}
 	}
 	return ""
 }
 
-// GetTokenAddress get token symbol from config
+// GetTokenAddress get token address from config
 func GetTokenAddress(exchange string) string {
 	for _, ex := range config.Distribute.Exchanges {
 		if strings.EqualFold(ex.Exchange, exchange) {
@@ -84,16 +103,29 @@ func SetConfig(cfg *Config) {
 
 // CheckConfig check config
 func CheckConfig() (err error) {
+	switch {
+	case config == nil:
+		return errors.New("empty config")
+	case config.MongoDB == nil:
+		return errors.New("must config MongoDB")
+	case config.Gateway == nil:
+		return errors.New("must config Gateway")
+	case config.Sync == nil:
+		return errors.New("must config Sync")
+	case config.Distribute == nil:
+		return errors.New("must config Distribute")
+	}
+
 	var total float64
 	for i, ex := range config.Distribute.Exchanges {
 		if ex.Exchange == "" {
 			return fmt.Errorf("empty exchange address (index %v)", i)
 		}
+		if ex.Pairs == "" {
+			return fmt.Errorf("empty exchange pairs (index %v)", i)
+		}
 		if ex.Token == "" {
 			return fmt.Errorf("empty exchange token (index %v)", i)
-		}
-		if ex.Symbol == "" {
-			return fmt.Errorf("empty exchange symbol (index %v)", i)
 		}
 		total += ex.Percentage
 	}

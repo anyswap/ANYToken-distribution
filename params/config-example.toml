@@ -5,8 +5,11 @@ DBName = "databasename"
 UserName = "username"
 Password = "password"
 
+[Gateway]
+APIAddress = "https://testnet.fsn.dev/api"
+AverageBlockTime = 13 # seconds
+
 [Sync]
-ServerURL = "https://testnet.fsn.dev/api"
 Overwrite = false # if true overwrite exist
 JobCount = 4 # job count
 WaitInterval = 6 # wait seconds to get latest block
@@ -17,13 +20,15 @@ End = 0 # 0 means endless
 [Distribute]
 
 [[Distribute.Exchanges]]
+Pairs = "XXX"
 Exchange = "0x1111111111111111111111111111111111111111"
 Token = "0x2222222222222222222222222222222222222222"
-Symbol = "XXX"
 Percentage = 40.0
+CreationHeight = 2300000
 
 [[Distribute.Exchanges]]
+Pairs = "YYY"
 Exchange = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 Token = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-Symbol = "YYY"
 Percentage = 60.0
+CreationHeight = 2300000

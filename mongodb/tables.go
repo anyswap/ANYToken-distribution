@@ -1,5 +1,9 @@
 package mongodb
 
+import (
+	"fmt"
+)
+
 const (
 	tbSyncInfo     string = "SyncInfo"
 	tbBlocks       string = "Blocks"
@@ -65,7 +69,7 @@ type ExchangeReceipt struct {
 
 // MgoLiquidity liquidity
 type MgoLiquidity struct {
-	Key         string `bson:"_id"` // exchange + Timestamp's day begin
+	Key         string `bson:"_id"` // exchange + ':' + Timestamp's day begin
 	Exchange    string `bson:"exchange"`
 	Pairs       string `bson:"pairs"`
 	Coin        string `bson:"coin"`
@@ -78,7 +82,7 @@ type MgoLiquidity struct {
 
 // MgoVolume volumn
 type MgoVolume struct {
-	Key            string `bson:"_id"` // exchange + Timestamp's day begin
+	Key            string `bson:"_id"` // exchange + ':' + Timestamp's day begin
 	Exchange       string `bson:"exchange"`
 	Pairs          string `bson:"pairs"`
 	CoinVolume24h  string `bson:"cvolume24h"`
@@ -88,4 +92,9 @@ type MgoVolume struct {
 	BlockNumber    uint64 `bson:"blockNumber"`
 	BlockHash      string `bson:"blockHash"`
 	Timestamp      uint64 `bson:"timestamp"`
+}
+
+// GetKeyOfExchangeAndTimestamp get key
+func GetKeyOfExchangeAndTimestamp(exchange string, timestamp uint64) string {
+	return fmt.Sprintf("%s:%d", exchange, timestamp)
 }

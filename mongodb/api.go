@@ -53,9 +53,9 @@ func getCollection(table string) *mgo.Collection {
 	case tbSyncInfo:
 		return getOrInitCollection(table, &collectionSyncInfo, "")
 	case tbLiquidity:
-		return getOrInitCollection(table, &collectionLiquidity, "exchange", "blockNumber")
+		return getOrInitCollection(table, &collectionLiquidity, "exchange", "timestamp")
 	case tbVolume:
-		return getOrInitCollection(table, &collectionVolume, "exchange", "blockNumber")
+		return getOrInitCollection(table, &collectionVolume, "exchange", "timestamp")
 	}
 	panic("unknown talbe " + table)
 }
@@ -148,4 +148,46 @@ func FindLatestSyncInfo() (*MgoSyncInfo, error) {
 		return nil, err
 	}
 	return &info, nil
+}
+
+// FindLatestLiquidity find latest liquidity
+func FindLatestLiquidity(exchange string) (*MgoLiquidity, error) {
+	var res MgoLiquidity
+	err := getCollection(tbLiquidity).Find(bson.M{"exchange": exchange}).Sort("-timestamp").Limit(1).One(&res)
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// FindLiquidity find by key
+func FindLiquidity(exchange string, timestamp uint64) (*MgoLiquidity, error) {
+	key := GetKeyOfExchangeAndTimestamp(exchange, timestamp)
+	var res MgoLiquidity
+	err := getCollection(tbLiquidity).FindId(key).One(&res)
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// FindLatestVolume find latest volume
+func FindLatestVolume(exchange string) (*MgoVolume, error) {
+	var res MgoVolume
+	err := getCollection(tbVolume).Find(bson.M{"exchange": exchange}).Sort("-timestamp").Limit(1).One(&res)
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// FindVolume find by key
+func FindVolume(exchange string, timestamp uint64) (*MgoVolume, error) {
+	key := GetKeyOfExchangeAndTimestamp(exchange, timestamp)
+	var res MgoVolume
+	err := getCollection(tbVolume).FindId(key).One(&res)
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
 }

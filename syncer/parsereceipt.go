@@ -23,7 +23,7 @@ func parseReceipt(mt *mongodb.MgoTransaction, receipt *types.Receipt) {
 		return
 	}
 	// only process configed exchange contract
-	if params.GetTokenSymbol(mt.To) == "" {
+	if params.GetExchangePairs(mt.To) == "" {
 		return
 	}
 	for _, rlog := range receipt.Logs {
@@ -48,7 +48,7 @@ func parseReceipt(mt *mongodb.MgoTransaction, receipt *types.Receipt) {
 
 		if exReceipt.LogType != "" {
 			exReceipt.Exchange = rlog.Address.String()
-			exReceipt.Pairs = params.GetTokenSymbol(exReceipt.Exchange)
+			exReceipt.Pairs = params.GetExchangePairs(exReceipt.Exchange)
 			mt.ExchangeReceipts = append(mt.ExchangeReceipts, exReceipt)
 			log.Info("add exchange tx receipt", "receipt", exReceipt)
 		}
@@ -106,7 +106,7 @@ func parseEthPurchase(mt *mongodb.ExchangeReceipt, rlog *types.Log) {
 func parseTransfer(rlog *types.Log) {
 	contract := rlog.Address
 	// only process configed exchange contract
-	if params.GetTokenSymbol(contract.String()) == "" {
+	if params.GetExchangePairs(contract.String()) == "" {
 		return
 	}
 	topics := rlog.Topics

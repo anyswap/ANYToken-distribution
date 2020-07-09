@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/anyswap/ANYToken-distribution/distribute"
 	"github.com/anyswap/ANYToken-distribution/mongodb"
@@ -11,10 +12,22 @@ import (
 
 // StartWork start all work
 func StartWork() {
-	initMongodb()
+	for {
+		err := dialServer()
+		if err == nil {
+			break
+		}
+		time.Sleep(3 * time.Second)
+	}
+	defer closeClient()
 
+	initMongodb()
 	go syncer.Start()
 	go distribute.Start()
+	go updateLiquidityDaily()
+
+	exitCh := make(chan struct{})
+	<-exitCh
 }
 
 func initMongodb() {

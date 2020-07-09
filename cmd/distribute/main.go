@@ -58,9 +58,6 @@ func distribute(ctx *cli.Context) error {
 	configFile := utils.GetConfigFilePath(ctx)
 	params.LoadConfig(configFile)
 
-	go worker.StartWork()
-
-	exitCh := make(chan struct{})
-	<-exitCh
+	worker.StartWork()
 	return nil
 }

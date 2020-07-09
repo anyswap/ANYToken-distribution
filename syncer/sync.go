@@ -77,7 +77,7 @@ func initConfig() {
 		waitDuration = time.Duration(waitInterval) * time.Second
 	}
 
-	serverURL = syncCfg.ServerURL
+	serverURL = config.Gateway.APIAddress
 	stableHeight = syncCfg.Stable
 	startHeight = syncCfg.Start
 	endHeight = syncCfg.End
@@ -123,18 +123,28 @@ func Start() {
 func dialServer() (err error) {
 	client, err = ethclient.Dial(serverURL)
 	if err != nil {
-		log.Error("client connection error", "server", serverURL, "err", err)
+		log.Error("[syncer] client connection error", "server", serverURL, "err", err)
 		return err
 	}
-	log.Info("client connection succeed", "server", serverURL)
+	log.Info("[syncer] client connection succeed", "server", serverURL)
 	return nil
 }
 
-func (s *syncer) sync() {
-	if err := dialServer(); err != nil {
-		return
+func closeClient() {
+	if client != nil {
+		client.Close()
 	}
-	defer client.Close()
+}
+
+func (s *syncer) sync() {
+	for {
+		err := dialServer()
+		if err == nil {
+			break
+		}
+		time.Sleep(3 * time.Second)
+	}
+	defer closeClient()
 	s.dipatchWork()
 	s.doWork()
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/anyswap/ANYToken-distribution/log"
 	"github.com/anyswap/ANYToken-distribution/mongodb"
@@ -13,20 +14,21 @@ import (
 )
 
 const (
-	defaultTryTimes int = 3
-	maxParseBlocks  int = 1000
+	maxParseBlocks  = 1000
+	retryDBCount    = 3
+	retryDBInterval = 1 * time.Second
 )
 
 func tryDoTimes(name string, f func() error) {
 	var err error
-	i := 0
-	for ; i < defaultTryTimes; i++ {
+	for i := 0; i < retryDBCount; i++ {
 		err = f()
 		if err == nil || mgo.IsDup(err) {
 			return
 		}
+		time.Sleep(retryDBInterval)
 	}
-	log.Warn("tryDoTimes", "name", name, "time", i, "err", err)
+	log.Warn("tryDoTimes", "name", name, "times", retryDBCount, "err", err)
 }
 
 // Parse parse block and receipts

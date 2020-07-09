@@ -87,8 +87,6 @@ type MgoVolume struct {
 	Pairs          string `bson:"pairs"`
 	CoinVolume24h  string `bson:"cvolume24h"`
 	TokenVolume24h string `bson:"tvolume24h"`
-	CoinVolume7d   string `bson:"cvolume7d"`
-	TokenVolume7d  string `bson:"tvolume7d"`
 	BlockNumber    uint64 `bson:"blockNumber"`
 	BlockHash      string `bson:"blockHash"`
 	Timestamp      uint64 `bson:"timestamp"`

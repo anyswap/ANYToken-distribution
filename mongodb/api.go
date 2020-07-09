@@ -1,6 +1,9 @@
 package mongodb
 
 import (
+	"fmt"
+	"math/big"
+
 	"github.com/anyswap/ANYToken-distribution/log"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
@@ -126,6 +129,55 @@ func UpdateSyncInfo(number uint64, hash string, timestamp uint64) error {
 		}})
 }
 
+func getBigIntFromString(str string) *big.Int {
+	bi, _ := new(big.Int).SetString(str, 0)
+	return bi
+}
+
+// UpdateVolumeWithReceipt update volume
+func UpdateVolumeWithReceipt(exr *ExchangeReceipt, blockHash string, blockNumber, timestamp uint64) error {
+	key := GetKeyOfExchangeAndTimestamp(exr.Exchange, timestamp)
+	curVol, err := FindVolume(key)
+
+	if curVol == nil && err != mgo.ErrNotFound {
+		return err
+	}
+
+	tokenFromAmount := getBigIntFromString(exr.TokenFromAmount)
+	tokenToAmount := getBigIntFromString(exr.TokenToAmount)
+
+	var coinVal, tokenVal *big.Int
+
+	switch {
+	case exr.LogType == "TokenPurchase":
+		coinVal = tokenFromAmount
+		tokenVal = tokenToAmount
+	case exr.LogType == "EthPurchase":
+		tokenVal = tokenFromAmount
+		coinVal = tokenToAmount
+	default:
+		return fmt.Errorf("update volume with wrong log type %v", exr.LogType)
+	}
+
+	if curVol != nil {
+		oldCoinVal := getBigIntFromString(curVol.CoinVolume24h)
+		oleTokenVal := getBigIntFromString(curVol.TokenVolume24h)
+		coinVal.Add(coinVal, oldCoinVal)
+		tokenVal.Add(tokenVal, oleTokenVal)
+	}
+
+	return AddVolume(&MgoVolume{
+		Key:            key,
+		Exchange:       exr.Exchange,
+		Pairs:          exr.Pairs,
+		CoinVolume24h:  coinVal.String(),
+		TokenVolume24h: tokenVal.String(),
+		BlockNumber:    blockNumber,
+		BlockHash:      blockHash,
+		Timestamp:      timestamp,
+	}, true)
+}
+
 // --------------- find ---------------------------------
 
 // FindBlocksInRange find blocks
@@ -161,8 +213,7 @@ func FindLatestLiquidity(exchange string) (*MgoLiquidity, error) {
 }
 
 // FindLiquidity find by key
-func FindLiquidity(exchange string, timestamp uint64) (*MgoLiquidity, error) {
-	key := GetKeyOfExchangeAndTimestamp(exchange, timestamp)
+func FindLiquidity(key string) (*MgoLiquidity, error) {
 	var res MgoLiquidity
 	err := getCollection(tbLiquidity).FindId(key).One(&res)
 	if err != nil {
@@ -182,8 +233,7 @@ func FindLatestVolume(exchange string) (*MgoVolume, error) {
 }
 
 // FindVolume find by key
-func FindVolume(exchange string, timestamp uint64) (*MgoVolume, error) {
-	key := GetKeyOfExchangeAndTimestamp(exchange, timestamp)
+func FindVolume(key string) (*MgoVolume, error) {
 	var res MgoVolume
 	err := getCollection(tbVolume).FindId(key).One(&res)
 	if err != nil {

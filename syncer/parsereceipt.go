@@ -18,6 +18,12 @@ var (
 	topicTransfer        = common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
 )
 
+const secondsPerDay = 24 * 3600
+
+func getDayBegin(timestamp uint64) uint64 {
+	return timestamp - timestamp%secondsPerDay
+}
+
 func parseReceipt(mt *mongodb.MgoTransaction, receipt *types.Receipt) {
 	if receipt == nil {
 		return
@@ -32,6 +38,7 @@ func parseReceipt(mt *mongodb.MgoTransaction, receipt *types.Receipt) {
 		}
 
 		exReceipt := &mongodb.ExchangeReceipt{}
+		updateVolume := false
 
 		switch rlog.Topics[0] {
 		case topicAddLiquidity:
@@ -39,8 +46,10 @@ func parseReceipt(mt *mongodb.MgoTransaction, receipt *types.Receipt) {
 		case topicRemoveLiquidity:
 			parseRemoveLiquidity(exReceipt, rlog)
 		case topicTokenPurchase:
+			updateVolume = true
 			parseTokenPurchase(exReceipt, rlog)
 		case topicEthPurchase:
+			updateVolume = true
 			parseEthPurchase(exReceipt, rlog)
 		case topicTransfer:
 			parseTransfer(rlog)
@@ -51,6 +60,13 @@ func parseReceipt(mt *mongodb.MgoTransaction, receipt *types.Receipt) {
 			exReceipt.Pairs = params.GetExchangePairs(exReceipt.Exchange)
 			mt.ExchangeReceipts = append(mt.ExchangeReceipts, exReceipt)
 			log.Info("add exchange tx receipt", "receipt", exReceipt)
+		}
+
+		if updateVolume {
+			tryDoTimes("UpdateVolume "+mt.Hash, func() error {
+				timestamp := getDayBegin(mt.Timestamp)
+				return mongodb.UpdateVolumeWithReceipt(exReceipt, mt.BlockHash, mt.BlockNumber, timestamp)
+			})
 		}
 	}
 }

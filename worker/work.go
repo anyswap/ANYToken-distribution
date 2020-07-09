@@ -23,8 +23,10 @@ func StartWork() {
 
 	initMongodb()
 	go syncer.Start()
-	go distribute.Start()
+
 	go updateLiquidityDaily()
+
+	go distribute.Start()
 
 	exitCh := make(chan struct{})
 	<-exitCh

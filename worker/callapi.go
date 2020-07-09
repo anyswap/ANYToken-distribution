@@ -46,7 +46,7 @@ func loopGetBlockHeader(blockNumber *big.Int) *types.Header {
 		if err == nil {
 			return header
 		}
-		log.Error("get block header failed.", "blockNumber", blockNumber, "err", err)
+		log.Error("[worker] get block header failed.", "blockNumber", blockNumber, "err", err)
 		time.Sleep(rpcRetryInterval)
 	}
 }
@@ -55,14 +55,14 @@ func loopGetLatestBlockHeader() *types.Header {
 	for {
 		header, err := client.HeaderByNumber(cliContext, nil)
 		if err == nil {
-			log.Info("get latest block header succeed.",
+			log.Info("[worker] get latest block header succeed.",
 				"number", header.Number,
 				"hash", header.Hash().String(),
 				"timestamp", header.Time,
 			)
 			return header
 		}
-		log.Error("get latest block header failed.", "err", err)
+		log.Error("[worker] get latest block header failed.", "err", err)
 		time.Sleep(rpcRetryInterval)
 	}
 }
@@ -75,7 +75,7 @@ func getCoinBalance(account common.Address, blockNumber *big.Int) (balance *big.
 		}
 	}
 	if err != nil {
-		log.Warn("getCoinBalance error", "blockNumber", blockNumber, "err", err)
+		log.Warn("[worker] getCoinBalance error", "blockNumber", blockNumber, "err", err)
 		return nil, err
 	}
 	return balance, nil
@@ -99,7 +99,7 @@ func getExchangeLiquidity(exchange common.Address, blockNumber *big.Int) (*big.I
 		}
 	}
 	if err != nil {
-		log.Warn("getExchangeLiquidity error", "blockNumber", blockNumber, "err", err)
+		log.Warn("[worker] getExchangeLiquidity error", "blockNumber", blockNumber, "err", err)
 		return nil, err
 	}
 	return common.GetBigInt(res, 0, 32), nil
@@ -126,7 +126,7 @@ func getExchangeTokenBalance(exchange, contract common.Address, blockNumber *big
 		}
 	}
 	if err != nil {
-		log.Warn("getExchangeLiquidity error", "blockNumber", blockNumber, "err", err)
+		log.Warn("[worker] getExchangeLiquidity error", "blockNumber", blockNumber, "err", err)
 		return nil, err
 	}
 	return common.GetBigInt(res, 0, 32), nil

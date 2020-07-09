@@ -18,15 +18,16 @@ Start = 0 # 0 means the latest synced
 End = 0 # 0 means endless
 
 [Distribute]
+Enable = false
 
-[[Distribute.Exchanges]]
+[[Exchanges]]
 Pairs = "XXX"
 Exchange = "0x1111111111111111111111111111111111111111"
 Token = "0x2222222222222222222222222222222222222222"
 Percentage = 40.0
 CreationHeight = 2300000
 
-[[Distribute.Exchanges]]
+[[Exchanges]]
 Pairs = "YYY"
 Exchange = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 Token = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"

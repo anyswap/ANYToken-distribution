@@ -32,6 +32,7 @@ func initMongodb(url, db string) {
 func mongoReconnect() {
 	log.Info("[mongodb] reconnect database", "dbName", dbName)
 	mongoConnect()
+	time.Sleep(300 * time.Second)
 	go checkMongoSession()
 }
 
@@ -73,6 +74,7 @@ func ensureMongoConnected() {
 	}()
 	err := session.Ping()
 	if err != nil {
+		log.Error("[mongodb] session ping error", "err", err)
 		log.Info("[mongodb] refresh session.", "dbName", dbName)
 		session.Refresh()
 		err = session.Ping()

@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"math/big"
+	"time"
 
 	"github.com/anyswap/ANYToken-distribution/log"
 	"github.com/anyswap/ANYToken-distribution/mongodb"
@@ -24,6 +25,10 @@ func getDayBegin(timestamp uint64) uint64 {
 	return timestamp - timestamp%secondsPerDay
 }
 
+func timestampToDate(timestamp uint64) string {
+	return time.Unix(int64(timestamp), 0).Format("2006-01-02 15:04:05")
+}
+
 func parseReceipt(mt *mongodb.MgoTransaction, receipt *types.Receipt) {
 	if receipt == nil {
 		return
@@ -32,8 +37,13 @@ func parseReceipt(mt *mongodb.MgoTransaction, receipt *types.Receipt) {
 	if params.GetExchangePairs(mt.To) == "" {
 		return
 	}
-	for _, rlog := range receipt.Logs {
+	for idx, rlog := range receipt.Logs {
 		if len(rlog.Topics) == 0 {
+			continue
+		}
+
+		// only process configed exchange contract
+		if params.GetExchangePairs(rlog.Address.String()) == "" {
 			continue
 		}
 
@@ -58,13 +68,15 @@ func parseReceipt(mt *mongodb.MgoTransaction, receipt *types.Receipt) {
 		if exReceipt.LogType != "" {
 			exReceipt.Exchange = rlog.Address.String()
 			exReceipt.Pairs = params.GetExchangePairs(exReceipt.Exchange)
+			exReceipt.LogIndex = idx
 			mt.ExchangeReceipts = append(mt.ExchangeReceipts, exReceipt)
-			log.Info("add exchange tx receipt", "receipt", exReceipt)
+			log.Info("[parse] add exchange tx receipt", "receipt", exReceipt)
 		}
 
 		if updateVolume {
-			tryDoTimes("UpdateVolume "+mt.Hash, func() error {
-				timestamp := getDayBegin(mt.Timestamp)
+			timestamp := getDayBegin(mt.Timestamp)
+			log.Info("[parse] update volume", "txHash", mt.Hash, "logIndex", idx, "logType", exReceipt.LogType, "exchange", exReceipt.Exchange, "pairs", exReceipt.Pairs, "timestamp", timestampToDate(mt.Timestamp))
+			tryDoTimes("[parse] UpdateVolume "+mt.Hash, func() error {
 				return mongodb.UpdateVolumeWithReceipt(exReceipt, mt.BlockHash, mt.BlockNumber, timestamp)
 			})
 		}
@@ -121,10 +133,6 @@ func parseEthPurchase(mt *mongodb.ExchangeReceipt, rlog *types.Log) {
 
 func parseTransfer(rlog *types.Log) {
 	contract := rlog.Address
-	// only process configed exchange contract
-	if params.GetExchangePairs(contract.String()) == "" {
-		return
-	}
 	topics := rlog.Topics
 	from := common.BytesToAddress(topics[1].Bytes())
 	to := common.BytesToAddress(topics[2].Bytes())
@@ -134,5 +142,5 @@ func parseTransfer(rlog *types.Log) {
 }
 
 func updateLiquidity(exchange, from, to common.Address, value *big.Int) {
-	log.Info("updateLiquidity", "exchange", exchange.String(), "from", from.String(), "to", to.String(), "value", value)
+	log.Info("[parse] updateLiquidity", "exchange", exchange.String(), "from", from.String(), "to", to.String(), "value", value)
 }

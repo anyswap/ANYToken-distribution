@@ -40,7 +40,7 @@ func getOrInitCollection(table string, collection **mgo.Collection, indexKey ...
 		if len(indexKey) != 0 && indexKey[0] != "" {
 			err := (*collection).EnsureIndexKey(indexKey...)
 			if err != nil {
-				log.Error("EnsureIndexKey error", "table", table, "indexKey", indexKey)
+				log.Error("[mongodb] EnsureIndexKey error", "table", table, "indexKey", indexKey, "err", err)
 			}
 		}
 	}
@@ -73,7 +73,10 @@ func AddBlock(mb *MgoBlock, overwrite bool) (err error) {
 		err = getCollection(tbBlocks).Insert(mb)
 	}
 	if err == nil {
+		log.Info("[mongodb] AddBlock success", "number", mb.Number, "hash", mb.Hash)
 		_ = UpdateSyncInfo(mb.Number, mb.Hash, mb.Timestamp)
+	} else {
+		log.Warn("[mongodb] AddBlock failed", "number", mb.Number, "hash", mb.Hash, "err", err)
 	}
 	return err
 }
@@ -95,9 +98,9 @@ func AddLiquidity(ml *MgoLiquidity, overwrite bool) (err error) {
 		err = getCollection(tbLiquidity).Insert(ml)
 	}
 	if err == nil {
-		log.Info("AddLiquidity success", "liquidity", ml)
+		log.Info("[mongodb] AddLiquidity success", "liquidity", ml)
 	} else {
-		log.Info("AddLiquidity failed", "liquidity", ml, "err", err)
+		log.Info("[mongodb] AddLiquidity failed", "liquidity", ml, "err", err)
 	}
 	return err
 }
@@ -110,9 +113,9 @@ func AddVolume(mv *MgoVolume, overwrite bool) (err error) {
 		err = getCollection(tbVolume).Insert(mv)
 	}
 	if err == nil {
-		log.Info("AddVolume success", "volume", mv)
+		log.Info("[mongodb] AddVolume success", "volume", mv)
 	} else {
-		log.Info("AddVolume failed", "volume", mv, "err", err)
+		log.Info("[mongodb] AddVolume failed", "volume", mv, "err", err)
 	}
 	return err
 }
@@ -156,14 +159,15 @@ func UpdateVolumeWithReceipt(exr *ExchangeReceipt, blockHash string, blockNumber
 		tokenVal = tokenFromAmount
 		coinVal = tokenToAmount
 	default:
-		return fmt.Errorf("update volume with wrong log type %v", exr.LogType)
+		return fmt.Errorf("[mongodb] update volume with wrong log type %v", exr.LogType)
 	}
 
 	if curVol != nil {
 		oldCoinVal := getBigIntFromString(curVol.CoinVolume24h)
-		oleTokenVal := getBigIntFromString(curVol.TokenVolume24h)
+		oldTokenVal := getBigIntFromString(curVol.TokenVolume24h)
 		coinVal.Add(coinVal, oldCoinVal)
-		tokenVal.Add(tokenVal, oleTokenVal)
+		tokenVal.Add(tokenVal, oldTokenVal)
+		log.Info("[mongodb] update volume", "oldCoins", oldCoinVal, "newCoins", coinVal, "oldTokens", oldTokenVal, "newTokens", tokenVal)
 	}
 
 	return AddVolume(&MgoVolume{

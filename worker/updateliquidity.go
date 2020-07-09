@@ -35,11 +35,15 @@ func getDayBegin(timestamp uint64) uint64 {
 	return timestamp - timestamp%secondsPerDay
 }
 
+func timestampToDate(timestamp uint64) string {
+	return time.Unix(int64(timestamp), 0).Format("2006-01-02 15:04:05")
+}
+
 func updateLiquidityDaily() {
 	now := uint64(time.Now().Unix())
 	todayBegin := getDayBegin(now)
 
-	for _, ex := range params.GetConfig().Distribute.Exchanges {
+	for _, ex := range params.GetConfig().Exchanges {
 		fromTime := todayBegin
 		latest, _ := mongodb.FindLatestLiquidity(ex.Exchange)
 		if latest != nil {
@@ -53,14 +57,14 @@ func updateLiquidityDaily() {
 		}
 
 		timestamp := fromTime
-		log.Info("start updateLiquidityDaily", "fromTime", fromTime)
+		log.Info("[worker] start updateLiquidityDaily", "fromTime", fromTime)
 
 		for {
 			err := updateDateLiquidity(ex, timestamp)
 			if err != nil {
 				if strings.HasPrefix(err.Error(), "missing trie node") {
 					timestamp = todayBegin
-					log.Error("updateLiquidityDaily must query 'archive' node", "err", err)
+					log.Error("[worker] updateLiquidityDaily must query 'archive' node", "err", err)
 				} else {
 					time.Sleep(rpcRetryInterval)
 					continue
@@ -112,12 +116,13 @@ func updateDateLiquidity(ex *params.ExchangeConfig, timestamp uint64) error {
 	err = tryDoTimes(func() error {
 		return mongodb.AddLiquidity(mliq, true)
 	})
+
 	if err != nil {
-		log.Warn("mongodb.AddLiquidity error", "err", err)
+		log.Warn("[worker] updateDateLiquidity error", "err", err)
 		return err
 	}
 
-	log.Info("updateDateLiquidity success", "liquidity", mliq)
+	log.Info("[worker] updateDateLiquidity success", "liquidity", mliq, "timestamp", timestampToDate(timestamp))
 	return nil
 }
 

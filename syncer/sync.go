@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"context"
+	"math"
 	"math/big"
 	"sync"
 	"time"
@@ -27,7 +28,7 @@ var (
 
 	maxJobs         uint64 = 100
 	minWorkBlocks   uint64 = 100
-	blockInterval   uint64 = 100
+	blockInterval   uint64 = 100 // show sync range log
 	messageChanSize        = 100
 
 	retryDuration = time.Duration(1) * time.Second
@@ -85,7 +86,7 @@ func initConfig() {
 
 	applyArguments()
 
-	log.Info("init sync parameters finished",
+	log.Info("[syncer] init sync parameters finished",
 		"serverURL", serverURL,
 		"overwrite", overwrite,
 		"jobCount", jobCount,
@@ -170,7 +171,7 @@ func (s *syncer) getStartAndLast() (start, last uint64) {
 			}
 			break
 		}
-		log.Warn("get latest block header failed", "err", err)
+		log.Warn("[syncer] get latest block header failed", "err", err)
 		time.Sleep(retryDuration)
 	}
 	return start, last
@@ -179,7 +180,7 @@ func (s *syncer) getStartAndLast() (start, last uint64) {
 func (s *syncer) dipatchWork() {
 	start, last := s.getStartAndLast()
 	if last <= start && s.end != 0 {
-		log.Info("no need to sync block", "begin", start, "end", last)
+		log.Info("[syncer] no need to sync block", "begin", start, "end", last)
 		return
 	}
 
@@ -218,7 +219,7 @@ func (s *syncer) dipatchWork() {
 		workers = append(workers, w)
 	}
 
-	log.Info("dispatch work", "count", workerCount, "step", stepCount, "start", start, "end", last)
+	log.Info("[syncer] dispatch work", "count", workerCount, "step", stepCount, "start", start, "end", last)
 }
 
 func (s *syncer) doWork() {
@@ -231,7 +232,7 @@ func (s *syncer) doWork() {
 }
 
 func (s *syncer) checkSync(start, end uint64) {
-	log.Info("checkSync", "from", start, "to", end)
+	log.Info("[syncer] checkSync", "from", start, "to", end)
 	checkWorker := &worker{
 		id:          -1,
 		stable:      s.stable,
@@ -246,22 +247,22 @@ func (s *syncer) checkSync(start, end uint64) {
 }
 
 func (s *syncer) doSyncWork() {
-	log.Info("doSyncWork start", "from", s.start, "to", s.last)
+	log.Info("[syncer] doSyncWork start", "from", s.start, "to", s.last)
 	wg := new(sync.WaitGroup)
 	wg.Add(len(workers))
 	for _, worker := range workers {
 		go worker.doSync(wg)
 	}
 	wg.Wait()
-	log.Info("doSyncWork finished", "from", s.start, "to", s.last)
+	log.Info("[syncer] doSyncWork finished", "from", s.start, "to", s.last)
 
-	log.Info("checkSync start", "from", s.start, "to", s.last)
+	log.Info("[syncer] checkSync start", "from", s.start, "to", s.last)
 	s.checkSync(s.start, s.last)
-	log.Info("checkSync finished", "from", s.start, "to", s.last)
+	log.Info("[syncer] checkSync finished", "from", s.start, "to", s.last)
 }
 
 func (s *syncer) doLoopWork() {
-	log.Info("doLoopWork start")
+	log.Info("[syncer] doLoopWork start")
 	loopWorker := &worker{
 		id:          0,
 		stable:      s.stable,
@@ -273,12 +274,12 @@ func (s *syncer) doLoopWork() {
 	wg.Add(1)
 	go loopWorker.doSync(wg)
 	wg.Wait()
-	log.Info("doLoopWork finished")
+	log.Info("[syncer] doLoopWork finished")
 }
 
 func (w *worker) doSync(wg *sync.WaitGroup) {
 	defer func(bstart time.Time) {
-		log.Info("End sync process", "id", w.id, "start", w.start, "end", w.end, "duration", common.PrettyDuration(time.Since(bstart)))
+		log.Info("[syncer] End sync process", "id", w.id, "start", w.start, "end", w.end, "duration", common.PrettyDuration(time.Since(bstart)))
 		close(w.messageChan)
 		wg.Done()
 	}(time.Now())
@@ -286,7 +287,7 @@ func (w *worker) doSync(wg *sync.WaitGroup) {
 	wg.Add(1)
 	go w.startParser(wg)
 
-	log.Info("Start sync process", "id", w.id, "start", w.start, "end", w.end)
+	log.Info("[syncer] Start sync process", "id", w.id, "start", w.start, "end", w.end)
 
 	latest := w.end
 	height := w.start
@@ -297,7 +298,7 @@ func (w *worker) doSync(wg *sync.WaitGroup) {
 		if height+w.stable > latest {
 			latestHeader, err := client.HeaderByNumber(cliContext, nil)
 			if err != nil {
-				log.Warn("get latest block header failed", "id", w.id, "err", err)
+				log.Warn("[syncer] get latest block header failed", "id", w.id, "err", err)
 				time.Sleep(retryDuration)
 				continue
 			}
@@ -330,7 +331,8 @@ func (w *worker) calcSyncPercentage(height uint64) float64 {
 	if w.end <= w.start {
 		return 100
 	}
-	return 100 * float64(height-w.start) / float64(w.end-w.start)
+	percent := 100 * float64(height-w.start) / float64(w.end-w.start)
+	return math.Trunc(percent*100+0.5) / 100
 }
 
 func (w *worker) syncRange(start, end uint64) {
@@ -344,24 +346,24 @@ func (w *worker) syncRange(start, end uint64) {
 		}
 		mblocks, err := mongodb.FindBlocksInRange(from, to)
 		if err != nil {
-			log.Error("syncRange error", "from", from, "to", to, "err", err)
+			log.Error("[syncer] syncRange error", "from", from, "to", to, "err", err)
 			time.Sleep(retryDuration)
 			continue
 		}
 		if !overwrite && len(mblocks) == int(to-from+1) {
-			log.Info("syncRange already synced", "id", w.id, "from", from, "to", to)
+			log.Info("[syncer] syncRange already synced", "id", w.id, "from", from, "to", to)
 			height = to + 1
 			continue
 		}
 		if w.end != 0 {
-			log.Info("syncRange", "id", w.id, "from", from, "to", to, "exist", len(mblocks))
+			log.Info("[syncer] syncRange", "id", w.id, "from", from, "to", to, "exist", len(mblocks))
 		}
 		for height <= to {
 			mb := getSynced(mblocks, height)
 			if overwrite || mb == nil {
 				block, err := client.BlockByNumber(cliContext, new(big.Int).SetUint64(height))
 				if err != nil {
-					log.Warn("get block failed", "id", w.id, "number", height, "err", err)
+					log.Warn("[syncer] get block failed", "id", w.id, "number", height, "err", err)
 					time.Sleep(retryDuration)
 					continue
 				}
@@ -379,15 +381,15 @@ func (w *worker) syncRange(start, end uint64) {
 				wg.Wait()
 				w.Parse(block, receipts)
 				if w.end == 0 {
-					log.Info("sync block completed", "id", w.id, "number", height)
+					log.Info("[syncer] sync block completed", "id", w.id, "number", height)
 				} else if height%blockInterval == 0 {
-					log.Info("syncRange in process", "id", w.id, "number", height, "percentage", w.calcSyncPercentage(height))
+					log.Info("[syncer] syncRange in process", "id", w.id, "number", height, "percentage", w.calcSyncPercentage(height))
 				}
 			}
 			height++
 		}
 		if w.end != 0 {
-			log.Info("syncRange completed", "id", w.id, "from", from, "to", to)
+			log.Info("[syncer] syncRange completed", "id", w.id, "from", from, "to", to)
 		}
 	}
 }

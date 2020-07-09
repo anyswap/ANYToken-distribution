@@ -65,6 +65,7 @@ type ExchangeReceipt struct {
 	Address         string `bson:"address"`
 	TokenFromAmount string `bson:"tokenFromAmount"`
 	TokenToAmount   string `bson:"tokenToAmount"`
+	LogIndex        int    `bson:"logIndex"`
 }
 
 // MgoLiquidity liquidity

@@ -22,6 +22,7 @@ type Config struct {
 	Gateway    *GatewayConfig
 	Sync       *SyncConfig
 	Distribute *DistributeConfig
+	Exchanges  []*ExchangeConfig
 }
 
 // MongoDBConfig mongodb config
@@ -68,12 +69,12 @@ type ExchangeConfig struct {
 
 // DistributeConfig distribute config
 type DistributeConfig struct {
-	Exchanges []*ExchangeConfig
+	Enable bool
 }
 
 // GetExchangePairs get pairs from config
 func GetExchangePairs(exchange string) string {
-	for _, ex := range config.Distribute.Exchanges {
+	for _, ex := range config.Exchanges {
 		if strings.EqualFold(ex.Exchange, exchange) {
 			return ex.Pairs
 		}
@@ -83,7 +84,7 @@ func GetExchangePairs(exchange string) string {
 
 // GetTokenAddress get token address from config
 func GetTokenAddress(exchange string) string {
-	for _, ex := range config.Distribute.Exchanges {
+	for _, ex := range config.Exchanges {
 		if strings.EqualFold(ex.Exchange, exchange) {
 			return ex.Token
 		}
@@ -114,10 +115,12 @@ func CheckConfig() (err error) {
 		return errors.New("must config Sync")
 	case config.Distribute == nil:
 		return errors.New("must config Distribute")
+	case config.Exchanges == nil:
+		return errors.New("must config Exchanges")
 	}
 
 	var total float64
-	for i, ex := range config.Distribute.Exchanges {
+	for i, ex := range config.Exchanges {
 		if ex.Exchange == "" {
 			return fmt.Errorf("empty exchange address (index %v)", i)
 		}

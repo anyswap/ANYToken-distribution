@@ -28,7 +28,7 @@ func tryDoTimes(name string, f func() error) {
 		}
 		time.Sleep(retryDBInterval)
 	}
-	log.Warn("tryDoTimes", "name", name, "times", retryDBCount, "err", err)
+	log.Warn("[parse] tryDoTimes", "name", name, "times", retryDBCount, "err", err)
 }
 
 // Parse parse block and receipts
@@ -80,7 +80,7 @@ func (w *worker) parseBlock(block *types.Block, wg *sync.WaitGroup) {
 	mb.GasUsed = block.GasUsed()
 	mb.Timestamp = block.Time().Uint64()
 
-	tryDoTimes("AddBlock "+hash, func() error {
+	tryDoTimes("[parse] AddBlock "+hash, func() error {
 		return mongodb.AddBlock(mb, overwrite)
 	})
 }
@@ -125,7 +125,7 @@ func (w *worker) parseTx(i int, tx *types.Transaction, block *types.Block, recei
 		parseReceipt(mt, receipt)
 	}
 
-	tryDoTimes("AddTransaction "+hash, func() error {
+	tryDoTimes("[parse] AddTransaction "+hash, func() error {
 		return mongodb.AddTransaction(mt, overwrite)
 	})
 }

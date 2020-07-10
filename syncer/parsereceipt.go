@@ -30,8 +30,9 @@ func timestampToDate(timestamp uint64) string {
 	return time.Unix(int64(timestamp), 0).Format("2006-01-02 15:04:05")
 }
 
-func isConfigedExchange(exchange common.Address) bool {
-	return params.GetExchangePairs(exchange.String()) != ""
+// return true if exchange is configed in config file
+func isConfigedExchange(exchange string) bool {
+	return params.GetExchangePairs(exchange) != ""
 }
 
 func parseReceipt(mt *mongodb.MgoTransaction, receipt *types.Receipt) {
@@ -84,25 +85,11 @@ func addExchangeReceipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int,
 	mt.ExchangeReceipts = append(mt.ExchangeReceipts, exReceipt)
 	log.Info("addExchangeReceipt", "receipt", exReceipt)
 
-	if !isConfigedExchange(rlog.Address) {
-		return
-	}
-
-	switch topics[0] {
-	case topicTokenPurchase:
-	case topicEthPurchase:
-	default:
-		return
-	}
-
-	timestamp := getDayBegin(mt.Timestamp)
-	log.Info("[parse] update volume", "txHash", mt.Hash, "logIndex", logIdx, "logType", logType, "exchange", exReceipt.Exchange, "pairs", exReceipt.Pairs, "timestamp", timestampToDate(mt.Timestamp))
-	tryDoTimes("[parse] UpdateVolume "+mt.Hash, func() error {
-		return mongodb.UpdateVolumeWithReceipt(exReceipt, mt.BlockHash, mt.BlockNumber, timestamp)
-	})
+	updateVolumes(mt, exReceipt, topics[0])
 }
 
 func addErc20Receipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, logType string) {
+	erc20Address := rlog.Address.String()
 	topics := rlog.Topics
 	from := common.BytesToAddress(topics[1].Bytes())
 	to := common.BytesToAddress(topics[2].Bytes())
@@ -111,7 +98,7 @@ func addErc20Receipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, lo
 	erc20Receipt := &mongodb.Erc20Receipt{
 		LogType:  logType,
 		LogIndex: logIdx,
-		Erc20:    rlog.Address.String(),
+		Erc20:    erc20Address,
 		From:     from.String(),
 		To:       to.String(),
 		Value:    value.String(),
@@ -119,4 +106,25 @@ func addErc20Receipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, lo
 
 	mt.Erc20Receipts = append(mt.Erc20Receipts, erc20Receipt)
 	log.Info("addErc20Receipt", "receipt", erc20Receipt)
+}
+
+func updateVolumes(mt *mongodb.MgoTransaction, exReceipt *mongodb.ExchangeReceipt, logTopic common.Hash) {
+	if !params.GetConfig().Sync.UpdateVolume {
+		return
+	}
+
+	if !(logTopic == topicTokenPurchase || logTopic == topicEthPurchase) {
+		return
+	}
+
+	if !isConfigedExchange(exReceipt.Exchange) {
+		return
+	}
+
+	timestamp := getDayBegin(mt.Timestamp)
+	log.Info("[parse] update volume", "txHash", mt.Hash, "logIndex", exReceipt.LogIndex, "logType", exReceipt.LogType, "exchange", exReceipt.Exchange, "pairs", exReceipt.Pairs, "timestamp", timestampToDate(mt.Timestamp))
+
+	tryDoTimes("[parse] UpdateVolume "+mt.Hash, func() error {
+		return mongodb.UpdateVolumeWithReceipt(exReceipt, mt.BlockHash, mt.BlockNumber, timestamp)
+	})
 }

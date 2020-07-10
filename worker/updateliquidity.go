@@ -40,6 +40,10 @@ func timestampToDate(timestamp uint64) string {
 }
 
 func updateLiquidityDaily() {
+	if !params.GetConfig().Sync.UpdateLiquidity {
+		return
+	}
+
 	now := uint64(time.Now().Unix())
 	todayBegin := getDayBegin(now)
 

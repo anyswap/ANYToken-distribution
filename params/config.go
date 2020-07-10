@@ -50,9 +50,11 @@ func GetAverageBlockTime() uint64 {
 
 // SyncConfig sync config
 type SyncConfig struct {
-	JobCount     uint64
-	WaitInterval uint64
-	Stable       uint64
+	JobCount        uint64
+	WaitInterval    uint64
+	Stable          uint64
+	UpdateLiquidity bool
+	UpdateVolume    bool
 }
 
 // ExchangeConfig exchange config

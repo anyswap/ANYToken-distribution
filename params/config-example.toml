@@ -18,15 +18,8 @@ Stable = 0 # suggest > 30 for mainnet
 Enable = false
 
 [[Exchanges]]
-Pairs = "XXX"
-Exchange = "0x1111111111111111111111111111111111111111"
-Token = "0x2222222222222222222222222222222222222222"
-Percentage = 40.0
-CreationHeight = 2300000
-
-[[Exchanges]]
-Pairs = "YYY"
-Exchange = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-Token = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-Percentage = 60.0
-CreationHeight = 2300000
+Pairs = "ANY"
+Exchange = "0x4dee5f0705ff478b452419375610155b5873ef5b"
+Token = "0xC20b5E92E1ce63Af6FE537491f75C19016ea5fb4"
+Percentage = 100.0
+CreationHeight = 2387654

@@ -131,3 +131,26 @@ func getExchangeTokenBalance(exchange, contract common.Address, blockNumber *big
 	}
 	return common.GetBigInt(res, 0, 32), nil
 }
+
+func getExchangeTokenAddress(exchange common.Address) common.Address {
+	var (
+		res []byte
+		err error
+
+		tokenAddressFuncHash = common.FromHex("0x9d76ea58")
+	)
+	msg := ethereum.CallMsg{
+		To:   &exchange,
+		Data: tokenAddressFuncHash,
+	}
+	for i := 0; i < rpcRetryCount; i++ {
+		res, err = client.CallContract(cliContext, msg, nil)
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		return common.Address{}
+	}
+	return common.BytesToAddress(common.GetData(res, 0, 32))
+}

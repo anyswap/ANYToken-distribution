@@ -54,18 +54,29 @@ type MgoTransaction struct {
 	Status           uint64 `bson:"status"`
 	Timestamp        uint64 `bson:"timestamp"`
 
+	Erc20Receipts    []*Erc20Receipt    `bson:"erc20Receipts,omitempty"`
 	ExchangeReceipts []*ExchangeReceipt `bson:"exchangeReceipts,omitempty"`
+}
+
+// Erc20Receipt erc20 tx receipt
+type Erc20Receipt struct {
+	LogType  string `bson:"logType"`
+	LogIndex int    `bson:"logIndex"`
+	Erc20    string `bson:"erc20"`
+	From     string `bson:"from"`
+	To       string `bson:"to"`
+	Value    string `bson:"value"`
 }
 
 // ExchangeReceipt exchange tx receipt
 type ExchangeReceipt struct {
+	LogType         string `bson:"txnsType"`
+	LogIndex        int    `bson:"logIndex"`
 	Exchange        string `bson:"exchange"`
 	Pairs           string `bson:"pairs"`
-	LogType         string `bson:"txnsType"`
 	Address         string `bson:"address"`
 	TokenFromAmount string `bson:"tokenFromAmount"`
 	TokenToAmount   string `bson:"tokenToAmount"`
-	LogIndex        int    `bson:"logIndex"`
 }
 
 // MgoLiquidity liquidity

@@ -10,12 +10,9 @@ APIAddress = "https://testnet.fsn.dev/api"
 AverageBlockTime = 13 # seconds
 
 [Sync]
-Overwrite = false # if true overwrite exist
 JobCount = 4 # job count
 WaitInterval = 6 # wait seconds to get latest block
 Stable = 0 # suggest > 30 for mainnet
-Start = 0 # 0 means the latest synced
-End = 0 # 0 means endless
 
 [Distribute]
 Enable = false

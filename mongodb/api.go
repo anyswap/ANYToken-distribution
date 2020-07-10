@@ -74,7 +74,6 @@ func AddBlock(mb *MgoBlock, overwrite bool) (err error) {
 	}
 	if err == nil {
 		log.Info("[mongodb] AddBlock success", "number", mb.Number, "hash", mb.Hash)
-		_ = UpdateSyncInfo(mb.Number, mb.Hash, mb.Timestamp)
 	} else {
 		log.Warn("[mongodb] AddBlock failed", "number", mb.Number, "hash", mb.Hash, "err", err)
 	}

@@ -80,9 +80,6 @@ func initConfig() {
 
 	serverURL = config.Gateway.APIAddress
 	stableHeight = syncCfg.Stable
-	startHeight = syncCfg.Start
-	endHeight = syncCfg.End
-	overwrite = syncCfg.Overwrite
 
 	applyArguments()
 
@@ -153,13 +150,16 @@ func (s *syncer) sync() {
 func (s *syncer) getStartAndLast() (start, last uint64) {
 	start = s.start
 	last = s.end
-	if s.start == 0 && s.end == 0 {
+	if s.start == 0 {
 		syncInfo, err := mongodb.FindLatestSyncInfo()
 		if err == nil {
 			start = syncInfo.Number
 			if start != 0 {
 				start++
 			}
+		}
+		if start == 0 {
+			start = params.GetMinExchangeCreationHeight()
 		}
 	}
 	for s.end == 0 {

@@ -50,12 +50,9 @@ func GetAverageBlockTime() uint64 {
 
 // SyncConfig sync config
 type SyncConfig struct {
-	Overwrite    bool
 	JobCount     uint64
 	WaitInterval uint64
 	Stable       uint64
-	Start        uint64
-	End          uint64
 }
 
 // ExchangeConfig exchange config
@@ -90,6 +87,17 @@ func GetTokenAddress(exchange string) string {
 		}
 	}
 	return ""
+}
+
+// GetMinExchangeCreationHeight get minimum exchange creation height
+func GetMinExchangeCreationHeight() uint64 {
+	minHeight := uint64(math.MaxUint64)
+	for _, ex := range config.Exchanges {
+		if ex.CreationHeight < minHeight {
+			minHeight = ex.CreationHeight
+		}
+	}
+	return minHeight
 }
 
 // GetConfig get config items structure
@@ -129,6 +137,9 @@ func CheckConfig() (err error) {
 		}
 		if ex.Token == "" {
 			return fmt.Errorf("empty exchange token (index %v)", i)
+		}
+		if ex.CreationHeight == 0 {
+			return fmt.Errorf("empty exchange creation height (index %v)", i)
 		}
 		total += ex.Percentage
 	}

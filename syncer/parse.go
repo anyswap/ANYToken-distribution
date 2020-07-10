@@ -83,6 +83,10 @@ func (w *worker) parseBlock(block *types.Block, wg *sync.WaitGroup) {
 	tryDoTimes("[parse] AddBlock "+hash, func() error {
 		return mongodb.AddBlock(mb, overwrite)
 	})
+
+	if w.end == 0 {
+		_ = mongodb.UpdateSyncInfo(mb.Number, mb.Hash, mb.Timestamp)
+	}
 }
 
 func (w *worker) parseTransactions(block *types.Block, receipts types.Receipts, wg *sync.WaitGroup) {

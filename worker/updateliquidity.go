@@ -56,7 +56,7 @@ func updateLiquidityDaily() {
 				fromTime = lasttime + secondsPerDay
 			}
 		} else {
-			header := loopGetBlockHeader(new(big.Int).SetUint64(ex.CreationHeight))
+			header := capi.LoopGetBlockHeader(new(big.Int).SetUint64(ex.CreationHeight))
 			fromTime = getDayBegin(header.Time.Uint64())
 		}
 
@@ -70,7 +70,7 @@ func updateLiquidityDaily() {
 					timestamp = todayBegin
 					log.Error("[worker] updateLiquidityDaily must query 'archive' node", "err", err)
 				} else {
-					time.Sleep(rpcRetryInterval)
+					time.Sleep(time.Second)
 					continue
 				}
 			}
@@ -91,17 +91,17 @@ func updateDateLiquidity(ex *params.ExchangeConfig, timestamp uint64) error {
 	blockNumber := blockHeader.Number
 	blockHash := blockHeader.Hash()
 
-	liquidity, err := getExchangeLiquidity(exchangeAddr, blockNumber)
+	liquidity, err := capi.GetExchangeLiquidity(exchangeAddr, blockNumber)
 	if err != nil {
 		return err
 	}
 
-	coins, err := getCoinBalance(exchangeAddr, blockNumber)
+	coins, err := capi.GetCoinBalance(exchangeAddr, blockNumber)
 	if err != nil {
 		return err
 	}
 
-	tokens, err := getExchangeTokenBalance(exchangeAddr, tokenAddr, blockNumber)
+	tokens, err := capi.GetExchangeTokenBalance(exchangeAddr, tokenAddr, blockNumber)
 	if err != nil {
 		return err
 	}
@@ -142,7 +142,7 @@ func findBlockWithTimestamp(timestamp uint64) *types.Header {
 	)
 
 	for {
-		header := loopGetBlockHeader(blockNumber)
+		header := capi.LoopGetBlockHeader(blockNumber)
 		headerTime := header.Time.Uint64()
 		if timeNear(headerTime) {
 			return header

@@ -10,6 +10,7 @@ const (
 	tbTransactions string = "Transactions"
 	tbLiquidity    string = "Liquidity"
 	tbVolume       string = "Volume"
+	tbAccounts     string = "Accounts"
 
 	// KeyOfLatestSyncInfo key
 	KeyOfLatestSyncInfo string = "latest"
@@ -102,6 +103,19 @@ type MgoVolume struct {
 	BlockNumber    uint64 `bson:"blockNumber"`
 	BlockHash      string `bson:"blockHash"`
 	Timestamp      uint64 `bson:"timestamp"`
+}
+
+// MgoAccount exchange account
+type MgoAccount struct {
+	Key      string `bson:"_id"` // exchange + account
+	Exchange string `bson:"exchange"`
+	Pairs    string `bson:"pairs"`
+	Account  string `bson:"account"`
+}
+
+// GetKeyOfExchangeAndAccount get key
+func GetKeyOfExchangeAndAccount(exchange, account string) string {
+	return fmt.Sprintf("%s:%s", exchange, account)
 }
 
 // GetKeyOfExchangeAndTimestamp get key

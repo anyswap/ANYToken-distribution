@@ -15,6 +15,7 @@ var (
 	collectionSyncInfo    *mgo.Collection
 	collectionLiquidity   *mgo.Collection
 	collectionVolume      *mgo.Collection
+	collectionAccount     *mgo.Collection
 )
 
 // do this when reconnect to the database
@@ -24,6 +25,7 @@ func deinintCollections() {
 	collectionSyncInfo = nil
 	collectionLiquidity = nil
 	collectionVolume = nil
+	collectionAccount = nil
 }
 
 func initCollections() {
@@ -59,6 +61,8 @@ func getCollection(table string) *mgo.Collection {
 		return getOrInitCollection(table, &collectionLiquidity, "exchange", "timestamp")
 	case tbVolume:
 		return getOrInitCollection(table, &collectionVolume, "exchange", "timestamp")
+	case tbAccounts:
+		return getOrInitCollection(table, &collectionAccount, "exchange")
 	}
 	panic("unknown talbe " + table)
 }
@@ -115,6 +119,20 @@ func AddVolume(mv *MgoVolume, overwrite bool) (err error) {
 		log.Info("[mongodb] AddVolume success", "volume", mv)
 	} else {
 		log.Info("[mongodb] AddVolume failed", "volume", mv, "err", err)
+	}
+	return err
+}
+
+// AddAccount add exchange account
+func AddAccount(ma *MgoAccount) error {
+	err := getCollection(tbAccounts).Insert(ma)
+	switch {
+	case err == nil:
+		log.Info("[mongodb] AddAccount success", "account", ma)
+	case mgo.IsDup(err):
+		return nil
+	default:
+		log.Info("[mongodb] AddAccount failed", "account", ma, "err", err)
 	}
 	return err
 }
@@ -243,4 +261,14 @@ func FindVolume(key string) (*MgoVolume, error) {
 		return nil, err
 	}
 	return &res, nil
+}
+
+// FindAllAccounts find accounts
+func FindAllAccounts(exchange string) (accounts []string) {
+	iter := getCollection(tbAccounts).Find(bson.M{"exchange": exchange}).Iter()
+	var result MgoAccount
+	for iter.Next(&result) {
+		accounts = append(accounts, result.Account)
+	}
+	return accounts
 }

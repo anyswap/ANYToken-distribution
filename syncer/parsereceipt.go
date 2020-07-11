@@ -85,6 +85,8 @@ func addExchangeReceipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int,
 	mt.ExchangeReceipts = append(mt.ExchangeReceipts, exReceipt)
 	log.Info("addExchangeReceipt", "receipt", exReceipt)
 
+	updateAccounts(exchange, exReceipt.Pairs, address.String())
+
 	updateVolumes(mt, exReceipt, topics[0])
 }
 
@@ -106,6 +108,18 @@ func addErc20Receipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, lo
 
 	mt.Erc20Receipts = append(mt.Erc20Receipts, erc20Receipt)
 	log.Info("addErc20Receipt", "receipt", erc20Receipt)
+}
+
+func updateAccounts(exchange, pairs, account string) {
+	ma := &mongodb.MgoAccount{
+		Key:      mongodb.GetKeyOfExchangeAndAccount(exchange, account),
+		Exchange: exchange,
+		Pairs:    pairs,
+		Account:  account,
+	}
+	tryDoTimes("[parse] AddAccount", func() error {
+		return mongodb.AddAccount(ma)
+	})
 }
 
 func updateVolumes(mt *mongodb.MgoTransaction, exReceipt *mongodb.ExchangeReceipt, logTopic common.Hash) {

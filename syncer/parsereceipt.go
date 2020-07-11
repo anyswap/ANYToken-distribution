@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/anyswap/ANYToken-distribution/log"
@@ -66,7 +67,7 @@ func parseReceipt(mt *mongodb.MgoTransaction, receipt *types.Receipt) {
 }
 
 func addExchangeReceipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, logType string) {
-	exchange := rlog.Address.String()
+	exchange := strings.ToLower(rlog.Address.String())
 	topics := rlog.Topics
 	address := common.BytesToAddress(topics[1].Bytes())
 	fromAmount := new(big.Int).SetBytes(topics[2].Bytes())
@@ -77,7 +78,7 @@ func addExchangeReceipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int,
 		LogIndex:        logIdx,
 		Exchange:        exchange,
 		Pairs:           params.GetExchangePairs(exchange),
-		Address:         address.String(),
+		Address:         strings.ToLower(address.String()),
 		TokenFromAmount: fromAmount.String(),
 		TokenToAmount:   toAmount.String(),
 	}
@@ -91,7 +92,7 @@ func addExchangeReceipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int,
 }
 
 func addErc20Receipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, logType string) {
-	erc20Address := rlog.Address.String()
+	erc20Address := strings.ToLower(rlog.Address.String())
 	topics := rlog.Topics
 	from := common.BytesToAddress(topics[1].Bytes())
 	to := common.BytesToAddress(topics[2].Bytes())
@@ -101,8 +102,8 @@ func addErc20Receipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, lo
 		LogType:  logType,
 		LogIndex: logIdx,
 		Erc20:    erc20Address,
-		From:     from.String(),
-		To:       to.String(),
+		From:     strings.ToLower(from.String()),
+		To:       strings.ToLower(to.String()),
 		Value:    value.String(),
 	}
 
@@ -113,9 +114,9 @@ func addErc20Receipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, lo
 func updateAccounts(exchange, pairs, account string) {
 	ma := &mongodb.MgoAccount{
 		Key:      mongodb.GetKeyOfExchangeAndAccount(exchange, account),
-		Exchange: exchange,
+		Exchange: strings.ToLower(exchange),
 		Pairs:    pairs,
-		Account:  account,
+		Account:  strings.ToLower(account),
 	}
 	tryDoTimes("[parse] AddAccount", func() error {
 		return mongodb.AddAccount(ma)

@@ -2,6 +2,7 @@ package mongodb
 
 import (
 	"fmt"
+	"strings"
 )
 
 const (
@@ -115,10 +116,10 @@ type MgoAccount struct {
 
 // GetKeyOfExchangeAndAccount get key
 func GetKeyOfExchangeAndAccount(exchange, account string) string {
-	return fmt.Sprintf("%s:%s", exchange, account)
+	return strings.ToLower(fmt.Sprintf("%s:%s", exchange, account))
 }
 
 // GetKeyOfExchangeAndTimestamp get key
 func GetKeyOfExchangeAndTimestamp(exchange string, timestamp uint64) string {
-	return fmt.Sprintf("%s:%d", exchange, timestamp)
+	return strings.ToLower(fmt.Sprintf("%s:%d", exchange, timestamp))
 }

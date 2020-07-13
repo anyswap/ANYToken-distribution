@@ -23,6 +23,13 @@ Please refer [config file example](https://github.com/anyswap/ANYToken-distribut
 
 ## Run distribute
 
+prepare the following:
+
+1. install mongodb
+2. start mongod service
+3. start fusion node (--gcmode archive)
+4. config rightly
+
 ```shell
 setsid ./build/bin/distribute --verbosity 6 --config build/bin/config.toml --log build/bin/logs/distribute.log >/dev/null 2>&1
 ```

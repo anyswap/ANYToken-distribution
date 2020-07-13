@@ -1,0 +1,66 @@
+package utils
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/anyswap/ANYToken-distribution/callapi"
+	"github.com/anyswap/ANYToken-distribution/log"
+	"github.com/anyswap/ANYToken-distribution/mongodb"
+	"github.com/anyswap/ANYToken-distribution/params"
+	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
+	"github.com/urfave/cli/v2"
+)
+
+// InitApp init app (remember close client in the caller)
+func InitApp(ctx *cli.Context, withMongodb bool) *callapi.APICaller {
+	SetLogger(ctx)
+	InitSyncArguments(ctx)
+
+	configFile := GetConfigFilePath(ctx)
+	params.LoadConfig(configFile)
+
+	if withMongodb {
+		initMongodb()
+	}
+
+	capi := callapi.NewDefaultAPICaller()
+	for {
+		err := capi.DialServer()
+		if err == nil {
+			break
+		}
+		time.Sleep(3 * time.Second)
+	}
+
+	if err := verifyConfig(capi); err != nil {
+		panic(err)
+	}
+
+	return capi
+}
+
+func initMongodb() {
+	config := params.GetConfig()
+	dbConfig := config.MongoDB
+	mongoURL := dbConfig.DBURL
+	if dbConfig.UserName != "" || dbConfig.Password != "" {
+		mongoURL = fmt.Sprintf("%s:%s@%s", dbConfig.UserName, dbConfig.Password, dbConfig.DBURL)
+	}
+	dbName := dbConfig.DBName
+	mongodb.MongoServerInit(mongoURL, dbName)
+}
+
+func verifyConfig(capi *callapi.APICaller) error {
+	config := params.GetConfig()
+	for _, ex := range config.Exchanges {
+		exchange := common.HexToAddress(ex.Exchange)
+		token := common.HexToAddress(ex.Token)
+		wantToken := capi.GetExchangeTokenAddress(exchange)
+		if token != wantToken {
+			return fmt.Errorf("exchange token mismatch. exchange %v want token %v, but have %v", ex.Exchange, wantToken.String(), ex.Token)
+		}
+		log.Info("verify exchange token success", "exchange", ex.Exchange, "token", ex.Token)
+	}
+	return nil
+}

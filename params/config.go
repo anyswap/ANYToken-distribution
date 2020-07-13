@@ -71,6 +71,11 @@ type DistributeConfig struct {
 	Enable bool
 }
 
+// IsConfigedExchange return true if exchange is configed
+func IsConfigedExchange(exchange string) bool {
+	return GetExchangePairs(exchange) != ""
+}
+
 // GetExchangePairs get pairs from config
 func GetExchangePairs(exchange string) string {
 	for _, ex := range config.Exchanges {
@@ -131,8 +136,8 @@ func CheckConfig() (err error) {
 
 	var total float64
 	for i, ex := range config.Exchanges {
-		if ex.Exchange == "" {
-			return fmt.Errorf("empty exchange address (index %v)", i)
+		if !common.IsHexAddress(ex.Exchange) {
+			return fmt.Errorf("wrong exchange address %v (index %v)", ex.Exchange, i)
 		}
 		if ex.Pairs == "" {
 			return fmt.Errorf("empty exchange pairs (index %v)", i)

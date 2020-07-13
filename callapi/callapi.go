@@ -190,3 +190,23 @@ func (c *APICaller) GetExchangeTokenAddress(exchange common.Address) common.Addr
 	}
 	return common.BytesToAddress(common.GetData(res, 0, 32))
 }
+
+// GetAccountNonce get account nonce
+func (c *APICaller) GetAccountNonce(account common.Address) (uint64, error) {
+	return c.client.PendingNonceAt(c.context, account)
+}
+
+// SendTransaction send signed tx
+func (c *APICaller) SendTransaction(tx *types.Transaction) error {
+	return c.client.SendTransaction(c.context, tx)
+}
+
+// GetChainID get chain ID, also known as network ID
+func (c *APICaller) GetChainID() (*big.Int, error) {
+	return c.client.NetworkID(c.context)
+}
+
+// SuggestGasPrice suggest gas price
+func (c *APICaller) SuggestGasPrice() (*big.Int, error) {
+	return c.client.SuggestGasPrice(c.context)
+}

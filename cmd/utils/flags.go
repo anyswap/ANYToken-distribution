@@ -71,6 +71,68 @@ var (
 		Name:  "overwrite",
 		Usage: "overwrite exist items in database",
 	}
+
+	// KeyStoreFileFlag --keystore
+	KeyStoreFileFlag = &cli.StringFlag{
+		Name:  "keystore",
+		Usage: "keystore file path",
+	}
+	// PasswordFileFlag --password
+	PasswordFileFlag = &cli.StringFlag{
+		Name:  "password",
+		Usage: "password file path",
+	}
+	// GasLimitFlag --gas
+	GasLimitFlag = &cli.StringFlag{
+		Name:  "gasLimit",
+		Usage: "gas limit in transaction",
+	}
+	// GasPriceFlag --gasPrice
+	GasPriceFlag = &cli.StringFlag{
+		Name:  "gasPrice",
+		Usage: "gas price in transaction",
+	}
+	// AccountNonceFlag --nonce
+	AccountNonceFlag = &cli.StringFlag{
+		Name:  "nonce",
+		Usage: "nonce in transaction",
+	}
+
+	// TotalRewardsFlag --rewards
+	TotalRewardsFlag = &cli.StringFlag{
+		Name:  "rewards",
+		Usage: "total rewards",
+	}
+	// StartHeightFlag --start
+	StartHeightFlag = &cli.StringFlag{
+		Name:  "start",
+		Usage: "start height (start inclusive)",
+	}
+	// EndHeightFlag --end
+	EndHeightFlag = &cli.StringFlag{
+		Name:  "end",
+		Usage: "end height (end exclusive)",
+	}
+	// ExchangeFlag --exchange
+	ExchangeFlag = &cli.StringFlag{
+		Name:  "exchange",
+		Usage: "exchange address",
+	}
+	// AccountsFileFlag --accounts
+	AccountsFileFlag = &cli.StringFlag{
+		Name:  "accounts",
+		Usage: "accounts file",
+	}
+	// OutputFileFlag --output
+	OutputFileFlag = &cli.StringFlag{
+		Name:  "output",
+		Usage: "output file of result",
+	}
+	// DryRunFlag --dryrun
+	DryRunFlag = &cli.BoolFlag{
+		Name:  "dryrun",
+		Usage: "dry run",
+	}
 )
 
 // SyncArguments command line arguments

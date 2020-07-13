@@ -31,11 +31,6 @@ func timestampToDate(timestamp uint64) string {
 	return time.Unix(int64(timestamp), 0).Format("2006-01-02 15:04:05")
 }
 
-// return true if exchange is configed in config file
-func isConfigedExchange(exchange string) bool {
-	return params.GetExchangePairs(exchange) != ""
-}
-
 func parseReceipt(mt *mongodb.MgoTransaction, receipt *types.Receipt) {
 	if receipt == nil || receipt.Status == 0 {
 		return
@@ -132,7 +127,7 @@ func updateVolumes(mt *mongodb.MgoTransaction, exReceipt *mongodb.ExchangeReceip
 		return
 	}
 
-	if !isConfigedExchange(exReceipt.Exchange) {
+	if !params.IsConfigedExchange(exReceipt.Exchange) {
 		return
 	}
 

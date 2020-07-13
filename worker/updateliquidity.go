@@ -137,6 +137,7 @@ func findBlockWithTimestamp(timestamp uint64) *types.Header {
 	}
 
 	var (
+		latest       *big.Int
 		blockNumber  *big.Int
 		avgBlockTime = params.GetAverageBlockTime()
 	)
@@ -147,8 +148,9 @@ func findBlockWithTimestamp(timestamp uint64) *types.Header {
 		if timeNear(headerTime) {
 			return header
 		}
+		latest = header.Number
 		if blockNumber == nil {
-			blockNumber = header.Number
+			blockNumber = latest
 			if headerTime < timestamp {
 				time.Sleep(time.Duration(timestamp-headerTime) * time.Second)
 			}
@@ -156,9 +158,15 @@ func findBlockWithTimestamp(timestamp uint64) *types.Header {
 		if headerTime > timestamp {
 			countOfBlocks := (headerTime - timestamp) / avgBlockTime
 			blockNumber.Sub(blockNumber, new(big.Int).SetUint64(countOfBlocks))
+			if blockNumber.Sign() <= 0 {
+				blockNumber = big.NewInt(1)
+			}
 		} else {
 			countOfBlocks := (timestamp-headerTime)/avgBlockTime + 1
 			blockNumber.Add(blockNumber, new(big.Int).SetUint64(countOfBlocks))
+			if blockNumber.Cmp(latest) > 0 {
+				blockNumber = latest
+			}
 		}
 	}
 }

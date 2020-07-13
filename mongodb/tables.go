@@ -6,12 +6,13 @@ import (
 )
 
 const (
-	tbSyncInfo     string = "SyncInfo"
-	tbBlocks       string = "Blocks"
-	tbTransactions string = "Transactions"
-	tbLiquidity    string = "Liquidity"
-	tbVolume       string = "Volume"
-	tbAccounts     string = "Accounts"
+	tbSyncInfo         string = "SyncInfo"
+	tbBlocks           string = "Blocks"
+	tbTransactions     string = "Transactions"
+	tbLiquidity        string = "Liquidity"
+	tbVolume           string = "Volume"
+	tbAccounts         string = "Accounts"
+	tbLiquidityBalance string = "LiquidityBalances"
 
 	// KeyOfLatestSyncInfo key
 	KeyOfLatestSyncInfo string = "latest"
@@ -83,7 +84,7 @@ type ExchangeReceipt struct {
 
 // MgoLiquidity liquidity
 type MgoLiquidity struct {
-	Key         string `bson:"_id"` // exchange + ':' + Timestamp's day begin
+	Key         string `bson:"_id"` // exchange + timestamp
 	Exchange    string `bson:"exchange"`
 	Pairs       string `bson:"pairs"`
 	Coin        string `bson:"coin"`
@@ -96,7 +97,7 @@ type MgoLiquidity struct {
 
 // MgoVolume volumn
 type MgoVolume struct {
-	Key            string `bson:"_id"` // exchange + ':' + Timestamp's day begin
+	Key            string `bson:"_id"` // exchange + timestamp
 	Exchange       string `bson:"exchange"`
 	Pairs          string `bson:"pairs"`
 	CoinVolume24h  string `bson:"cvolume24h"`
@@ -114,6 +115,16 @@ type MgoAccount struct {
 	Account  string `bson:"account"`
 }
 
+// MgoLiquidityBalance liquidity balance
+type MgoLiquidityBalance struct {
+	Key         string `bson:"_id"` // exchange + account + blockNumber
+	Exchange    string `bson:"exchange"`
+	Pairs       string `bson:"pairs"`
+	Account     string `bson:"account"`
+	BlockNumber uint64 `bson:"blockNumber"`
+	Liquidity   string `bson:"liquidity"`
+}
+
 // GetKeyOfExchangeAndAccount get key
 func GetKeyOfExchangeAndAccount(exchange, account string) string {
 	return strings.ToLower(fmt.Sprintf("%s:%s", exchange, account))
@@ -122,4 +133,9 @@ func GetKeyOfExchangeAndAccount(exchange, account string) string {
 // GetKeyOfExchangeAndTimestamp get key
 func GetKeyOfExchangeAndTimestamp(exchange string, timestamp uint64) string {
 	return strings.ToLower(fmt.Sprintf("%s:%d", exchange, timestamp))
+}
+
+// GetKeyOfLiquidityBalance get key
+func GetKeyOfLiquidityBalance(exchange, account string, blockNumber uint64) string {
+	return strings.ToLower(fmt.Sprintf("%s:%s:%d", exchange, account, blockNumber))
 }

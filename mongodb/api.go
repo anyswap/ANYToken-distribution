@@ -3,19 +3,23 @@ package mongodb
 import (
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/anyswap/ANYToken-distribution/log"
+	"github.com/anyswap/ANYToken-distribution/tools"
+	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
 
 var (
-	collectionBlock       *mgo.Collection
-	collectionTransaction *mgo.Collection
-	collectionSyncInfo    *mgo.Collection
-	collectionLiquidity   *mgo.Collection
-	collectionVolume      *mgo.Collection
-	collectionAccount     *mgo.Collection
+	collectionBlock            *mgo.Collection
+	collectionTransaction      *mgo.Collection
+	collectionSyncInfo         *mgo.Collection
+	collectionLiquidity        *mgo.Collection
+	collectionVolume           *mgo.Collection
+	collectionAccount          *mgo.Collection
+	collectionLiquidityBalance *mgo.Collection
 )
 
 // do this when reconnect to the database
@@ -26,6 +30,7 @@ func deinintCollections() {
 	collectionLiquidity = nil
 	collectionVolume = nil
 	collectionAccount = nil
+	collectionLiquidityBalance = nil
 }
 
 func initCollections() {
@@ -63,6 +68,8 @@ func getCollection(table string) *mgo.Collection {
 		return getOrInitCollection(table, &collectionVolume, "exchange", "timestamp")
 	case tbAccounts:
 		return getOrInitCollection(table, &collectionAccount, "exchange")
+	case tbLiquidityBalance:
+		return getOrInitCollection(table, &collectionLiquidityBalance, "exchange", "account", "blockNumber")
 	}
 	panic("unknown talbe " + table)
 }
@@ -137,6 +144,20 @@ func AddAccount(ma *MgoAccount) error {
 	return err
 }
 
+// AddLiquidityBalance add liauidity balance
+func AddLiquidityBalance(ma *MgoLiquidityBalance) error {
+	err := getCollection(tbLiquidityBalance).Insert(ma)
+	switch {
+	case err == nil:
+		log.Info("[mongodb] AddLiquidityBalance success", "balance", ma)
+	case mgo.IsDup(err):
+		return nil
+	default:
+		log.Info("[mongodb] AddLiquidityBalance failed", "balance", ma, "err", err)
+	}
+	return err
+}
+
 // --------------- update ---------------------------------
 
 // UpdateSyncInfo update sync info
@@ -149,11 +170,6 @@ func UpdateSyncInfo(number uint64, hash string, timestamp uint64) error {
 		}})
 }
 
-func getBigIntFromString(str string) *big.Int {
-	bi, _ := new(big.Int).SetString(str, 0)
-	return bi
-}
-
 // UpdateVolumeWithReceipt update volume
 func UpdateVolumeWithReceipt(exr *ExchangeReceipt, blockHash string, blockNumber, timestamp uint64) error {
 	key := GetKeyOfExchangeAndTimestamp(exr.Exchange, timestamp)
@@ -163,8 +179,8 @@ func UpdateVolumeWithReceipt(exr *ExchangeReceipt, blockHash string, blockNumber
 		return err
 	}
 
-	tokenFromAmount := getBigIntFromString(exr.TokenFromAmount)
-	tokenToAmount := getBigIntFromString(exr.TokenToAmount)
+	tokenFromAmount, _ := tools.GetBigIntFromString(exr.TokenFromAmount)
+	tokenToAmount, _ := tools.GetBigIntFromString(exr.TokenToAmount)
 
 	var coinVal, tokenVal *big.Int
 
@@ -180,8 +196,8 @@ func UpdateVolumeWithReceipt(exr *ExchangeReceipt, blockHash string, blockNumber
 	}
 
 	if curVol != nil {
-		oldCoinVal := getBigIntFromString(curVol.CoinVolume24h)
-		oldTokenVal := getBigIntFromString(curVol.TokenVolume24h)
+		oldCoinVal, _ := tools.GetBigIntFromString(curVol.CoinVolume24h)
+		oldTokenVal, _ := tools.GetBigIntFromString(curVol.TokenVolume24h)
 		coinVal.Add(coinVal, oldCoinVal)
 		tokenVal.Add(tokenVal, oldTokenVal)
 		log.Info("[mongodb] update volume", "oldCoins", oldCoinVal, "newCoins", coinVal, "oldTokens", oldTokenVal, "newTokens", tokenVal)
@@ -264,11 +280,22 @@ func FindVolume(key string) (*MgoVolume, error) {
 }
 
 // FindAllAccounts find accounts
-func FindAllAccounts(exchange string) (accounts []string) {
-	iter := getCollection(tbAccounts).Find(bson.M{"exchange": exchange}).Iter()
+func FindAllAccounts(exchange string) (accounts []common.Address) {
+	iter := getCollection(tbAccounts).Find(bson.M{"exchange": strings.ToLower(exchange)}).Iter()
 	var result MgoAccount
 	for iter.Next(&result) {
-		accounts = append(accounts, result.Account)
+		accounts = append(accounts, common.HexToAddress(result.Account))
 	}
 	return accounts
+}
+
+// FindLiquidityBalance find liquidity balance
+func FindLiquidityBalance(exchange, account string, blockNumber uint64) (string, error) {
+	var res MgoLiquidityBalance
+	key := GetKeyOfLiquidityBalance(exchange, account, blockNumber)
+	err := getCollection(tbLiquidityBalance).FindId(key).One(&res)
+	if err != nil {
+		return "0", err
+	}
+	return res.Liquidity, nil
 }

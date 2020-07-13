@@ -34,10 +34,10 @@ func dispatchRewards(opt *Option, accounts []common.Address, shares []*big.Int) 
 		rewards[i] = reward
 	}
 
-	sendRewards(accounts, rewards, shares, common.HexToAddress(opt.Exchange), opt.DryRun)
+	sendRewards(accounts, rewards, shares, common.HexToAddress(opt.RewardToken), opt.DryRun)
 }
 
-func sendRewards(accounts []common.Address, rewards, shares []*big.Int, exchange common.Address, dryRun bool) {
+func sendRewards(accounts []common.Address, rewards, shares []*big.Int, rewardToken common.Address, dryRun bool) {
 	if len(accounts) != len(rewards) || len(accounts) != len(shares) {
 		log.Error("number of accounts %v, rewards %v, and shares %v are not equal", len(accounts), len(rewards), len(shares))
 		return
@@ -57,7 +57,7 @@ func sendRewards(accounts []common.Address, rewards, shares []*big.Int, exchange
 				log.Info("sendRewards write output error", "msg", msg, "err", err)
 			}
 		}
-		err := commonTxArgs.sendRewardsTransaction(account, reward, exchange, dryRun)
+		err := commonTxArgs.sendRewardsTransaction(account, reward, rewardToken, dryRun)
 		if err != nil {
 			log.Info("sendRewards failed", "account", account.String(), "reward", reward, "share", share, "dryrun", dryRun, "err", err)
 		}

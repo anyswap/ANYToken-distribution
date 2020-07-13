@@ -114,7 +114,7 @@ func (args *BuildTxArgs) setDefaults() (err error) {
 	return nil
 }
 
-func (args *BuildTxArgs) sendRewardsTransaction(account common.Address, reward *big.Int, exchange common.Address, dryRun bool) error {
+func (args *BuildTxArgs) sendRewardsTransaction(account common.Address, reward *big.Int, rewardToken common.Address, dryRun bool) error {
 	data := make([]byte, 68)
 	copy(data[:4], transferFuncHash)
 	copy(data[4:36], account.Hash().Bytes())
@@ -126,7 +126,7 @@ func (args *BuildTxArgs) sendRewardsTransaction(account common.Address, reward *
 		}
 	}
 
-	rawTx := types.NewTransaction(*args.Nonce, exchange, big.NewInt(0), *args.GasLimit, args.GasPrice, data)
+	rawTx := types.NewTransaction(*args.Nonce, rewardToken, big.NewInt(0), *args.GasLimit, args.GasPrice, data)
 
 	signedTx, err := types.SignTx(rawTx, args.chainSigner, args.keyWrapper.PrivateKey)
 	if err != nil {

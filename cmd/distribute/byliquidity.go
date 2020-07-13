@@ -19,6 +19,7 @@ var (
 distribute rewards by liquidity
 `,
 		Flags: []cli.Flag{
+			utils.RewardTokenFlag,
 			utils.TotalRewardsFlag,
 			utils.StartHeightFlag,
 			utils.EndHeightFlag,
@@ -78,6 +79,7 @@ func byLiquidity(ctx *cli.Context) (err error) {
 	}
 
 	opt := &distributer.Option{
+		RewardToken:  ctx.String(utils.RewardTokenFlag.Name),
 		TotalValue:   rewards,
 		StartHeight:  ctx.Uint64(utils.StartHeightFlag.Name),
 		EndHeight:    ctx.Uint64(utils.EndHeightFlag.Name),

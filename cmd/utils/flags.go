@@ -98,6 +98,11 @@ var (
 		Usage: "nonce in transaction",
 	}
 
+	// RewardTokenFlag --rewardToken
+	RewardTokenFlag = &cli.StringFlag{
+		Name:  "rewardToken",
+		Usage: "reward token",
+	}
 	// TotalRewardsFlag --rewards
 	TotalRewardsFlag = &cli.StringFlag{
 		Name:  "rewards",

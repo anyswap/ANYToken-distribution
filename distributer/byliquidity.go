@@ -26,15 +26,16 @@ func getRandNumber(max uint64) uint64 {
 
 // ByLiquidity ditribute by liquidity
 func ByLiquidity(opt *Option) {
-	err := opt.checkAndInit()
+	var err error
+	err = commonTxArgs.Check() // check args before opts
+	if err != nil {
+		log.Error("[ditribute] Check commonTxArgs error", "args", commonTxArgs, "err", err)
+		return
+	}
+	err = opt.checkAndInit()
 	defer opt.deinit()
 	if err != nil {
 		log.Error("[ditribute] check option error", "option", opt, "err", err)
-		return
-	}
-	err = commonTxArgs.Check()
-	if err != nil {
-		log.Error("[ditribute] Check commonTxArgs error", "args", commonTxArgs, "err", err)
 		return
 	}
 	accounts, err := opt.getAccounts()
@@ -52,6 +53,9 @@ func ByLiquidity(opt *Option) {
 	quarterCount := countOfBlocks/sampleCount + 1
 	for i := uint64(0); i < sampleCount; i++ {
 		height := opt.StartHeight + i*quarterCount + getRandNumber(quarterCount)
+		if height >= opt.EndHeight {
+			break
+		}
 		updateLiquidityBalance(accounts, liquids, height, opt.Exchange)
 	}
 	dispatchRewards(opt, accounts, liquids)

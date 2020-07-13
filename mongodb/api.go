@@ -18,6 +18,7 @@ var (
 	collectionSyncInfo         *mgo.Collection
 	collectionLiquidity        *mgo.Collection
 	collectionVolume           *mgo.Collection
+	collectionVolumeHistory    *mgo.Collection
 	collectionAccount          *mgo.Collection
 	collectionLiquidityBalance *mgo.Collection
 )
@@ -66,6 +67,8 @@ func getCollection(table string) *mgo.Collection {
 		return getOrInitCollection(table, &collectionLiquidity, "exchange", "timestamp")
 	case tbVolume:
 		return getOrInitCollection(table, &collectionVolume, "exchange", "timestamp")
+	case tbVolumeHistory:
+		return getOrInitCollection(table, &collectionVolumeHistory, "exchange", "account", "blockNumber")
 	case tbAccounts:
 		return getOrInitCollection(table, &collectionAccount, "exchange")
 	case tbLiquidityBalance:
@@ -130,6 +133,20 @@ func AddVolume(mv *MgoVolume, overwrite bool) (err error) {
 	return err
 }
 
+// AddVolumeHistory add volume history
+func AddVolumeHistory(mv *MgoVolumeHistory) error {
+	err := getCollection(tbVolumeHistory).Insert(mv)
+	switch {
+	case err == nil:
+		log.Info("[mongodb] AddVolumeHistory success", "volume", mv)
+	case mgo.IsDup(err):
+		return nil
+	default:
+		log.Info("[mongodb] AddVolumeHistory failed", "volume", mv, "err", err)
+	}
+	return err
+}
+
 // AddAccount add exchange account
 func AddAccount(ma *MgoAccount) error {
 	err := getCollection(tbAccounts).Insert(ma)
@@ -144,7 +161,7 @@ func AddAccount(ma *MgoAccount) error {
 	return err
 }
 
-// AddLiquidityBalance add liauidity balance
+// AddLiquidityBalance add liquidity balance
 func AddLiquidityBalance(ma *MgoLiquidityBalance) error {
 	err := getCollection(tbLiquidityBalance).Insert(ma)
 	switch {

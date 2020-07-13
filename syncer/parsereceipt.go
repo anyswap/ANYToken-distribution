@@ -81,7 +81,8 @@ func addExchangeReceipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int,
 	mt.ExchangeReceipts = append(mt.ExchangeReceipts, exReceipt)
 	log.Info("addExchangeReceipt", "receipt", exReceipt)
 
-	updateAccounts(exchange, exReceipt.Pairs, address.String())
+	recordAccounts(exchange, exReceipt.Pairs, address.String())
+	recordAccountVoumes(mt, exReceipt, topics[0])
 
 	updateVolumes(mt, exReceipt, topics[0])
 }
@@ -106,15 +107,51 @@ func addErc20Receipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, lo
 	log.Info("addErc20Receipt", "receipt", erc20Receipt)
 }
 
-func updateAccounts(exchange, pairs, account string) {
+func recordAccounts(exchange, pairs, account string) {
 	ma := &mongodb.MgoAccount{
 		Key:      mongodb.GetKeyOfExchangeAndAccount(exchange, account),
 		Exchange: strings.ToLower(exchange),
 		Pairs:    pairs,
 		Account:  strings.ToLower(account),
 	}
-	tryDoTimes("[parse] AddAccount", func() error {
+	tryDoTimes("[parse] AddAccount "+ma.Key, func() error {
 		return mongodb.AddAccount(ma)
+	})
+}
+
+func recordAccountVoumes(mt *mongodb.MgoTransaction, exReceipt *mongodb.ExchangeReceipt, logTopic common.Hash) {
+	if !(logTopic == topicTokenPurchase || logTopic == topicEthPurchase) {
+		return
+	}
+
+	if !params.IsConfigedExchange(exReceipt.Exchange) {
+		return
+	}
+
+	var coinAmount, tokenAmount string
+	if logTopic == topicTokenPurchase {
+		coinAmount = exReceipt.TokenFromAmount
+		tokenAmount = exReceipt.TokenToAmount
+	} else if logTopic == topicEthPurchase {
+		coinAmount = exReceipt.TokenToAmount
+		tokenAmount = exReceipt.TokenFromAmount
+	}
+
+	mv := &mongodb.MgoVolumeHistory{
+		Key:         mongodb.GetKeyOfVolumeHistory(mt.Hash, exReceipt.LogIndex),
+		Exchange:    exReceipt.Exchange,
+		Pairs:       exReceipt.Pairs,
+		Account:     exReceipt.Address,
+		CoinAmount:  coinAmount,
+		TokenAmount: tokenAmount,
+		BlockNumber: mt.BlockNumber,
+		Timestamp:   mt.Timestamp,
+		TxHash:      mt.Hash,
+		LogType:     exReceipt.LogType,
+		LogIndex:    exReceipt.LogIndex,
+	}
+	tryDoTimes("[parse] AddVolumeHistory "+mv.Key, func() error {
+		return mongodb.AddVolumeHistory(mv)
 	})
 }
 

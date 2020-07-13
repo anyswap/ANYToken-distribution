@@ -11,6 +11,7 @@ const (
 	tbTransactions     string = "Transactions"
 	tbLiquidity        string = "Liquidity"
 	tbVolume           string = "Volume"
+	tbVolumeHistory    string = "VolumeHistory"
 	tbAccounts         string = "Accounts"
 	tbLiquidityBalance string = "LiquidityBalances"
 
@@ -125,6 +126,21 @@ type MgoLiquidityBalance struct {
 	Liquidity   string `bson:"liquidity"`
 }
 
+// MgoVolumeHistory volmue tx history
+type MgoVolumeHistory struct {
+	Key         string `bson:"_id"` // txhash + logIndex
+	Exchange    string `bson:"exchange"`
+	Pairs       string `bson:"pairs"`
+	Account     string `bson:"account"`
+	CoinAmount  string `bson:"coinAmount"`
+	TokenAmount string `bson:"tokenAmount"`
+	BlockNumber uint64 `bson:"blockNumber"`
+	Timestamp   uint64 `bson:"timestamp"`
+	TxHash      string `bson:"txhash"`
+	LogType     string `bson:"logType"`
+	LogIndex    int    `bson:"logIndex"`
+}
+
 // GetKeyOfExchangeAndAccount get key
 func GetKeyOfExchangeAndAccount(exchange, account string) string {
 	return strings.ToLower(fmt.Sprintf("%s:%s", exchange, account))
@@ -138,4 +154,9 @@ func GetKeyOfExchangeAndTimestamp(exchange string, timestamp uint64) string {
 // GetKeyOfLiquidityBalance get key
 func GetKeyOfLiquidityBalance(exchange, account string, blockNumber uint64) string {
 	return strings.ToLower(fmt.Sprintf("%s:%s:%d", exchange, account, blockNumber))
+}
+
+// GetKeyOfVolumeHistory get key
+func GetKeyOfVolumeHistory(txhash string, logIndex int) string {
+	return fmt.Sprintf("%s:%d", txhash, logIndex)
 }

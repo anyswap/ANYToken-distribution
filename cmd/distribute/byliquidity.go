@@ -36,34 +36,46 @@ distribute rewards by liquidity
 	}
 )
 
-func byLiquidity(ctx *cli.Context) (err error) {
+func byLiquidity(ctx *cli.Context) error {
 	capi := utils.InitApp(ctx, true)
 	defer capi.CloseClient()
 	distributer.SetAPICaller(capi)
 
+	opt, args, err := getOptionAndTxArgs(ctx)
+	if err != nil {
+		return err
+	}
+
+	distributer.InitBuildTxArgs(args)
+	distributer.ByLiquidity(opt)
+	return nil
+}
+
+func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, *distributer.BuildTxArgs, error) {
 	var (
 		rewards     *big.Int
 		gasPrice    *big.Int
 		gasLimitPtr *uint64
 		noncePtr    *uint64
+		err         error
 	)
 
 	rewards, err = tools.GetBigIntFromString(ctx.String(utils.TotalRewardsFlag.Name))
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	if ctx.IsSet(utils.GasPriceFlag.Name) {
 		gasPrice, err = tools.GetBigIntFromString(ctx.String(utils.GasPriceFlag.Name))
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 	}
 
 	if ctx.IsSet(utils.GasLimitFlag.Name) {
 		gasLimitBig, errf := tools.GetBigIntFromString(ctx.String(utils.GasLimitFlag.Name))
 		if errf != nil {
-			return errf
+			return nil, nil, errf
 		}
 		gasLimit := gasLimitBig.Uint64()
 		gasLimitPtr = &gasLimit
@@ -72,21 +84,28 @@ func byLiquidity(ctx *cli.Context) (err error) {
 	if ctx.IsSet(utils.AccountNonceFlag.Name) {
 		nonceBig, errf := tools.GetBigIntFromString(ctx.String(utils.AccountNonceFlag.Name))
 		if errf != nil {
-			return errf
+			return nil, nil, errf
 		}
 		nonce := nonceBig.Uint64()
 		noncePtr = &nonce
 	}
 
+	var inputFile string
+	if ctx.IsSet(utils.AccountsFileFlag.Name) {
+		inputFile = ctx.String(utils.AccountsFileFlag.Name)
+	} else if ctx.IsSet(utils.VolumesFileFlag.Name) {
+		inputFile = ctx.String(utils.VolumesFileFlag.Name)
+	}
+
 	opt := &distributer.Option{
-		RewardToken:  ctx.String(utils.RewardTokenFlag.Name),
-		TotalValue:   rewards,
-		StartHeight:  ctx.Uint64(utils.StartHeightFlag.Name),
-		EndHeight:    ctx.Uint64(utils.EndHeightFlag.Name),
-		Exchange:     ctx.String(utils.ExchangeFlag.Name),
-		AccountsFile: ctx.String(utils.AccountsFileFlag.Name),
-		OutputFile:   ctx.String(utils.OutputFileFlag.Name),
-		DryRun:       ctx.Bool(utils.DryRunFlag.Name),
+		RewardToken: ctx.String(utils.RewardTokenFlag.Name),
+		TotalValue:  rewards,
+		StartHeight: ctx.Uint64(utils.StartHeightFlag.Name),
+		EndHeight:   ctx.Uint64(utils.EndHeightFlag.Name),
+		Exchange:    ctx.String(utils.ExchangeFlag.Name),
+		InputFile:   inputFile,
+		OutputFile:  ctx.String(utils.OutputFileFlag.Name),
+		DryRun:      ctx.Bool(utils.DryRunFlag.Name),
 	}
 
 	args := &distributer.BuildTxArgs{
@@ -96,8 +115,6 @@ func byLiquidity(ctx *cli.Context) (err error) {
 		GasLimit:     gasLimitPtr,
 		GasPrice:     gasPrice,
 	}
-	distributer.InitBuildTxArgs(args)
 
-	distributer.ByLiquidity(opt)
-	return nil
+	return opt, args, nil
 }

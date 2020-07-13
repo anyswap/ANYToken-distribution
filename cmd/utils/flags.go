@@ -126,7 +126,12 @@ var (
 	// AccountsFileFlag --accounts
 	AccountsFileFlag = &cli.StringFlag{
 		Name:  "accounts",
-		Usage: "accounts file",
+		Usage: "accounts file (line format: <address>)",
+	}
+	// VolumesFileFlag --volumes
+	VolumesFileFlag = &cli.StringFlag{
+		Name:  "volumes",
+		Usage: "volumes file (line format: <address> <volume>)",
 	}
 	// OutputFileFlag --output
 	OutputFileFlag = &cli.StringFlag{

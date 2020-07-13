@@ -67,14 +67,14 @@ func (args *BuildTxArgs) loadKeyStore() error {
 	}
 	passwd := strings.TrimSpace(string(passdata))
 
+	log.Println("decrypt keystore ......")
 	args.keyWrapper, err = keystore.DecryptKey(keyjson, passwd)
 	if err != nil {
 		log.Println("key decrypt fail", err)
 		return err
 	}
-
 	args.fromAddr = args.keyWrapper.Address
-	log.Println("from address is", args.fromAddr.String())
+	log.Info("decrypt keystore succeed", "from", args.fromAddr.String())
 	return nil
 }
 
@@ -89,6 +89,7 @@ func (args *BuildTxArgs) setDefaults() (err error) {
 			}
 			args.chainSigner = types.NewEIP155Signer(args.chainID)
 		}
+		log.Info("get chain ID succeed", "chainID", args.chainID)
 		if args.Nonce == nil {
 			var nonce uint64
 			nonce, err = capi.GetAccountNonce(from)
@@ -98,6 +99,7 @@ func (args *BuildTxArgs) setDefaults() (err error) {
 			}
 			args.Nonce = &nonce
 		}
+		log.Info("get nonce succeed", "from", from.String(), "nonce", *args.Nonce)
 		if args.GasPrice == nil {
 			args.GasPrice, err = capi.SuggestGasPrice()
 			if err != nil {
@@ -105,10 +107,12 @@ func (args *BuildTxArgs) setDefaults() (err error) {
 				continue
 			}
 		}
+		log.Info("get gas price succeed", "gasPrice", args.GasPrice)
 		if args.GasLimit == nil {
 			defaultGasLimit := uint64(90000)
 			args.GasLimit = &defaultGasLimit
 		}
+		log.Info("get gas limit succeed", "gasLimit", *args.GasLimit)
 		break
 	}
 	return nil

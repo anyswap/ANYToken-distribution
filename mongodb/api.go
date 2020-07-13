@@ -316,3 +316,38 @@ func FindLiquidityBalance(exchange, account string, blockNumber uint64) (string,
 	}
 	return res.Liquidity, nil
 }
+
+// FindAccountVolumes find account volumes
+func FindAccountVolumes(exchange string, startHeight, endHeight uint64) (accounts []common.Address, volumes []*big.Int) {
+	qexchange := bson.M{"exchange": strings.ToLower(exchange)}
+	qsheight := bson.M{"blockNumber": bson.M{"$gte": startHeight}}
+	qeheight := bson.M{"blockNumber": bson.M{"$lt": endHeight}}
+	queries := []bson.M{qexchange, qsheight, qeheight}
+	iter := getCollection(tbVolumeHistory).Find(bson.M{"$and": queries}).Iter()
+	var (
+		accountVolumesMap = make(map[common.Address]*big.Int)
+		account           common.Address
+		volume            *big.Int
+		result            MgoVolumeHistory
+	)
+	for iter.Next(&result) {
+		log.Info("find volume record", "account", result.Account, "coinAmount", result.CoinAmount, "tokenAmount", result.TokenAmount, "blockNumber", result.BlockNumber, "logIndex", result.LogIndex)
+		volume, _ = tools.GetBigIntFromString(result.CoinAmount)
+		if volume == nil || volume.Sign() <= 0 {
+			continue
+		}
+		account = common.HexToAddress(result.Account)
+		old, exist := accountVolumesMap[account]
+		if exist {
+			accountVolumesMap[account] = old.Add(old, volume)
+		} else {
+			accountVolumesMap[account] = volume
+		}
+	}
+	for acc, vol := range accountVolumesMap {
+		accounts = append(accounts, acc)
+		volumes = append(volumes, vol)
+		log.Info("find volume result", "account", acc.String(), "volume", vol)
+	}
+	return accounts, volumes
+}

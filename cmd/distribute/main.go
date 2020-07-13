@@ -23,6 +23,7 @@ func initApp() {
 	app.Copyright = "Copyright 2017-2020 The Anyswap Authors"
 	app.Commands = []*cli.Command{
 		byLiquidityCommand,
+		byVolumeCommand,
 		utils.LicenseCommand,
 		utils.VersionCommand,
 	}

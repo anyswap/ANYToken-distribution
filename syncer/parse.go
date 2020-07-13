@@ -75,7 +75,7 @@ func (w *worker) parseBlock(block *types.Block, wg *sync.WaitGroup) {
 	mb.ParentHash = block.ParentHash().String()
 	mb.Nonce = fmt.Sprintf("%d", block.Nonce())
 	mb.Miner = strings.ToLower(block.Coinbase().String())
-	mb.Difficulty = block.Difficulty().Uint64()
+	mb.Difficulty = block.Difficulty().String()
 	mb.GasLimit = block.GasLimit()
 	mb.GasUsed = block.GasUsed()
 	mb.Timestamp = block.Time().Uint64()

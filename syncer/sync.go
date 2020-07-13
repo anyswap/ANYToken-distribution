@@ -368,17 +368,7 @@ func (w *worker) syncRange(start, end uint64) {
 					continue
 				}
 				txs := block.Transactions()
-				receipts := make(types.Receipts, len(txs))
-				wg := new(sync.WaitGroup)
-				wg.Add(len(txs))
-				for i, tx := range txs {
-					go func(index int, txhash common.Hash) {
-						defer wg.Done()
-						receipt, _ := client.TransactionReceipt(cliContext, txhash)
-						receipts[index] = receipt
-					}(i, tx.Hash())
-				}
-				wg.Wait()
+				receipts := getReceipts(txs)
 				w.Parse(block, receipts)
 				if w.end == 0 {
 					log.Info("[syncer] sync block completed", "id", w.id, "number", height)
@@ -392,4 +382,29 @@ func (w *worker) syncRange(start, end uint64) {
 			log.Info("[syncer] syncRange completed", "id", w.id, "from", from, "to", to)
 		}
 	}
+}
+
+func loopGetReceipt(txHash common.Hash) *types.Receipt {
+	for {
+		receipt, err := client.TransactionReceipt(cliContext, txHash)
+		if err == nil {
+			return receipt
+		}
+		log.Warn("get tx receipt error", "txHash", txHash.String(), "err", err)
+		time.Sleep(retryDuration)
+	}
+}
+
+func getReceipts(txs []*types.Transaction) types.Receipts {
+	receipts := make(types.Receipts, len(txs))
+	wg := new(sync.WaitGroup)
+	wg.Add(len(txs))
+	for i, tx := range txs {
+		go func(index int, txHash common.Hash) {
+			defer wg.Done()
+			receipts[index] = loopGetReceipt(txHash)
+		}(i, tx.Hash())
+	}
+	wg.Wait()
+	return receipts
 }

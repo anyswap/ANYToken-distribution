@@ -35,7 +35,7 @@ type MgoBlock struct {
 	ParentHash string `bson:"parentHash"`
 	Nonce      string `bson:"nonce"`
 	Miner      string `bson:"miner"`
-	Difficulty uint64 `bson:"difficulty"`
+	Difficulty string `bson:"difficulty"`
 	GasLimit   uint64 `bson:"gasLimit"`
 	GasUsed    uint64 `bson:"gasUsed"`
 	Timestamp  uint64 `bson:"timestamp"`

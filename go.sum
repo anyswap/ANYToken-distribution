@@ -54,6 +54,8 @@ github.com/fortytw2/leaktest v1.3.0/go.mod h1:jDsjWgpAGjm2CA7WthBh/CdZYEPF31XHqu
 github.com/frankban/quicktest v1.7.2/go.mod h1:jaStnuzAqU1AJdCO0l53JDCJrVDKcS03DbaAcR7Ks/o=
 github.com/fsn-dev/fsn-go-sdk v0.0.0-20200609091359-5df5c67c20aa h1:skjVrw0oTr/r4gYV0ak6vmTCdv9mCCxJqBgxVZrMGuM=
 github.com/fsn-dev/fsn-go-sdk v0.0.0-20200609091359-5df5c67c20aa/go.mod h1:MtL34MP65N4fVCkYHlaXabn0mKKVOZZL2hRRS7L16ak=
+github.com/fsn-dev/fsn-go-sdk v0.0.0-20200713092344-8b46180560a2 h1:M4HCQOBrtdCQqmM3sd+arrcYl0rX9FVhG+9NkZStWFw=
+github.com/fsn-dev/fsn-go-sdk v0.0.0-20200713092344-8b46180560a2/go.mod h1:MtL34MP65N4fVCkYHlaXabn0mKKVOZZL2hRRS7L16ak=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
 github.com/garyburd/redigo v1.6.0/go.mod h1:NR3MbYisc3/PwhQ00EMzDiPmrwpPxAn5GI05/YaO1SY=
 github.com/go-kit/kit v0.8.0/go.mod h1:xBxKIO96dXMWWy0MnWVtmwkA9/13aqxPnvrjFYMA2as=

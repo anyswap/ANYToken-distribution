@@ -46,10 +46,7 @@ func getOrInitCollection(table string, collection **mgo.Collection, indexKey ...
 	if *collection == nil {
 		*collection = database.C(table)
 		if len(indexKey) != 0 && indexKey[0] != "" {
-			err := (*collection).EnsureIndexKey(indexKey...)
-			if err != nil {
-				log.Error("[mongodb] EnsureIndexKey error", "table", table, "indexKey", indexKey, "err", err)
-			}
+			_ = (*collection).EnsureIndexKey(indexKey...)
 		}
 	}
 	return *collection
@@ -88,7 +85,7 @@ func AddBlock(mb *MgoBlock, overwrite bool) (err error) {
 	}
 	if err == nil {
 		log.Info("[mongodb] AddBlock success", "number", mb.Number, "hash", mb.Hash)
-	} else {
+	} else if !mgo.IsDup(err) {
 		log.Warn("[mongodb] AddBlock failed", "number", mb.Number, "hash", mb.Hash, "err", err)
 	}
 	return err

@@ -29,13 +29,6 @@ func initMongodb(url, db string) {
 	dbName = db
 }
 
-func mongoReconnect() {
-	log.Info("[mongodb] reconnect database", "dbName", dbName)
-	mongoConnect()
-	time.Sleep(300 * time.Second)
-	go checkMongoSession()
-}
-
 func mongoConnect() {
 	if session != nil { // when reconnect
 		session.Close()
@@ -48,7 +41,7 @@ func mongoConnect() {
 		if err == nil {
 			break
 		}
-		log.Printf("[mongodb] dial error, err=%v\n", err)
+		log.Warn("[mongodb] dial error", "err", err)
 		time.Sleep(1 * time.Second)
 	}
 	session.SetMode(mgo.Monotonic, true)
@@ -62,27 +55,39 @@ func mongoConnect() {
 func checkMongoSession() {
 	for {
 		time.Sleep(60 * time.Second)
-		ensureMongoConnected()
+		if err := ensureMongoConnected(); err != nil {
+			log.Info("[mongodb] check session error", "err", err)
+			log.Info("[mongodb] reconnect database", "dbName", dbName)
+			mongoConnect()
+		}
 	}
 }
 
-func ensureMongoConnected() {
+func sessionPing() (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			mongoReconnect()
+			err = fmt.Errorf("recover from error %v", r)
 		}
 	}()
-	err := session.Ping()
+	for i := 0; i < 6; i++ {
+		err = session.Ping()
+		if err == nil {
+			break
+		}
+		time.Sleep(10 * time.Second)
+	}
+	return err
+}
+
+func ensureMongoConnected() (err error) {
+	err = sessionPing()
 	if err != nil {
 		log.Error("[mongodb] session ping error", "err", err)
 		log.Info("[mongodb] refresh session.", "dbName", dbName)
 		session.Refresh()
-		err = session.Ping()
-		if err == nil {
-			database = session.DB(dbName)
-			deinintCollections()
-		} else {
-			mongoReconnect()
-		}
+		database = session.DB(dbName)
+		deinintCollections()
+		err = sessionPing()
 	}
+	return err
 }

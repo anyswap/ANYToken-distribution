@@ -328,11 +328,15 @@ func getSynced(mbs []*mongodb.MgoBlock, num uint64) *mongodb.MgoBlock {
 }
 
 func (w *worker) calcSyncPercentage(height uint64) float64 {
-	if w.end <= w.start {
+	switch {
+	default:
+		percent := 100 * float64(height-w.start) / float64(w.end-w.start)
+		return math.Trunc(percent*100+0.5) / 100
+	case height <= w.start:
+		return 0
+	case w.end <= w.start || height >= w.end:
 		return 100
 	}
-	percent := 100 * float64(height-w.start) / float64(w.end-w.start)
-	return math.Trunc(percent*100+0.5) / 100
 }
 
 func (w *worker) syncRange(start, end uint64) {

@@ -17,9 +17,15 @@ func SetAPICaller(apiCaller *callapi.APICaller) {
 func Start(apiCaller *callapi.APICaller) {
 	SetAPICaller(apiCaller)
 	config := params.GetConfig()
-	if !config.Distribute.Enable {
-		log.Info("[distribute] function is not enabled")
-		return
+	for _, distCfg := range config.Distribute {
+		if !distCfg.Enable {
+			log.Warn("[distribute] ignore disabled config", "config", distCfg)
+			continue
+		}
+		go startDistributeJob(distCfg)
 	}
-	log.Info("[distribute] start job")
+}
+
+func startDistributeJob(distCfg *params.DistributeConfig) {
+	log.Info("[distribute] start job", "config", distCfg)
 }

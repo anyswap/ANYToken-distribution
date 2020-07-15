@@ -2,7 +2,6 @@ package params
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -21,7 +20,7 @@ type Config struct {
 	MongoDB    *MongoDBConfig
 	Gateway    *GatewayConfig
 	Sync       *SyncConfig
-	Distribute *DistributeConfig
+	Distribute []*DistributeConfig
 	Exchanges  []*ExchangeConfig
 }
 
@@ -68,7 +67,14 @@ type ExchangeConfig struct {
 
 // DistributeConfig distribute config
 type DistributeConfig struct {
-	Enable bool
+	Enable          bool
+	Exchange        string
+	RewardToken     string
+	StartHeight     uint64
+	ByLiquidCycle   uint64
+	ByLiquidRewards uint64
+	ByVolumeCycle   uint64
+	ByVolumeRewards uint64
 }
 
 // IsConfigedExchange return true if exchange is configed
@@ -115,45 +121,6 @@ func GetConfig() *Config {
 // SetConfig set config items
 func SetConfig(cfg *Config) {
 	config = cfg
-}
-
-// CheckConfig check config
-func CheckConfig() (err error) {
-	switch {
-	case config == nil:
-		return errors.New("empty config")
-	case config.MongoDB == nil:
-		return errors.New("must config MongoDB")
-	case config.Gateway == nil:
-		return errors.New("must config Gateway")
-	case config.Sync == nil:
-		return errors.New("must config Sync")
-	case config.Distribute == nil:
-		return errors.New("must config Distribute")
-	case config.Exchanges == nil:
-		return errors.New("must config Exchanges")
-	}
-
-	var total float64
-	for i, ex := range config.Exchanges {
-		if !common.IsHexAddress(ex.Exchange) {
-			return fmt.Errorf("wrong exchange address %v (index %v)", ex.Exchange, i)
-		}
-		if ex.Pairs == "" {
-			return fmt.Errorf("empty exchange pairs (index %v)", i)
-		}
-		if ex.Token == "" {
-			return fmt.Errorf("empty exchange token (index %v)", i)
-		}
-		if ex.CreationHeight == 0 {
-			return fmt.Errorf("empty exchange creation height (index %v)", i)
-		}
-		total += ex.Percentage
-	}
-	if math.Abs(total-100) > 1e-18 {
-		return fmt.Errorf("total percentage %v is not 100%%", total)
-	}
-	return nil
 }
 
 // LoadConfig load config

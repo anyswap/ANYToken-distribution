@@ -79,6 +79,7 @@ func updateLiquidityBalance(accounts []common.Address, liquids []*big.Int, heigh
 				continue
 			}
 		}
+		log.Info("[ditribute] GetLiquidityBalance success", "exchange", exchange, "account", account.String(), "height", height)
 		totalLiquid.Add(totalLiquid, value)
 		oldVal := liquids[i]
 		if oldVal == nil || oldVal.Cmp(value) > 0 { // get minimumn liquidity balance
@@ -106,6 +107,7 @@ func verifyTotalLiquidity(exchangeAddr common.Address, blockNumber, totalLiquid 
 			if totalLiquid.Cmp(totalSupply) != 0 {
 				return fmt.Errorf("account list is not complete at height %v. total liqudity %v is not equal to total supply %v", blockNumber, totalLiquid, totalSupply)
 			}
+			log.Info("account list is complete at height %v. total supply is %v", blockNumber, totalSupply)
 			return nil
 		}
 		log.Warn("[ditribute] GetExchangeLiquidity error", "exchange", exchangeAddr.String(), "blockNumber", blockNumber, "err", err)

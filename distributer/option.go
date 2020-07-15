@@ -110,6 +110,9 @@ func (opt *Option) getAccounts() (accounts []common.Address, err error) {
 			break
 		}
 		line := strings.TrimSpace(string(lineData))
+		if isCommentedLine(line) {
+			continue
+		}
 		if !common.IsHexAddress(line) {
 			return nil, fmt.Errorf("found wrong address line %v", line)
 		}
@@ -139,7 +142,13 @@ func (opt *Option) getAccountsAndVolumes() (accounts []common.Address, volumes [
 			break
 		}
 		line := strings.TrimSpace(string(lineData))
+		if isCommentedLine(line) {
+			continue
+		}
 		parts := strings.Split(line, " ")
+		if len(parts) < 2 {
+			return nil, nil, fmt.Errorf("less than 2 parts in line %v", line)
+		}
 		accountStr := parts[0]
 		volumeStr := parts[1]
 		if !common.IsHexAddress(accountStr) {
@@ -155,4 +164,8 @@ func (opt *Option) getAccountsAndVolumes() (accounts []common.Address, volumes [
 	}
 
 	return accounts, volumes, nil
+}
+
+func isCommentedLine(line string) bool {
+	return strings.HasPrefix(line, "#")
 }

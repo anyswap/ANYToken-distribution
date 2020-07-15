@@ -118,13 +118,14 @@ func (args *BuildTxArgs) setDefaults() (err error) {
 	return nil
 }
 
-func (args *BuildTxArgs) sendRewardsTransaction(account common.Address, reward *big.Int, rewardToken common.Address, dryRun bool) error {
+func (args *BuildTxArgs) sendRewardsTransaction(account common.Address, reward *big.Int, rewardToken common.Address, dryRun bool) (txHash common.Hash, err error) {
 	data := make([]byte, 68)
 	copy(data[:4], transferFuncHash)
 	copy(data[4:36], account.Hash().Bytes())
 	copy(data[36:68], common.LeftPadBytes(reward.Bytes(), 32))
 
-	if nonce, err := capi.GetAccountNonce(args.fromAddr); err == nil {
+	nonce, err := capi.GetAccountNonce(args.fromAddr)
+	if err == nil {
 		if nonce > *args.Nonce {
 			*args.Nonce = nonce
 		}
@@ -134,20 +135,21 @@ func (args *BuildTxArgs) sendRewardsTransaction(account common.Address, reward *
 
 	signedTx, err := types.SignTx(rawTx, args.chainSigner, args.keyWrapper.PrivateKey)
 	if err != nil {
-		return fmt.Errorf("sign tx failed, err=%v", err)
+		return txHash, fmt.Errorf("sign tx failed, %v", err)
 	}
 
-	txHash := signedTx.Hash().String()
-
-	if !dryRun {
-		err = capi.SendTransaction(signedTx)
-		if err != nil {
-			return fmt.Errorf("send transaction failed, err=%v", err)
-		}
-		*args.Nonce++
-		log.Printf("send tx success, tx hash is %v\n", txHash)
-	} else {
-		log.Println("is dry run, does not send transaction")
+	if dryRun {
+		log.Info("sendRewards dry run", "account", account.String(), "reward", reward)
+		return txHash, nil
 	}
-	return nil
+
+	err = capi.SendTransaction(signedTx)
+	if err != nil {
+		return txHash, fmt.Errorf("send tx failed, %v", err)
+	}
+	*args.Nonce++
+
+	txHash = signedTx.Hash()
+	log.Info("sendRewards success", "account", account.String(), "reward", reward, "txHash", txHash.String())
+	return txHash, nil
 }

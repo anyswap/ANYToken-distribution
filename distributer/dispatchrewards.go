@@ -49,17 +49,14 @@ func sendRewards(accounts []common.Address, rewards, shares []*big.Int, rewardTo
 		if reward == nil || reward.Sign() <= 0 {
 			continue
 		}
-		log.Info("sendRewards", "account", account.String(), "reward", reward, "share", share, "dryrun", dryRun)
-		if outputFile != nil {
-			msg := strings.ToLower(fmt.Sprintf("%s %s\n", account.String(), reward.String()))
-			_, err := outputFile.Write([]byte(msg))
-			if err != nil {
-				log.Info("sendRewards write output error", "msg", msg, "err", err)
-			}
-		}
-		err := commonTxArgs.sendRewardsTransaction(account, reward, rewardToken, dryRun)
+		log.Info("sendRewards begin", "account", account.String(), "reward", reward, "share", share, "dryrun", dryRun)
+		txHash, err := commonTxArgs.sendRewardsTransaction(account, reward, rewardToken, dryRun)
 		if err != nil {
 			log.Info("sendRewards failed", "account", account.String(), "reward", reward, "share", share, "dryrun", dryRun, "err", err)
+		}
+		err = writeOutput(strings.ToLower(account.String()), reward.String(), txHash.String())
+		if err != nil {
+			log.Info("sendRewards write output error", "err", err)
 		}
 	}
 }
@@ -73,4 +70,13 @@ func calcTotalShare(shares []*big.Int) *big.Int {
 		sum.Add(sum, share)
 	}
 	return sum
+}
+
+func writeOutput(account, reward, txHash string) error {
+	if outputFile == nil {
+		return nil
+	}
+	msg := fmt.Sprintf("%s %s %s\n", account, reward, txHash)
+	_, err := outputFile.Write([]byte(msg))
+	return err
 }

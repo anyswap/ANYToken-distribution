@@ -12,76 +12,14 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-var (
-	collectionBlock            *mgo.Collection
-	collectionTransaction      *mgo.Collection
-	collectionSyncInfo         *mgo.Collection
-	collectionLiquidity        *mgo.Collection
-	collectionVolume           *mgo.Collection
-	collectionVolumeHistory    *mgo.Collection
-	collectionAccount          *mgo.Collection
-	collectionLiquidityBalance *mgo.Collection
-)
-
-// do this when reconnect to the database
-func deinintCollections() {
-	collectionBlock = nil
-	collectionTransaction = nil
-	collectionSyncInfo = nil
-	collectionLiquidity = nil
-	collectionVolume = nil
-	collectionAccount = nil
-	collectionLiquidityBalance = nil
-}
-
-func initCollections() {
-	_ = getCollection(tbSyncInfo).Insert(
-		&MgoSyncInfo{
-			Key: KeyOfLatestSyncInfo,
-		},
-	)
-}
-
-func getOrInitCollection(table string, collection **mgo.Collection, indexKey ...string) *mgo.Collection {
-	if *collection == nil {
-		*collection = database.C(table)
-		if len(indexKey) != 0 && indexKey[0] != "" {
-			_ = (*collection).EnsureIndexKey(indexKey...)
-		}
-	}
-	return *collection
-}
-
-func getCollection(table string) *mgo.Collection {
-	switch table {
-	case tbBlocks:
-		return getOrInitCollection(table, &collectionBlock, "number")
-	case tbTransactions:
-		return getOrInitCollection(table, &collectionTransaction, "blockNumber")
-	case tbSyncInfo:
-		return getOrInitCollection(table, &collectionSyncInfo, "")
-	case tbLiquidity:
-		return getOrInitCollection(table, &collectionLiquidity, "exchange", "timestamp")
-	case tbVolume:
-		return getOrInitCollection(table, &collectionVolume, "exchange", "timestamp")
-	case tbVolumeHistory:
-		return getOrInitCollection(table, &collectionVolumeHistory, "exchange", "account", "blockNumber")
-	case tbAccounts:
-		return getOrInitCollection(table, &collectionAccount, "exchange")
-	case tbLiquidityBalance:
-		return getOrInitCollection(table, &collectionLiquidityBalance, "exchange", "account", "blockNumber")
-	}
-	panic("unknown talbe " + table)
-}
-
 // --------------- add ---------------------------------
 
 // AddBlock add block
 func AddBlock(mb *MgoBlock, overwrite bool) (err error) {
 	if overwrite {
-		_, err = getCollection(tbBlocks).UpsertId(mb.Key, mb)
+		_, err = collectionBlock.UpsertId(mb.Key, mb)
 	} else {
-		err = getCollection(tbBlocks).Insert(mb)
+		err = collectionBlock.Insert(mb)
 	}
 	if err == nil {
 		log.Info("[mongodb] AddBlock success", "number", mb.Number, "hash", mb.Hash)
@@ -94,18 +32,18 @@ func AddBlock(mb *MgoBlock, overwrite bool) (err error) {
 // AddTransaction add tx
 func AddTransaction(mt *MgoTransaction, overwrite bool) error {
 	if overwrite {
-		_, err := getCollection(tbTransactions).UpsertId(mt.Key, mt)
+		_, err := collectionTransaction.UpsertId(mt.Key, mt)
 		return err
 	}
-	return getCollection(tbTransactions).Insert(mt)
+	return collectionTransaction.Insert(mt)
 }
 
 // AddLiquidity add liquidity
 func AddLiquidity(ml *MgoLiquidity, overwrite bool) (err error) {
 	if overwrite {
-		_, err = getCollection(tbLiquidity).UpsertId(ml.Key, ml)
+		_, err = collectionLiquidity.UpsertId(ml.Key, ml)
 	} else {
-		err = getCollection(tbLiquidity).Insert(ml)
+		err = collectionLiquidity.Insert(ml)
 	}
 	if err == nil {
 		log.Info("[mongodb] AddLiquidity success", "liquidity", ml)
@@ -118,9 +56,9 @@ func AddLiquidity(ml *MgoLiquidity, overwrite bool) (err error) {
 // AddVolume add volume
 func AddVolume(mv *MgoVolume, overwrite bool) (err error) {
 	if overwrite {
-		_, err = getCollection(tbVolume).UpsertId(mv.Key, mv)
+		_, err = collectionVolume.UpsertId(mv.Key, mv)
 	} else {
-		err = getCollection(tbVolume).Insert(mv)
+		err = collectionVolume.Insert(mv)
 	}
 	if err == nil {
 		log.Info("[mongodb] AddVolume success", "volume", mv)
@@ -132,7 +70,7 @@ func AddVolume(mv *MgoVolume, overwrite bool) (err error) {
 
 // AddVolumeHistory add volume history
 func AddVolumeHistory(mv *MgoVolumeHistory) error {
-	err := getCollection(tbVolumeHistory).Insert(mv)
+	err := collectionVolumeHistory.Insert(mv)
 	switch {
 	case err == nil:
 		log.Info("[mongodb] AddVolumeHistory success", "volume", mv)
@@ -146,7 +84,7 @@ func AddVolumeHistory(mv *MgoVolumeHistory) error {
 
 // AddAccount add exchange account
 func AddAccount(ma *MgoAccount) error {
-	err := getCollection(tbAccounts).Insert(ma)
+	err := collectionAccount.Insert(ma)
 	switch {
 	case err == nil:
 		log.Info("[mongodb] AddAccount success", "account", ma)
@@ -160,7 +98,7 @@ func AddAccount(ma *MgoAccount) error {
 
 // AddLiquidityBalance add liquidity balance
 func AddLiquidityBalance(ma *MgoLiquidityBalance) error {
-	err := getCollection(tbLiquidityBalance).Insert(ma)
+	err := collectionLiquidityBalance.Insert(ma)
 	switch {
 	case err == nil:
 		log.Info("[mongodb] AddLiquidityBalance success", "balance", ma)
@@ -176,7 +114,7 @@ func AddLiquidityBalance(ma *MgoLiquidityBalance) error {
 
 // UpdateSyncInfo update sync info
 func UpdateSyncInfo(number uint64, hash string, timestamp uint64) error {
-	return getCollection(tbSyncInfo).UpdateId(KeyOfLatestSyncInfo,
+	return collectionSyncInfo.UpdateId(KeyOfLatestSyncInfo,
 		bson.M{"$set": bson.M{
 			"number":    number,
 			"timestamp": timestamp,
@@ -235,7 +173,7 @@ func UpdateVolumeWithReceipt(exr *ExchangeReceipt, blockHash string, blockNumber
 func FindBlocksInRange(start, end uint64) ([]*MgoBlock, error) {
 	count := int(end - start + 1)
 	blocks := make([]*MgoBlock, count)
-	iter := getCollection(tbBlocks).Find(bson.M{"number": bson.M{"$gte": start, "$lte": end}}).Limit(count).Iter()
+	iter := collectionBlock.Find(bson.M{"number": bson.M{"$gte": start, "$lte": end}}).Limit(count).Iter()
 	err := iter.All(&blocks)
 	if err != nil {
 		return nil, err
@@ -246,7 +184,7 @@ func FindBlocksInRange(start, end uint64) ([]*MgoBlock, error) {
 // FindLatestSyncInfo find latest sync info
 func FindLatestSyncInfo() (*MgoSyncInfo, error) {
 	var info MgoSyncInfo
-	err := getCollection(tbSyncInfo).FindId(KeyOfLatestSyncInfo).One(&info)
+	err := collectionSyncInfo.FindId(KeyOfLatestSyncInfo).One(&info)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +194,7 @@ func FindLatestSyncInfo() (*MgoSyncInfo, error) {
 // FindLatestLiquidity find latest liquidity
 func FindLatestLiquidity(exchange string) (*MgoLiquidity, error) {
 	var res MgoLiquidity
-	err := getCollection(tbLiquidity).Find(bson.M{"exchange": exchange}).Sort("-timestamp").Limit(1).One(&res)
+	err := collectionLiquidity.Find(bson.M{"exchange": exchange}).Sort("-timestamp").Limit(1).One(&res)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +204,7 @@ func FindLatestLiquidity(exchange string) (*MgoLiquidity, error) {
 // FindLiquidity find by key
 func FindLiquidity(key string) (*MgoLiquidity, error) {
 	var res MgoLiquidity
-	err := getCollection(tbLiquidity).FindId(key).One(&res)
+	err := collectionLiquidity.FindId(key).One(&res)
 	if err != nil {
 		return nil, err
 	}
@@ -276,7 +214,7 @@ func FindLiquidity(key string) (*MgoLiquidity, error) {
 // FindLatestVolume find latest volume
 func FindLatestVolume(exchange string) (*MgoVolume, error) {
 	var res MgoVolume
-	err := getCollection(tbVolume).Find(bson.M{"exchange": exchange}).Sort("-timestamp").Limit(1).One(&res)
+	err := collectionVolume.Find(bson.M{"exchange": exchange}).Sort("-timestamp").Limit(1).One(&res)
 	if err != nil {
 		return nil, err
 	}
@@ -286,7 +224,7 @@ func FindLatestVolume(exchange string) (*MgoVolume, error) {
 // FindVolume find by key
 func FindVolume(key string) (*MgoVolume, error) {
 	var res MgoVolume
-	err := getCollection(tbVolume).FindId(key).One(&res)
+	err := collectionVolume.FindId(key).One(&res)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +233,7 @@ func FindVolume(key string) (*MgoVolume, error) {
 
 // FindAllAccounts find accounts
 func FindAllAccounts(exchange string) (accounts []common.Address) {
-	iter := getCollection(tbAccounts).Find(bson.M{"exchange": strings.ToLower(exchange)}).Iter()
+	iter := collectionAccount.Find(bson.M{"exchange": strings.ToLower(exchange)}).Iter()
 	var result MgoAccount
 	for iter.Next(&result) {
 		accounts = append(accounts, common.HexToAddress(result.Account))
@@ -307,7 +245,7 @@ func FindAllAccounts(exchange string) (accounts []common.Address) {
 func FindLiquidityBalance(exchange, account string, blockNumber uint64) (string, error) {
 	var res MgoLiquidityBalance
 	key := GetKeyOfLiquidityBalance(exchange, account, blockNumber)
-	err := getCollection(tbLiquidityBalance).FindId(key).One(&res)
+	err := collectionLiquidityBalance.FindId(key).One(&res)
 	if err != nil {
 		return "0", err
 	}
@@ -320,7 +258,7 @@ func FindAccountVolumes(exchange string, startHeight, endHeight uint64) (account
 	qsheight := bson.M{"blockNumber": bson.M{"$gte": startHeight}}
 	qeheight := bson.M{"blockNumber": bson.M{"$lt": endHeight}}
 	queries := []bson.M{qexchange, qsheight, qeheight}
-	iter := getCollection(tbVolumeHistory).Find(bson.M{"$and": queries}).Iter()
+	iter := collectionVolumeHistory.Find(bson.M{"$and": queries}).Iter()
 	var (
 		accountVolumesMap = make(map[common.Address]*big.Int)
 		account           common.Address

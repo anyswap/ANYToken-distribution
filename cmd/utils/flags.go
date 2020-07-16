@@ -85,17 +85,17 @@ var (
 	// GasLimitFlag --gas
 	GasLimitFlag = &cli.StringFlag{
 		Name:  "gasLimit",
-		Usage: "gas limit in transaction",
+		Usage: "gas limit in transaction, use default if not specified",
 	}
 	// GasPriceFlag --gasPrice
 	GasPriceFlag = &cli.StringFlag{
 		Name:  "gasPrice",
-		Usage: "gas price in transaction",
+		Usage: "gas price in transaction, use default if not specified",
 	}
 	// AccountNonceFlag --nonce
 	AccountNonceFlag = &cli.StringFlag{
 		Name:  "nonce",
-		Usage: "nonce in transaction",
+		Usage: "nonce in transaction, use default if not specified",
 	}
 
 	// RewardTokenFlag --rewardToken
@@ -106,7 +106,7 @@ var (
 	// TotalRewardsFlag --rewards
 	TotalRewardsFlag = &cli.StringFlag{
 		Name:  "rewards",
-		Usage: "total rewards",
+		Usage: "total rewards (uint wei)",
 	}
 	// StartHeightFlag --start
 	StartHeightFlag = &cli.StringFlag{
@@ -126,12 +126,12 @@ var (
 	// AccountsFileFlag --accounts
 	AccountsFileFlag = &cli.StringFlag{
 		Name:  "accounts",
-		Usage: "accounts file (line format: <address>)",
+		Usage: "accounts file (line format: <address>), read from database if not specified",
 	}
 	// VolumesFileFlag --volumes
 	VolumesFileFlag = &cli.StringFlag{
 		Name:  "volumes",
-		Usage: "volumes file (line format: <address> <volume>)",
+		Usage: "volumes file (line format: <address> <volume>), read from database if not specified",
 	}
 	// OutputFileFlag --output
 	OutputFileFlag = &cli.StringFlag{

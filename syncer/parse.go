@@ -4,32 +4,15 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
-	"github.com/anyswap/ANYToken-distribution/log"
 	"github.com/anyswap/ANYToken-distribution/mongodb"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/core/types"
-	"gopkg.in/mgo.v2"
 )
 
 const (
-	maxParseBlocks  = 1000
-	retryDBCount    = 3
-	retryDBInterval = 1 * time.Second
+	maxParseBlocks = 1000
 )
-
-func tryDoTimes(name string, f func() error) {
-	var err error
-	for i := 0; i < retryDBCount; i++ {
-		err = f()
-		if err == nil || mgo.IsDup(err) {
-			return
-		}
-		time.Sleep(retryDBInterval)
-	}
-	log.Warn("[parse] tryDoTimes", "name", name, "times", retryDBCount, "err", err)
-}
 
 // Parse parse block and receipts
 func (w *worker) Parse(block *types.Block, receipts types.Receipts) {
@@ -80,12 +63,14 @@ func (w *worker) parseBlock(block *types.Block, wg *sync.WaitGroup) {
 	mb.GasUsed = block.GasUsed()
 	mb.Timestamp = block.Time().Uint64()
 
-	tryDoTimes("[parse] AddBlock "+hash, func() error {
+	_ = mongodb.TryDoTimes("AddBlock "+mb.Key, func() error {
 		return mongodb.AddBlock(mb, overwrite)
 	})
 
 	if w.end == 0 {
-		_ = mongodb.UpdateSyncInfo(mb.Number, mb.Hash, mb.Timestamp)
+		_ = mongodb.TryDoTimes("UpdateSyncInfo "+mb.Hash, func() error {
+			return mongodb.UpdateSyncInfo(mb.Number, mb.Hash, mb.Timestamp)
+		})
 	}
 }
 
@@ -129,7 +114,7 @@ func (w *worker) parseTx(i int, tx *types.Transaction, block *types.Block, recei
 		parseReceipt(mt, receipt)
 	}
 
-	tryDoTimes("[parse] AddTransaction "+hash, func() error {
+	_ = mongodb.TryDoTimes("AddTransaction "+mt.Key, func() error {
 		return mongodb.AddTransaction(mt, overwrite)
 	})
 }

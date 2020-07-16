@@ -4,28 +4,28 @@ import (
 	"github.com/anyswap/ANYToken-distribution/log"
 )
 
-// ByVolume ditribute rewards by vloume
-func ByVolume(opt *Option) {
-	var err error
-	err = commonTxArgs.Check() // check args before opts
-	if err != nil {
-		log.Error("[ditribute] Check commonTxArgs error", "args", commonTxArgs, "err", err)
-		return
+// ByVolume distribute rewards by vloume
+func ByVolume(opt *Option, args *BuildTxArgs) error {
+	if opt.TotalValue == nil || opt.TotalValue.Sign() <= 0 {
+		log.Warn("no volume rewards", "option", opt.String())
+		return errTotalRewardsIsZero
 	}
-	err = opt.checkAndInit()
+	opt.byWhat = byVolumeMethod
+	opt.buildTxArgs = args
+	err := opt.checkAndInit()
 	defer opt.deinit()
 	if err != nil {
-		log.Error("[ditribute] check option error", "option", opt, "err", err)
-		return
+		log.Error("[byvolume] check option error", "option", opt.String(), "err", err)
+		return errCheckOptionFailed
 	}
 	accounts, volumes, err := opt.getAccountsAndVolumes()
 	if err != nil {
-		log.Error("[distribute] getAccountsAndVolumes error", "err", err)
-		return
+		log.Error("[byvolume] getAccountsAndVolumes error", "err", err)
+		return errGetAccountsVolumeFailed
 	}
 	if len(accounts) == 0 {
-		log.Warn("[ditribute] no accounts")
-		return
+		log.Warn("[byvolume] no accounts. " + opt.String())
+		return errNoAccountSatisfied
 	}
-	dispatchRewards(opt, accounts, volumes)
+	return dispatchRewards(opt, accounts, volumes)
 }

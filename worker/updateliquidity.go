@@ -10,26 +10,11 @@ import (
 	"github.com/anyswap/ANYToken-distribution/params"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/core/types"
-	"gopkg.in/mgo.v2"
 )
 
 const (
-	secondsPerDay   = 24 * 3600
-	retryDBCount    = 3
-	retryDBInterval = 1 * time.Second
+	secondsPerDay = 24 * 3600
 )
-
-func tryDoTimes(f func() error) error {
-	var err error
-	for i := 0; i < retryDBCount; i++ {
-		err = f()
-		if err == nil || mgo.IsDup(err) {
-			return nil
-		}
-		time.Sleep(retryDBInterval)
-	}
-	return err
-}
 
 func getDayBegin(timestamp uint64) uint64 {
 	return timestamp - timestamp%secondsPerDay
@@ -117,7 +102,7 @@ func updateDateLiquidity(ex *params.ExchangeConfig, timestamp uint64) error {
 	mliq.BlockHash = blockHash.String()
 	mliq.Timestamp = timestamp
 
-	err = tryDoTimes(func() error {
+	err = mongodb.TryDoTimes("AddLiquidity "+mliq.Key, func() error {
 		return mongodb.AddLiquidity(mliq, true)
 	})
 

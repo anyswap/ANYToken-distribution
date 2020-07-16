@@ -114,7 +114,7 @@ func recordAccounts(exchange, pairs, account string) {
 		Pairs:    pairs,
 		Account:  strings.ToLower(account),
 	}
-	tryDoTimes("[parse] AddAccount "+ma.Key, func() error {
+	_ = mongodb.TryDoTimes("AddAccount "+ma.Key, func() error {
 		return mongodb.AddAccount(ma)
 	})
 }
@@ -150,7 +150,7 @@ func recordAccountVoumes(mt *mongodb.MgoTransaction, exReceipt *mongodb.Exchange
 		LogType:     exReceipt.LogType,
 		LogIndex:    exReceipt.LogIndex,
 	}
-	tryDoTimes("[parse] AddVolumeHistory "+mv.Key, func() error {
+	_ = mongodb.TryDoTimes("AddVolumeHistory "+mv.Key, func() error {
 		return mongodb.AddVolumeHistory(mv)
 	})
 }
@@ -171,7 +171,7 @@ func updateVolumes(mt *mongodb.MgoTransaction, exReceipt *mongodb.ExchangeReceip
 	timestamp := getDayBegin(mt.Timestamp)
 	log.Info("[parse] update volume", "txHash", mt.Hash, "logIndex", exReceipt.LogIndex, "logType", exReceipt.LogType, "exchange", exReceipt.Exchange, "pairs", exReceipt.Pairs, "timestamp", timestampToDate(mt.Timestamp))
 
-	tryDoTimes("[parse] UpdateVolume "+mt.Hash, func() error {
+	_ = mongodb.TryDoTimes("UpdateVolume "+mt.Hash, func() error {
 		return mongodb.UpdateVolumeWithReceipt(exReceipt, mt.BlockHash, mt.BlockNumber, timestamp)
 	})
 }

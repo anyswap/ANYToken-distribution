@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/anyswap/ANYToken-distribution/tools"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 )
 
@@ -71,6 +72,24 @@ func checkDistributeConfig() (err error) {
 		}
 		if !common.IsHexAddress(dist.RewardToken) {
 			return fmt.Errorf("[check distribute] wrong reward token address %v (index %v)", dist.RewardToken, i)
+		}
+		if dist.ByLiquidRewards != "" {
+			_, err := tools.GetBigIntFromString(dist.ByLiquidRewards)
+			if err != nil {
+				return fmt.Errorf("[check distribute] wrong by liquid rewards %v (index %v)", dist.ByLiquidRewards, i)
+			}
+		}
+		if dist.ByVolumeRewards != "" {
+			_, err := tools.GetBigIntFromString(dist.ByVolumeRewards)
+			if err != nil {
+				return fmt.Errorf("[check distribute] wrong by volume rewards %v (index %v)", dist.ByVolumeRewards, i)
+			}
+		}
+		if dist.GasPrice != "" {
+			_, err := tools.GetBigIntFromString(dist.GasPrice)
+			if err != nil {
+				return fmt.Errorf("[check distribute] wrong gas price %v (index %v)", dist.GasPrice, i)
+			}
 		}
 	}
 	return nil

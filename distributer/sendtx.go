@@ -14,8 +14,6 @@ import (
 
 var (
 	transferFuncHash = common.FromHex("0xa9059cbb")
-
-	commonTxArgs *BuildTxArgs
 )
 
 // BuildTxArgs build tx args
@@ -32,11 +30,6 @@ type BuildTxArgs struct {
 	fromAddr    common.Address
 	chainID     *big.Int
 	chainSigner types.Signer
-}
-
-// InitBuildTxArgs init buildtx args
-func InitBuildTxArgs(args *BuildTxArgs) {
-	commonTxArgs = args
 }
 
 // Check check common args

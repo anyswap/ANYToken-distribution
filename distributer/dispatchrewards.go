@@ -1,23 +1,24 @@
 package distributer
 
 import (
-	"fmt"
 	"math/big"
 	"strings"
 
 	"github.com/anyswap/ANYToken-distribution/log"
+	"github.com/anyswap/ANYToken-distribution/mongodb"
+	"github.com/anyswap/ANYToken-distribution/params"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 )
 
-func dispatchRewards(opt *Option, accounts []common.Address, shares []*big.Int) {
+func dispatchRewards(opt *Option, accounts []common.Address, shares []*big.Int) error {
 	if len(accounts) != len(shares) {
 		log.Error("number of accounts %v is not equal to shares %v", len(accounts), len(shares))
-		return
+		return errAccountsLengthMismatch
 	}
 	totalShare := calcTotalShare(shares)
 	if totalShare.Sign() <= 0 {
 		log.Error("sum shares is zero")
-		return
+		return errNoAccountSatisfied
 	}
 	rewards := make([]*big.Int, len(accounts))
 	totalReward := opt.TotalValue
@@ -34,14 +35,41 @@ func dispatchRewards(opt *Option, accounts []common.Address, shares []*big.Int) 
 		rewards[i] = reward
 	}
 
-	sendRewards(accounts, rewards, shares, common.HexToAddress(opt.RewardToken), opt.DryRun)
+	rewardsSended, err := sendRewards(accounts, rewards, shares, opt)
+
+	hasSendedReward := rewardsSended.Sign() > 0
+
+	if !opt.DryRun && hasSendedReward {
+		mdist := &mongodb.MgoDistributeInfo{
+			Exchange:    strings.ToLower(opt.Exchange),
+			Pairs:       params.GetExchangePairs(opt.Exchange),
+			ByWhat:      opt.byWhat,
+			Start:       opt.StartHeight,
+			End:         opt.EndHeight,
+			RewardToken: opt.RewardToken,
+			Rewards:     rewardsSended.String(),
+		}
+		_ = mongodb.TryDoTimes("AddDistributeInfo "+mdist.Pairs, func() error {
+			return mongodb.AddDistributeInfo(mdist)
+		})
+	}
+	if hasSendedReward {
+		// treat this situation as success
+		// and resolve partly failed manually if have
+		// don't retry send rewards with return nil here
+		return nil
+	}
+	return err
 }
 
-func sendRewards(accounts []common.Address, rewards, shares []*big.Int, rewardToken common.Address, dryRun bool) {
+func sendRewards(accounts []common.Address, rewards, shares []*big.Int, opt *Option) (*big.Int, error) {
+	rewardsSended := big.NewInt(0)
 	if len(accounts) != len(rewards) || len(accounts) != len(shares) {
 		log.Error("number of accounts %v, rewards %v, and shares %v are not equal", len(accounts), len(rewards), len(shares))
-		return
+		return rewardsSended, errAccountsLengthMismatch
 	}
+	rewardToken := common.HexToAddress(opt.RewardToken)
+	dryRun := opt.DryRun
 	var reward, share *big.Int
 	for i, account := range accounts {
 		reward = rewards[i]
@@ -50,15 +78,15 @@ func sendRewards(accounts []common.Address, rewards, shares []*big.Int, rewardTo
 			continue
 		}
 		log.Info("sendRewards begin", "account", account.String(), "reward", reward, "share", share, "dryrun", dryRun)
-		txHash, err := commonTxArgs.sendRewardsTransaction(account, reward, rewardToken, dryRun)
+		txHash, err := opt.sendRewardsTransaction(account, reward, rewardToken, dryRun)
 		if err != nil {
 			log.Info("sendRewards failed", "account", account.String(), "reward", reward, "share", share, "dryrun", dryRun, "err", err)
+			return rewardsSended, errSendTransactionFailed
 		}
-		err = writeOutput(strings.ToLower(account.String()), reward.String(), txHash.String())
-		if err != nil {
-			log.Info("sendRewards write output error", "err", err)
-		}
+		rewardsSended.Add(rewardsSended, reward)
+		_ = opt.writeOutput(strings.ToLower(account.String()), reward.String(), txHash.String())
 	}
+	return rewardsSended, nil
 }
 
 func calcTotalShare(shares []*big.Int) *big.Int {
@@ -70,13 +98,4 @@ func calcTotalShare(shares []*big.Int) *big.Int {
 		sum.Add(sum, share)
 	}
 	return sum
-}
-
-func writeOutput(account, reward, txHash string) error {
-	if outputFile == nil {
-		return nil
-	}
-	msg := fmt.Sprintf("%s %s %s\n", account, reward, txHash)
-	_, err := outputFile.Write([]byte(msg))
-	return err
 }

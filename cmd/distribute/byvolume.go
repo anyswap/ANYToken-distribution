@@ -43,7 +43,5 @@ func byVolume(ctx *cli.Context) (err error) {
 		return err
 	}
 
-	distributer.InitBuildTxArgs(args)
-	distributer.ByVolume(opt)
-	return nil
+	return distributer.ByVolume(opt, args)
 }

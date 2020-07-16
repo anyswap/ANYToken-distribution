@@ -46,9 +46,7 @@ func byLiquidity(ctx *cli.Context) error {
 		return err
 	}
 
-	distributer.InitBuildTxArgs(args)
-	distributer.ByLiquidity(opt)
-	return nil
+	return distributer.ByLiquidity(opt, args)
 }
 
 func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, *distributer.BuildTxArgs, error) {

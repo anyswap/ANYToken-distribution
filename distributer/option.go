@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/anyswap/ANYToken-distribution/log"
 	"github.com/anyswap/ANYToken-distribution/mongodb"
 	"github.com/anyswap/ANYToken-distribution/params"
 	"github.com/anyswap/ANYToken-distribution/tools"
@@ -17,9 +18,7 @@ import (
 
 const sampleCount = 4
 
-var outputFile *os.File
-
-// Option ditribute options
+// Option distribute options
 type Option struct {
 	TotalValue  *big.Int
 	StartHeight uint64 // start inclusive
@@ -29,27 +28,32 @@ type Option struct {
 	InputFile   string
 	OutputFile  string
 	DryRun      bool
+
+	byWhat      string
+	buildTxArgs *BuildTxArgs
+	outputFile  *os.File
+}
+
+func (opt *Option) String() string {
+	return fmt.Sprintf("TotalValue %v StartHeight %v EndHeight %v Exchange %v RewardToken %v DryRun %v", opt.TotalValue, opt.StartHeight, opt.EndHeight, opt.Exchange, opt.RewardToken, opt.DryRun)
 }
 
 func (opt *Option) deinit() {
-	if outputFile != nil {
-		outputFile.Close()
+	if opt.outputFile != nil {
+		opt.outputFile.Close()
 	}
 }
 
 func (opt *Option) checkAndInit() (err error) {
-	if opt.TotalValue == nil || opt.TotalValue.Sign() <= 0 {
-		return fmt.Errorf("wrong total value %v", opt.TotalValue)
+	err = opt.buildTxArgs.Check()
+	if err != nil {
+		return err
 	}
 	if opt.StartHeight >= opt.EndHeight {
 		return fmt.Errorf("empty range, start height %v >= end height %v", opt.StartHeight, opt.EndHeight)
 	}
 	if !params.IsConfigedExchange(opt.Exchange) {
 		return fmt.Errorf("exchange %v is not configed", opt.Exchange)
-	}
-	latestBlock := capi.LoopGetLatestBlockHeader()
-	if latestBlock.Number.Uint64() < opt.EndHeight {
-		return fmt.Errorf("latest height %v is lower than end height %v", latestBlock.Number, opt.EndHeight)
 	}
 	if !common.IsHexAddress(opt.RewardToken) {
 		return fmt.Errorf("wrong reward token: '%v'", opt.RewardToken)
@@ -58,23 +62,49 @@ func (opt *Option) checkAndInit() (err error) {
 	if err != nil {
 		return err
 	}
-	err = opt.openOutputFile()
-	if err != nil {
-		return err
+	latestBlock := capi.LoopGetLatestBlockHeader()
+	if latestBlock.Number.Uint64() < opt.EndHeight {
+		return fmt.Errorf("latest height %v is lower than end height %v", latestBlock.Number, opt.EndHeight)
 	}
 	return nil
 }
 
+func (opt *Option) getDefaultOutputFile() string {
+	return fmt.Sprintf("distribute-%s-%d-%d-%s-%d.txt", opt.byWhat, opt.StartHeight, opt.EndHeight, opt.Exchange, time.Now().Unix())
+}
+
 func (opt *Option) openOutputFile() (err error) {
 	if opt.OutputFile == "" {
-		return nil
+		opt.OutputFile = opt.getDefaultOutputFile()
 	}
-	outputFile, err = os.OpenFile(opt.OutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	opt.outputFile, err = os.OpenFile(opt.OutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		log.Info("open output file error", "file", opt.OutputFile)
+	}
 	return err
 }
 
+func (opt *Option) writeOutput(account, reward, txHash string) error {
+	if opt.outputFile == nil {
+		err := opt.openOutputFile()
+		if err != nil {
+			return err
+		}
+	}
+	msg := fmt.Sprintf("%s %s %s\n", account, reward, txHash)
+	_, err := opt.outputFile.Write([]byte(msg))
+	if err != nil {
+		log.Info("write output error", "msg", msg, "err", err)
+	}
+	return err
+}
+
+func (opt *Option) sendRewardsTransaction(account common.Address, reward *big.Int, rewardToken common.Address, dryRun bool) (txHash common.Hash, err error) {
+	return opt.buildTxArgs.sendRewardsTransaction(account, reward, rewardToken, dryRun)
+}
+
 func (opt *Option) checkSenderRewardTokenBalance() (err error) {
-	sender := commonTxArgs.fromAddr
+	sender := opt.buildTxArgs.fromAddr
 	rewardTokenAddr := common.HexToAddress(opt.RewardToken)
 	var senderTokenBalance *big.Int
 	for {
@@ -157,6 +187,9 @@ func (opt *Option) getAccountsAndVolumes() (accounts []common.Address, volumes [
 		volume, err := tools.GetBigIntFromString(volumeStr)
 		if err != nil {
 			return nil, nil, err
+		}
+		if volume.Sign() <= 0 {
+			continue
 		}
 		account := common.HexToAddress(line)
 		accounts = append(accounts, account)

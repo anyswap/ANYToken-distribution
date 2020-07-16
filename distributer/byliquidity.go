@@ -24,28 +24,28 @@ func getRandNumber(max uint64) uint64 {
 	return uint64(time.Now().Unix()) % max
 }
 
-// ByLiquidity ditribute by liquidity
-func ByLiquidity(opt *Option) {
-	var err error
-	err = commonTxArgs.Check() // check args before opts
-	if err != nil {
-		log.Error("[ditribute] Check commonTxArgs error", "args", commonTxArgs, "err", err)
-		return
+// ByLiquidity distribute by liquidity
+func ByLiquidity(opt *Option, args *BuildTxArgs) error {
+	if opt.TotalValue == nil || opt.TotalValue.Sign() <= 0 {
+		log.Warn("no liquidity rewards", "option", opt.String())
+		return errTotalRewardsIsZero
 	}
-	err = opt.checkAndInit()
+	opt.byWhat = byLiquidMethod
+	opt.buildTxArgs = args
+	err := opt.checkAndInit()
 	defer opt.deinit()
 	if err != nil {
-		log.Error("[ditribute] check option error", "option", opt, "err", err)
-		return
+		log.Error("[byliquid] check option error", "option", opt.String(), "err", err)
+		return errCheckOptionFailed
 	}
 	accounts, err := opt.getAccounts()
 	if err != nil {
-		log.Error("[ditribute] get accounts error", "err", err)
-		return
+		log.Error("[byliquid] get accounts error", "err", err)
+		return errGetAccountListFailed
 	}
 	if len(accounts) == 0 {
-		log.Warn("[ditribute] no accounts")
-		return
+		log.Warn("[byliquid] no accounts. " + opt.String())
+		return errNoAccountSatisfied
 	}
 	liquids := make([]*big.Int, len(accounts))
 	countOfBlocks := opt.EndHeight - opt.StartHeight
@@ -58,7 +58,7 @@ func ByLiquidity(opt *Option) {
 		}
 		updateLiquidityBalance(accounts, liquids, height, opt.Exchange)
 	}
-	dispatchRewards(opt, accounts, liquids)
+	return dispatchRewards(opt, accounts, liquids)
 }
 
 func updateLiquidityBalance(accounts []common.Address, liquids []*big.Int, height uint64, exchange string) {
@@ -74,29 +74,32 @@ func updateLiquidityBalance(accounts []common.Address, liquids []*big.Int, heigh
 		for value == nil {
 			value, err = capi.GetLiquidityBalance(exchangeAddr, account, blockNumber)
 			if err != nil {
-				log.Warn("[ditribute] GetLiquidityBalance error", "err", err)
+				log.Warn("[byliquid] GetLiquidityBalance error", "err", err)
 				time.Sleep(time.Second)
 				continue
 			}
 		}
-		log.Info("[ditribute] GetLiquidityBalance success", "exchange", exchange, "account", account.String(), "height", height)
+		log.Info("[byliquid] GetLiquidityBalance success", "exchange", exchange, "account", account.String(), "height", height)
+		mliq := &mongodb.MgoLiquidityBalance{
+			Key:         mongodb.GetKeyOfLiquidityBalance(exchange, account.String(), height),
+			Exchange:    strings.ToLower(exchange),
+			Pairs:       params.GetExchangePairs(exchange),
+			Account:     strings.ToLower(account.String()),
+			BlockNumber: height,
+			Liquidity:   value.String(),
+		}
+		_ = mongodb.TryDoTimes("AddLiquidityBalance "+mliq.Key, func() error {
+			return mongodb.AddLiquidityBalance(mliq)
+		})
 		totalLiquid.Add(totalLiquid, value)
 		oldVal := liquids[i]
 		if oldVal == nil || oldVal.Cmp(value) > 0 { // get minimumn liquidity balance
 			liquids[i] = value
-			_ = mongodb.AddLiquidityBalance(&mongodb.MgoLiquidityBalance{
-				Key:         mongodb.GetKeyOfLiquidityBalance(exchange, account.String(), height),
-				Exchange:    strings.ToLower(exchange),
-				Pairs:       params.GetExchangePairs(exchange),
-				Account:     strings.ToLower(account.String()),
-				BlockNumber: height,
-				Liquidity:   value.String(),
-			})
 		}
 	}
 	err := verifyTotalLiquidity(exchangeAddr, blockNumber, totalLiquid)
 	if err != nil {
-		log.Warn(err.Error())
+		log.Warn("[byliquid] " + err.Error())
 	}
 }
 
@@ -107,10 +110,10 @@ func verifyTotalLiquidity(exchangeAddr common.Address, blockNumber, totalLiquid 
 			if totalLiquid.Cmp(totalSupply) != 0 {
 				return fmt.Errorf("account list is not complete at height %v. total liqudity %v is not equal to total supply %v", blockNumber, totalLiquid, totalSupply)
 			}
-			log.Info("account list is complete at height %v. total supply is %v", blockNumber, totalSupply)
+			log.Info("[byliquid] account list is complete", "height", blockNumber, "totalsupply", totalSupply)
 			return nil
 		}
-		log.Warn("[ditribute] GetExchangeLiquidity error", "exchange", exchangeAddr.String(), "blockNumber", blockNumber, "err", err)
+		log.Warn("[byliquid] GetExchangeLiquidity error", "exchange", exchangeAddr.String(), "blockNumber", blockNumber, "err", err)
 		time.Sleep(time.Second)
 	}
 }

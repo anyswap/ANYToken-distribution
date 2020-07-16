@@ -67,14 +67,23 @@ type ExchangeConfig struct {
 
 // DistributeConfig distribute config
 type DistributeConfig struct {
-	Enable          bool
-	Exchange        string
-	RewardToken     string
-	StartHeight     uint64
-	ByLiquidCycle   uint64
-	ByLiquidRewards uint64
-	ByVolumeCycle   uint64
-	ByVolumeRewards uint64
+	Enable       bool
+	Exchange     string
+	RewardToken  string
+	StartHeight  uint64
+	StableHeight uint64
+	GasLimit     uint64
+	GasPrice     string
+
+	ByLiquidCycle        uint64
+	ByLiquidRewards      string // unit Wei
+	ByLiquidKeystoreFile string
+	ByLiquidPasswordFile string
+
+	ByVolumeCycle        uint64
+	ByVolumeRewards      string // unit Wei
+	ByVolumeKeystoreFile string
+	ByVolumePasswordFile string
 }
 
 // IsConfigedExchange return true if exchange is configed

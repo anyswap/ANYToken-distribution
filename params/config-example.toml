@@ -22,10 +22,16 @@ Exchange = "0x4dee5f0705ff478b452419375610155b5873ef5b"
 RewardToken = "0xC20b5E92E1ce63Af6FE537491f75C19016ea5fb4"
 StartHeight = 2510000
 StableHeight = 30
+
 ByLiquidCycle = 6600
-ByLiquidRewards = 9900
+ByLiquidRewards = "9900000000000000000000"
+ByLiquidKeystoreFile = "keystore file path"
+ByLiquidPasswordFile = "password file path"
+
 ByVolumeCycle = 100
-ByVolumeRewards = 250
+ByVolumeRewards = "250000000000000000000"
+ByVolumeKeystoreFile = "keystore file path"
+ByVolumePasswordFile = "password file path"
 
 [[Exchanges]]
 Pairs = "ANY"

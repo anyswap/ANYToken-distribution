@@ -13,6 +13,7 @@ var (
 	collectionVolumeHistory    *mgo.Collection
 	collectionAccount          *mgo.Collection
 	collectionLiquidityBalance *mgo.Collection
+	collectionDistributeInfo   *mgo.Collection
 )
 
 // do this when reconnect to the database
@@ -25,17 +26,19 @@ func deinintCollections() {
 	collectionVolumeHistory = database.C(tbVolumeHistory)
 	collectionAccount = database.C(tbAccounts)
 	collectionLiquidityBalance = database.C(tbLiquidityBalance)
+	collectionDistributeInfo = database.C(tbDistributeInfo)
 }
 
 func initCollections() {
 	initCollection(tbBlocks, &collectionBlock, "number")
 	initCollection(tbTransactions, &collectionTransaction, "blockNumber")
-	initCollection(tbSyncInfo, &collectionSyncInfo, "")
+	initCollection(tbSyncInfo, &collectionSyncInfo)
 	initCollection(tbLiquidity, &collectionLiquidity, "exchange", "timestamp")
 	initCollection(tbVolume, &collectionVolume, "exchange", "timestamp")
 	initCollection(tbVolumeHistory, &collectionVolumeHistory, "exchange", "account", "blockNumber")
 	initCollection(tbAccounts, &collectionAccount, "exchange")
 	initCollection(tbLiquidityBalance, &collectionLiquidityBalance, "exchange", "account", "blockNumber")
+	initCollection(tbDistributeInfo, &collectionDistributeInfo, "exchange", "bywhat")
 
 	_ = initLatestSyncInfo()
 }

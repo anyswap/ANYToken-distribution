@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/anyswap/ANYToken-distribution/log"
 	"github.com/anyswap/ANYToken-distribution/tools"
@@ -11,6 +12,24 @@ import (
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
+
+const (
+	retryDBCount    = 3
+	retryDBInterval = 1 * time.Second
+)
+
+// TryDoTimes try do again if meet error
+func TryDoTimes(name string, f func() error) (err error) {
+	for i := 0; i < retryDBCount; i++ {
+		err = f()
+		if err == nil || mgo.IsDup(err) {
+			return nil
+		}
+		time.Sleep(retryDBInterval)
+	}
+	log.Warn("[mongodb] TryDoTimes", "name", name, "times", retryDBCount, "err", err)
+	return err
+}
 
 // --------------- add ---------------------------------
 
@@ -106,6 +125,19 @@ func AddLiquidityBalance(ma *MgoLiquidityBalance) error {
 		return nil
 	default:
 		log.Info("[mongodb] AddLiquidityBalance failed", "balance", ma, "err", err)
+	}
+	return err
+}
+
+// AddDistributeInfo add distributeInfo
+func AddDistributeInfo(ma *MgoDistributeInfo) error {
+	ma.Key = bson.NewObjectId()
+	err := collectionDistributeInfo.Insert(ma)
+	switch {
+	case err == nil:
+		log.Info("[mongodb] AddDistributeInfo success", "distribute", ma)
+	default:
+		log.Info("[mongodb] AddDistributeInfo failed", "distribute", ma, "err", err)
 	}
 	return err
 }

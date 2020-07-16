@@ -3,6 +3,8 @@ package mongodb
 import (
 	"fmt"
 	"strings"
+
+	"gopkg.in/mgo.v2/bson"
 )
 
 const (
@@ -14,6 +16,7 @@ const (
 	tbVolumeHistory    string = "VolumeHistory"
 	tbAccounts         string = "Accounts"
 	tbLiquidityBalance string = "LiquidityBalances"
+	tbDistributeInfo   string = "DistributeInfo"
 
 	// KeyOfLatestSyncInfo key
 	KeyOfLatestSyncInfo string = "latest"
@@ -139,6 +142,18 @@ type MgoVolumeHistory struct {
 	TxHash      string `bson:"txhash"`
 	LogType     string `bson:"logType"`
 	LogIndex    int    `bson:"logIndex"`
+}
+
+// MgoDistributeInfo distribute info
+type MgoDistributeInfo struct {
+	Key         bson.ObjectId `bson:"_id"`
+	Exchange    string        `bson:"exchange"`
+	Pairs       string        `bson:"pairs"`
+	ByWhat      string        `bson:"bywhat"`
+	Start       uint64        `bson:"start"`
+	End         uint64        `bson:"end"`
+	RewardToken string        `bson:"rewardToken"`
+	Rewards     string        `bson:"rewards"`
 }
 
 // GetKeyOfExchangeAndAccount get key

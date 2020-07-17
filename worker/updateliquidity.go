@@ -78,16 +78,19 @@ func updateDateLiquidity(ex *params.ExchangeConfig, timestamp uint64) error {
 
 	liquidity, err := capi.GetExchangeLiquidity(exchangeAddr, blockNumber)
 	if err != nil {
+		log.Warn("[worker] updateDateLiquidity error", "err", err)
 		return err
 	}
 
 	coins, err := capi.GetCoinBalance(exchangeAddr, blockNumber)
 	if err != nil {
+		log.Warn("[worker] updateDateLiquidity error", "err", err)
 		return err
 	}
 
 	tokens, err := capi.GetExchangeTokenBalance(exchangeAddr, tokenAddr, blockNumber)
 	if err != nil {
+		log.Warn("[worker] updateDateLiquidity error", "err", err)
 		return err
 	}
 

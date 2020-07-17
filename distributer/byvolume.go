@@ -5,13 +5,12 @@ import (
 )
 
 // ByVolume distribute rewards by vloume
-func ByVolume(opt *Option, args *BuildTxArgs) error {
+func ByVolume(opt *Option) error {
+	opt.byWhat = byVolumeMethod
 	if opt.TotalValue == nil || opt.TotalValue.Sign() <= 0 {
 		log.Warn("no volume rewards", "option", opt.String())
 		return errTotalRewardsIsZero
 	}
-	opt.byWhat = byVolumeMethod
-	opt.buildTxArgs = args
 	err := opt.checkAndInit()
 	defer opt.deinit()
 	if err != nil {

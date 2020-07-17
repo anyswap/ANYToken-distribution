@@ -7,6 +7,7 @@ import (
 
 	"github.com/anyswap/ANYToken-distribution/callapi"
 	"github.com/anyswap/ANYToken-distribution/log"
+	"github.com/anyswap/ANYToken-distribution/mongodb"
 	"github.com/anyswap/ANYToken-distribution/params"
 	"github.com/anyswap/ANYToken-distribution/tools"
 )
@@ -46,11 +47,23 @@ func Start(apiCaller *callapi.APICaller) {
 	}
 }
 
+// every 6600 blocks distribute:
+// 	1. by liquidity rewards
+// 	2. by volume rewards
+// check volumes every 100 block,
+// if no volume then give this rewards to liquidity rewards
 func startDistributeJob(distCfg *params.DistributeConfig) {
 	log.Info("[distribute] start job", "config", distCfg)
 
-	byLiquidArgs := getBuildTxArgs(byLiquidMethod, distCfg)
-	byVolumeArgs := getBuildTxArgs(byVolumeMethod, distCfg)
+	byLiquidArgs, err := getBuildTxArgs(byLiquidMethod, distCfg)
+	if err != nil {
+		return
+	}
+
+	byVolumeArgs, err := getBuildTxArgs(byVolumeMethod, distCfg)
+	if err != nil {
+		return
+	}
 
 	exchange := distCfg.Exchange
 	rewardToken := distCfg.RewardToken
@@ -60,6 +73,9 @@ func startDistributeJob(distCfg *params.DistributeConfig) {
 	var (
 		byLiquidCycleRewards *big.Int
 		byVolumeCycleRewards *big.Int
+
+		totalVolumeRewards *big.Int
+		missVolumeRewards  *big.Int
 	)
 
 	byLiquidCycleLen := distCfg.ByLiquidCycle
@@ -69,57 +85,74 @@ func startDistributeJob(distCfg *params.DistributeConfig) {
 	}
 
 	byVolumeCycleLen := distCfg.ByVolumeCycle
-	byVolumeCycleStart := calcCurCycleStart(start, stable, byVolumeCycleLen)
 	if distCfg.ByVolumeRewards != "" {
 		byVolumeCycleRewards, _ = tools.GetBigIntFromString(distCfg.ByVolumeRewards)
 	}
+	totalVolumeRewards = new(big.Int).Mul(byVolumeCycleRewards, new(big.Int).SetUint64(byLiquidCycleLen/byVolumeCycleLen))
 
-	waitInterval := 60 * time.Second
+	opt := &Option{
+		Exchange:    exchange,
+		RewardToken: rewardToken,
+	}
 
+	curCycleStart := byLiquidCycleStart
 	for {
-		latestBlock := capi.LoopGetLatestBlockHeader()
-		latest := latestBlock.Number.Uint64()
-		if latest >= byVolumeCycleStart+byVolumeCycleLen+stable {
-			opt := &Option{
-				Exchange:    exchange,
-				RewardToken: rewardToken,
-				TotalValue:  byVolumeCycleRewards,
-				StartHeight: byVolumeCycleStart,
-				EndHeight:   byVolumeCycleStart + byVolumeCycleLen,
-			}
-			err := ByVolume(opt, byVolumeArgs)
-			if err != nil {
-				log.Info("[byvolume] distribute error", "err", err)
-			}
-			if !shouldRetry(err) {
-				if err == errNoAccountSatisfied {
-					byLiquidCycleRewards.Add(byLiquidCycleRewards, byVolumeCycleRewards)
-				}
-				byVolumeCycleStart += byVolumeCycleLen
-			} else {
-				log.Info("[byvolume] retry as meet error", "opt", opt.String(), "err", err)
-			}
+		curCycleEnd := curCycleStart + byLiquidCycleLen
+		opt.StartHeight = curCycleStart
+		opt.EndHeight = curCycleEnd
+
+		missVolumeCycles := waitAndCheckMissVolumeCycles(exchange, curCycleStart, curCycleEnd, stable, byVolumeCycleLen)
+		missVolumeRewards = new(big.Int).Mul(byVolumeCycleRewards, big.NewInt(missVolumeCycles))
+
+		opt.TotalValue = new(big.Int).Add(byLiquidCycleRewards, missVolumeRewards)
+		opt.BuildTxArgs = byLiquidArgs
+		loopDoUntilSuccess(ByLiquidity, opt)
+
+		opt.TotalValue = new(big.Int).Sub(totalVolumeRewards, missVolumeRewards)
+		opt.BuildTxArgs = byVolumeArgs
+		loopDoUntilSuccess(ByVolume, opt)
+
+		curCycleStart += byVolumeCycleLen
+	}
+}
+
+func loopDoUntilSuccess(distributeFunc func(*Option) error, opt *Option) {
+	waitInterval := 60 * time.Second
+	for {
+		err := distributeFunc(opt)
+		if err != nil {
+			log.Info("distribute error", "byWhat", opt.ByWhat(), "err", err)
 		}
-		if latest >= byLiquidCycleStart+byLiquidCycleLen+stable {
-			opt := &Option{
-				Exchange:    exchange,
-				RewardToken: rewardToken,
-				TotalValue:  byLiquidCycleRewards,
-				StartHeight: byLiquidCycleStart,
-				EndHeight:   byLiquidCycleStart + byLiquidCycleLen,
-			}
-			err := ByLiquidity(opt, byLiquidArgs)
-			if err != nil {
-				log.Info("[byliquid] distribute error", "err", err)
-			}
-			if !shouldRetry(err) {
-				byLiquidCycleStart += byLiquidCycleLen
-			} else {
-				log.Info("[byliquid] retry as meet error", "opt", opt.String(), "err", err)
-			}
+		if !shouldRetry(err) {
+			break
 		}
+		log.Info("retry as meet error", "opt", opt.String(), "err", err)
 		time.Sleep(waitInterval)
 	}
+}
+
+func waitAndCheckMissVolumeCycles(exchange string, cycleStart, cycleEnd, stable, step uint64) (missCycles int64) {
+	waitInterval := 60 * time.Second
+	start := cycleStart
+	for {
+		time.Sleep(waitInterval)
+		latestBlock := capi.LoopGetLatestBlockHeader()
+		latest := latestBlock.Number.Uint64()
+
+		for latest >= start+step+stable {
+			accounts, _ := mongodb.FindAccountVolumes(exchange, start, start+step)
+			if len(accounts) == 0 {
+				log.Info("find miss volume cycle", "exchange", exchange, "start", start, "end", start+step)
+				missCycles++
+			}
+			start += step // next by volume cycle
+		}
+
+		if latest >= cycleEnd+stable {
+			break
+		}
+	}
+	return missCycles
 }
 
 func shouldRetry(err error) bool {
@@ -152,7 +185,7 @@ func calcCurCycleStart(start, stable, cycleLen uint64) uint64 {
 	return curCycleStart
 }
 
-func getBuildTxArgs(byWhat string, distCfg *params.DistributeConfig) *BuildTxArgs {
+func getBuildTxArgs(byWhat string, distCfg *params.DistributeConfig) (*BuildTxArgs, error) {
 	var (
 		keystoreFile string
 		passwordFile string
@@ -175,10 +208,16 @@ func getBuildTxArgs(byWhat string, distCfg *params.DistributeConfig) *BuildTxArg
 		passwordFile = distCfg.ByVolumePasswordFile
 	}
 
-	return &BuildTxArgs{
+	args := &BuildTxArgs{
 		KeystoreFile: keystoreFile,
 		PasswordFile: passwordFile,
 		GasLimit:     gasLimitPtr,
 		GasPrice:     gasPrice,
 	}
+	err := args.Check()
+	if err != nil {
+		log.Error("check build tx args failed", "err", err)
+		return nil, err
+	}
+	return args, nil
 }

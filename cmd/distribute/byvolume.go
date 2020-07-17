@@ -38,10 +38,10 @@ func byVolume(ctx *cli.Context) (err error) {
 	defer capi.CloseClient()
 	distributer.SetAPICaller(capi)
 
-	opt, args, err := getOptionAndTxArgs(ctx)
+	opt, err := getOptionAndTxArgs(ctx)
 	if err != nil {
 		return err
 	}
 
-	return distributer.ByVolume(opt, args)
+	return distributer.ByVolume(opt)
 }

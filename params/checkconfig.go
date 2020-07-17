@@ -9,6 +9,8 @@ import (
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 )
 
+var maxDistributeStableHeight uint64
+
 // CheckConfig check config
 func CheckConfig() (err error) {
 	switch {
@@ -32,6 +34,12 @@ func CheckConfig() (err error) {
 	err = checkDistributeConfig()
 	if err != nil {
 		return err
+	}
+	// for security reason, if has distribute job, then
+	// must sync with at least the distribute job's stable height
+	// to prevent blockchain short forks
+	if maxDistributeStableHeight > config.Sync.Stable {
+		config.Sync.Stable = maxDistributeStableHeight
 	}
 	return nil
 }
@@ -64,10 +72,13 @@ func checkDistributeConfig() (err error) {
 		if !dist.Enable {
 			continue
 		}
+		if dist.StableHeight > maxDistributeStableHeight {
+			maxDistributeStableHeight = dist.StableHeight
+		}
 		if !common.IsHexAddress(dist.Exchange) {
 			return fmt.Errorf("[check distribute] wrong exchange address %v (index %v)", dist.Exchange, i)
 		}
-		if GetExchangePairs(dist.Exchange) == "" {
+		if !IsConfigedExchange(dist.Exchange) {
 			return fmt.Errorf("[check distribute] exchange %v (index %v) is not configed with pairs", dist.Exchange, i)
 		}
 		if !common.IsHexAddress(dist.RewardToken) {
@@ -90,6 +101,12 @@ func checkDistributeConfig() (err error) {
 			if err != nil {
 				return fmt.Errorf("[check distribute] wrong gas price %v (index %v)", dist.GasPrice, i)
 			}
+		}
+		if dist.ByLiquidCycle < dist.ByVolumeCycle {
+			return fmt.Errorf("[check distribute] error: by liquidity cycle %v < by volume cycle %v", dist.ByLiquidCycle, dist.ByVolumeCycle)
+		}
+		if dist.ByLiquidCycle%dist.ByVolumeCycle != 0 {
+			return fmt.Errorf("[check distribute] error: by liquidity cycle %v is not an integral multiple of by volume cycle %v", dist.ByLiquidCycle, dist.ByVolumeCycle)
 		}
 	}
 	return nil

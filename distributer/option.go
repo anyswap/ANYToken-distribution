@@ -20,6 +20,7 @@ const sampleCount = 4
 
 // Option distribute options
 type Option struct {
+	BuildTxArgs *BuildTxArgs
 	TotalValue  *big.Int
 	StartHeight uint64 // start inclusive
 	EndHeight   uint64 // end exclusive
@@ -29,13 +30,17 @@ type Option struct {
 	OutputFile  string
 	DryRun      bool
 
-	byWhat      string
-	buildTxArgs *BuildTxArgs
-	outputFile  *os.File
+	byWhat     string
+	outputFile *os.File
+}
+
+// ByWhat distribute by what method
+func (opt *Option) ByWhat() string {
+	return opt.byWhat
 }
 
 func (opt *Option) String() string {
-	return fmt.Sprintf("TotalValue %v StartHeight %v EndHeight %v Exchange %v RewardToken %v DryRun %v", opt.TotalValue, opt.StartHeight, opt.EndHeight, opt.Exchange, opt.RewardToken, opt.DryRun)
+	return fmt.Sprintf("%v TotalValue %v StartHeight %v EndHeight %v Exchange %v RewardToken %v DryRun %v", opt.byWhat, opt.TotalValue, opt.StartHeight, opt.EndHeight, opt.Exchange, opt.RewardToken, opt.DryRun)
 }
 
 func (opt *Option) deinit() {
@@ -45,10 +50,6 @@ func (opt *Option) deinit() {
 }
 
 func (opt *Option) checkAndInit() (err error) {
-	err = opt.buildTxArgs.Check()
-	if err != nil {
-		return err
-	}
 	if opt.StartHeight >= opt.EndHeight {
 		return fmt.Errorf("empty range, start height %v >= end height %v", opt.StartHeight, opt.EndHeight)
 	}
@@ -100,11 +101,11 @@ func (opt *Option) writeOutput(account, reward, txHash string) error {
 }
 
 func (opt *Option) sendRewardsTransaction(account common.Address, reward *big.Int, rewardToken common.Address, dryRun bool) (txHash common.Hash, err error) {
-	return opt.buildTxArgs.sendRewardsTransaction(account, reward, rewardToken, dryRun)
+	return opt.BuildTxArgs.sendRewardsTransaction(account, reward, rewardToken, dryRun)
 }
 
 func (opt *Option) checkSenderRewardTokenBalance() (err error) {
-	sender := opt.buildTxArgs.fromAddr
+	sender := opt.BuildTxArgs.fromAddr
 	rewardTokenAddr := common.HexToAddress(opt.RewardToken)
 	var senderTokenBalance *big.Int
 	for {

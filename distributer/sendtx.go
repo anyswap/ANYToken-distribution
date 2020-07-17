@@ -34,14 +34,12 @@ type BuildTxArgs struct {
 
 // Check check common args
 func (args *BuildTxArgs) Check() error {
-	if args == nil {
-		return fmt.Errorf("[check] BuildTxArgs is not init")
-	}
 	err := args.loadKeyStore()
 	if err != nil {
 		return err
 	}
-	return args.setDefaults()
+	args.setDefaults()
+	return nil
 }
 
 func (args *BuildTxArgs) loadKeyStore() error {
@@ -71,8 +69,9 @@ func (args *BuildTxArgs) loadKeyStore() error {
 	return nil
 }
 
-func (args *BuildTxArgs) setDefaults() (err error) {
+func (args *BuildTxArgs) setDefaults() {
 	from := args.fromAddr
+	var err error
 	for {
 		if args.chainID == nil {
 			args.chainID, err = capi.GetChainID()
@@ -108,7 +107,6 @@ func (args *BuildTxArgs) setDefaults() (err error) {
 		log.Info("get gas limit succeed", "gasLimit", *args.GasLimit)
 		break
 	}
-	return nil
 }
 
 func (args *BuildTxArgs) sendRewardsTransaction(account common.Address, reward *big.Int, rewardToken common.Address, dryRun bool) (txHash common.Hash, err error) {

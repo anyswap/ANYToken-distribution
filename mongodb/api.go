@@ -306,7 +306,7 @@ func FindAccountVolumes(exchange string, startHeight, endHeight uint64) (account
 		account = common.HexToAddress(result.Account)
 		old, exist := accountVolumesMap[account]
 		if exist {
-			accountVolumesMap[account] = old.Add(old, volume)
+			accountVolumesMap[account].Add(old, volume)
 		} else {
 			accountVolumesMap[account] = volume
 		}

@@ -20,6 +20,7 @@ distribute rewards by volume
 			utils.TotalRewardsFlag,
 			utils.StartHeightFlag,
 			utils.EndHeightFlag,
+			utils.StepCountFlag,
 			utils.ExchangeFlag,
 			utils.VolumesFileFlag,
 			utils.KeyStoreFileFlag,

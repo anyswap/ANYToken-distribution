@@ -60,7 +60,7 @@ func sendRewards(ctx *cli.Context) (err error) {
 		return fmt.Errorf("must specify input file")
 	}
 
-	accounts, rewards, err := opt.GetAccountsAndVolumes()
+	accounts, rewards, err := opt.GetAccountsAndVolumesFromFile()
 	if err != nil {
 		log.Error("[sendRewards] get accounts and rewards from input file failed", "inputfile", opt.InputFile, "err", err)
 		return err

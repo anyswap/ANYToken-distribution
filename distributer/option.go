@@ -24,6 +24,7 @@ type Option struct {
 	TotalValue  *big.Int
 	StartHeight uint64 // start inclusive
 	EndHeight   uint64 // end exclusive
+	StepCount   uint64
 	Exchange    string
 	RewardToken string
 	InputFile   string
@@ -68,6 +69,10 @@ func (opt *Option) checkAndInit() (err error) {
 	if opt.StartHeight >= opt.EndHeight {
 		return fmt.Errorf("empty range, start height %v >= end height %v", opt.StartHeight, opt.EndHeight)
 	}
+	if opt.StepCount != 0 && (opt.EndHeight-opt.StartHeight)%opt.StepCount != 0 {
+		return fmt.Errorf("cycle length %v is not intergral multiple of step %v", opt.EndHeight-opt.StartHeight, opt.StepCount)
+	}
+
 	if !params.IsConfigedExchange(opt.Exchange) {
 		return fmt.Errorf("exchange %v is not configed", opt.Exchange)
 	}
@@ -109,6 +114,22 @@ func (opt *Option) WriteOutput(account, reward, txHash string) error {
 		}
 	}
 	msg := fmt.Sprintf("%s %s %s\n", account, reward, txHash)
+	_, err := opt.outputFile.Write([]byte(msg))
+	if err != nil {
+		log.Info("write output error", "msg", msg, "err", err)
+	}
+	return err
+}
+
+// WriteNoVolumeOutput write output
+func (opt *Option) WriteNoVolumeOutput(exchange string, start, end uint64) error {
+	if opt.outputFile == nil {
+		err := opt.openOutputFile()
+		if err != nil {
+			return err
+		}
+	}
+	msg := fmt.Sprintf("novolume %s %d %d\n", exchange, start, end)
 	_, err := opt.outputFile.Write([]byte(msg))
 	if err != nil {
 		log.Info("write output error", "msg", msg, "err", err)
@@ -174,13 +195,61 @@ func (opt *Option) getAccounts() (accounts []common.Address, err error) {
 	return accounts, nil
 }
 
-// GetAccountsAndVolumes pass line format "<address> <amount>" from input file
-func (opt *Option) GetAccountsAndVolumes() (accounts []common.Address, volumes []*big.Int, err error) {
+// GetAccountsAndVolumes get from file if input file exist, or else from database
+func (opt *Option) GetAccountsAndVolumes() (accounts []common.Address, volumes []*big.Int, missSteps uint64, err error) {
 	if opt.InputFile == "" {
-		accounts, volumes = mongodb.FindAccountVolumes(opt.Exchange, opt.StartHeight, opt.EndHeight)
-		return accounts, volumes, nil
+		return opt.GetAccountsAndVolumesFromDB()
 	}
+	accounts, volumes, err = opt.GetAccountsAndVolumesFromFile()
+	return accounts, volumes, 0, err
+}
 
+// GetAccountsAndVolumesFromDB get from database
+func (opt *Option) GetAccountsAndVolumesFromDB() (accounts []common.Address, volumes []*big.Int, missSteps uint64, err error) {
+	exchange := opt.Exchange
+	step := opt.StepCount
+	if step == 0 {
+		accounts, volumes = mongodb.FindAccountVolumes(exchange, opt.StartHeight, opt.EndHeight)
+		return accounts, volumes, 0, nil
+	}
+	volumeMap := make(map[common.Address]*big.Int)
+	for start := opt.StartHeight; start < opt.EndHeight; start += step {
+		accounts, volumes = mongodb.FindAccountVolumes(exchange, start, start+step)
+		if len(accounts) == 0 {
+			log.Info("find miss volume", "exchange", exchange, "start", start, "end", start+step)
+			missSteps++
+			_ = opt.WriteNoVolumeOutput(exchange, start, start+step)
+			continue
+		}
+		for i, account := range accounts {
+			volume := volumes[i]
+			if volume == nil || volume.Sign() <= 0 {
+				continue
+			}
+			old, exist := volumeMap[account]
+			if exist {
+				volumeMap[account].Add(old, volume)
+			} else {
+				volumeMap[account] = volume
+			}
+		}
+	}
+	length := len(volumeMap)
+	accounts = make([]common.Address, 0, length)
+	volumes = make([]*big.Int, 0, length)
+	for acc, vol := range volumeMap {
+		accounts = append(accounts, acc)
+		volumes = append(volumes, vol)
+	}
+	log.Info("get account volumes from db success", "exchange", exchange, "start", opt.StartHeight, "end", opt.EndHeight, "step", opt.StepCount, "missSteps", missSteps)
+	return accounts, volumes, missSteps, nil
+}
+
+// GetAccountsAndVolumesFromFile pass line format "<address> <amount>" from input file
+func (opt *Option) GetAccountsAndVolumesFromFile() (accounts []common.Address, volumes []*big.Int, err error) {
+	if opt.InputFile == "" {
+		return nil, nil, fmt.Errorf("get account volumes from file error, no input file specified")
+	}
 	file, err := os.Open(opt.InputFile)
 	if err != nil {
 		return nil, nil, fmt.Errorf("open %v failed. %v)", opt.InputFile, err)

@@ -109,14 +109,19 @@ var (
 		Usage: "total rewards (uint wei)",
 	}
 	// StartHeightFlag --start
-	StartHeightFlag = &cli.StringFlag{
+	StartHeightFlag = &cli.Uint64Flag{
 		Name:  "start",
 		Usage: "start height (start inclusive)",
 	}
 	// EndHeightFlag --end
-	EndHeightFlag = &cli.StringFlag{
+	EndHeightFlag = &cli.Uint64Flag{
 		Name:  "end",
 		Usage: "end height (end exclusive)",
+	}
+	// StepCountFlag --step
+	StepCountFlag = &cli.Uint64Flag{
+		Name:  "step",
+		Usage: "step count",
 	}
 	// ExchangeFlag --exchange
 	ExchangeFlag = &cli.StringFlag{

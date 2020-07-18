@@ -44,20 +44,11 @@ func CheckConfig() (err error) {
 	return nil
 }
 
-func checkExchangeConfig() (err error) {
+func checkExchangeConfig() error {
 	var total float64
-	for i, ex := range config.Exchanges {
-		if !common.IsHexAddress(ex.Exchange) {
-			return fmt.Errorf("[check exchange] wrong exchange address %v (index %v)", ex.Exchange, i)
-		}
-		if ex.Pairs == "" {
-			return fmt.Errorf("[check exchange] empty exchange pairs (index %v)", i)
-		}
-		if ex.Token == "" {
-			return fmt.Errorf("[check exchange] empty exchange token (index %v)", i)
-		}
-		if ex.CreationHeight == 0 {
-			return fmt.Errorf("[check exchange] empty exchange creation height (index %v)", i)
+	for _, ex := range config.Exchanges {
+		if err := ex.check(); err != nil {
+			return err
 		}
 		total += ex.Percentage
 	}
@@ -67,47 +58,94 @@ func checkExchangeConfig() (err error) {
 	return nil
 }
 
-func checkDistributeConfig() (err error) {
-	for i, dist := range config.Distribute {
+func checkDistributeConfig() error {
+	for _, dist := range config.Distribute {
 		if !dist.Enable {
 			continue
 		}
-		if dist.StableHeight > maxDistributeStableHeight {
-			maxDistributeStableHeight = dist.StableHeight
+		if err := dist.check(); err != nil {
+			return err
 		}
-		if !common.IsHexAddress(dist.Exchange) {
-			return fmt.Errorf("[check distribute] wrong exchange address %v (index %v)", dist.Exchange, i)
+	}
+	return nil
+}
+
+func (ex *ExchangeConfig) check() error {
+	if !common.IsHexAddress(ex.Exchange) {
+		return fmt.Errorf("[check exchange] wrong exchange address %v", ex.Exchange)
+	}
+	if ex.Pairs == "" {
+		return fmt.Errorf("[check exchange] empty exchange pairs (exchange %v)", ex.Exchange)
+	}
+	if ex.Token == "" {
+		return fmt.Errorf("[check exchange] empty exchange token (exchange %v)", ex.Exchange)
+	}
+	if ex.CreationHeight == 0 {
+		return fmt.Errorf("[check exchange] empty exchange creation height (exchange %v)", ex.Exchange)
+	}
+	return nil
+}
+
+func (dist *DistributeConfig) check() error {
+	if err := dist.checkAddress(); err != nil {
+		return err
+	}
+	if err := dist.checkStringValue(); err != nil {
+		return err
+	}
+	if err := dist.checkCycle(); err != nil {
+		return err
+	}
+	if dist.StableHeight > maxDistributeStableHeight {
+		maxDistributeStableHeight = dist.StableHeight
+	}
+	return nil
+}
+
+func (dist *DistributeConfig) checkAddress() error {
+	if !common.IsHexAddress(dist.Exchange) {
+		return fmt.Errorf("[check distribute] wrong exchange address %v", dist.Exchange)
+	}
+	if !IsConfigedExchange(dist.Exchange) {
+		return fmt.Errorf("[check distribute] exchange %v is not configed with pairs", dist.Exchange)
+	}
+	if !common.IsHexAddress(dist.RewardToken) {
+		return fmt.Errorf("[check distribute] wrong reward token address %v (exchange %v)", dist.RewardToken, dist.Exchange)
+	}
+	return nil
+}
+
+func (dist *DistributeConfig) checkStringValue() error {
+	if dist.ByLiquidRewards != "" {
+		_, err := tools.GetBigIntFromString(dist.ByLiquidRewards)
+		if err != nil {
+			return fmt.Errorf("[check distribute] wrong by liquid rewards %v (exchange %v)", dist.ByLiquidRewards, dist.Exchange)
 		}
-		if !IsConfigedExchange(dist.Exchange) {
-			return fmt.Errorf("[check distribute] exchange %v (index %v) is not configed with pairs", dist.Exchange, i)
+	}
+	if dist.ByVolumeRewards != "" {
+		_, err := tools.GetBigIntFromString(dist.ByVolumeRewards)
+		if err != nil {
+			return fmt.Errorf("[check distribute] wrong by volume rewards %v (exchange %v)", dist.ByVolumeRewards, dist.Exchange)
 		}
-		if !common.IsHexAddress(dist.RewardToken) {
-			return fmt.Errorf("[check distribute] wrong reward token address %v (index %v)", dist.RewardToken, i)
+	}
+	if dist.GasPrice != "" {
+		_, err := tools.GetBigIntFromString(dist.GasPrice)
+		if err != nil {
+			return fmt.Errorf("[check distribute] wrong gas price %v (exchange %v)", dist.GasPrice, dist.Exchange)
 		}
-		if dist.ByLiquidRewards != "" {
-			_, err := tools.GetBigIntFromString(dist.ByLiquidRewards)
-			if err != nil {
-				return fmt.Errorf("[check distribute] wrong by liquid rewards %v (index %v)", dist.ByLiquidRewards, i)
-			}
-		}
-		if dist.ByVolumeRewards != "" {
-			_, err := tools.GetBigIntFromString(dist.ByVolumeRewards)
-			if err != nil {
-				return fmt.Errorf("[check distribute] wrong by volume rewards %v (index %v)", dist.ByVolumeRewards, i)
-			}
-		}
-		if dist.GasPrice != "" {
-			_, err := tools.GetBigIntFromString(dist.GasPrice)
-			if err != nil {
-				return fmt.Errorf("[check distribute] wrong gas price %v (index %v)", dist.GasPrice, i)
-			}
-		}
-		if dist.ByLiquidCycle < dist.ByVolumeCycle {
-			return fmt.Errorf("[check distribute] error: by liquidity cycle %v < by volume cycle %v", dist.ByLiquidCycle, dist.ByVolumeCycle)
-		}
-		if dist.ByLiquidCycle%dist.ByVolumeCycle != 0 {
-			return fmt.Errorf("[check distribute] error: by liquidity cycle %v is not an integral multiple of by volume cycle %v", dist.ByLiquidCycle, dist.ByVolumeCycle)
-		}
+	}
+	return nil
+}
+
+func (dist *DistributeConfig) checkCycle() error {
+	if dist.ByVolumeCycle == 0 {
+		return fmt.Errorf("[check distribute] error: zero by volume cycle length")
+	}
+	if dist.ByLiquidCycle < dist.ByVolumeCycle {
+		return fmt.Errorf("[check distribute] error: by liquidity cycle %v < by volume cycle %v", dist.ByLiquidCycle, dist.ByVolumeCycle)
+	}
+	if dist.ByLiquidCycle%dist.ByVolumeCycle != 0 {
+		return fmt.Errorf("[check distribute] error: by liquidity cycle %v is not an integral multiple of by volume cycle %v", dist.ByLiquidCycle, dist.ByVolumeCycle)
 	}
 	return nil
 }

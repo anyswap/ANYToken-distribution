@@ -10,6 +10,7 @@ import (
 	"github.com/anyswap/ANYToken-distribution/mongodb"
 	"github.com/anyswap/ANYToken-distribution/params"
 	"github.com/anyswap/ANYToken-distribution/tools"
+	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 )
 
 var capi *callapi.APICaller
@@ -104,6 +105,13 @@ func startDistributeJob(distCfg *params.DistributeConfig) {
 		missVolumeCycles := waitAndCheckMissVolumeCycles(exchange, curCycleStart, curCycleEnd, stable, byVolumeCycleLen)
 		missVolumeRewards = new(big.Int).Mul(byVolumeCycleRewards, big.NewInt(missVolumeCycles))
 
+		// give missing volume rewards to liquidity rewards sender
+		if missVolumeRewards.Sign() > 0 {
+			opt.TotalValue = missVolumeRewards
+			opt.BuildTxArgs = byVolumeArgs
+			loopSendMissingVolumeRewards(opt, byLiquidArgs.GetSender())
+		}
+
 		opt.TotalValue = new(big.Int).Add(byLiquidCycleRewards, missVolumeRewards)
 		opt.BuildTxArgs = byLiquidArgs
 		loopDoUntilSuccess(ByLiquidity, opt)
@@ -113,6 +121,21 @@ func startDistributeJob(distCfg *params.DistributeConfig) {
 		loopDoUntilSuccess(ByVolume, opt)
 
 		curCycleStart += byVolumeCycleLen
+	}
+}
+
+func loopSendMissingVolumeRewards(opt *Option, to common.Address) {
+	from := opt.GetSender()
+	value := opt.TotalValue
+	waitInterval := 60 * time.Second
+	for {
+		txHash, err := opt.SendRewardsTransaction(to, value)
+		if err == nil {
+			log.Info("send missing volume rewards success", "from", from.String(), "to", to.String(), "value", value, "start", opt.StartHeight, "end", opt.EndHeight, "txHash", txHash.String())
+			break
+		}
+		log.Info("send missing volume rewards failed", "from", from.String(), "to", to.String(), "value", value, "start", opt.StartHeight, "end", opt.EndHeight, "err", err)
+		time.Sleep(waitInterval)
 	}
 }
 

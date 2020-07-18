@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/anyswap/ANYToken-distribution/log"
-	"github.com/anyswap/ANYToken-distribution/params"
 	ethereum "github.com/fsn-dev/fsn-go-sdk/efsn"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/core/types"
@@ -40,9 +39,7 @@ func NewAPICaller(ctx context.Context, retryCount int, retryInterval time.Durati
 }
 
 // DialServer dial server and assign client
-func (c *APICaller) DialServer() (err error) {
-	config := params.GetConfig()
-	serverURL := config.Gateway.APIAddress
+func (c *APICaller) DialServer(serverURL string) (err error) {
 	c.client, err = ethclient.Dial(serverURL)
 	if err != nil {
 		log.Error("[callapi] client connection error", "server", serverURL, "err", err)

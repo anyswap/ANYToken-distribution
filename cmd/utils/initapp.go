@@ -24,19 +24,26 @@ func InitApp(ctx *cli.Context, withMongodb bool) *callapi.APICaller {
 		initMongodb()
 	}
 
-	capi := callapi.NewDefaultAPICaller()
-	for {
-		err := capi.DialServer()
-		if err == nil {
-			break
-		}
-		time.Sleep(3 * time.Second)
-	}
+	serverURL := params.GetConfig().Gateway.APIAddress
+	capi := DialServer(serverURL)
 
 	if err := verifyConfig(capi); err != nil {
 		panic(err)
 	}
 
+	return capi
+}
+
+// DialServer connect to serverURL
+func DialServer(serverURL string) *callapi.APICaller {
+	capi := callapi.NewDefaultAPICaller()
+	for {
+		err := capi.DialServer(serverURL)
+		if err == nil {
+			break
+		}
+		time.Sleep(3 * time.Second)
+	}
 	return capi
 }
 

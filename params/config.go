@@ -1,13 +1,13 @@
 package params
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/anyswap/ANYToken-distribution/log"
+	"github.com/anyswap/ANYToken-distribution/tools"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 )
 
@@ -146,13 +146,7 @@ func LoadConfig(configFile string) *Config {
 
 	SetConfig(config)
 
-	var bs []byte
-	if log.JSONFormat {
-		bs, _ = json.Marshal(config)
-	} else {
-		bs, _ = json.MarshalIndent(config, "", "  ")
-	}
-	log.Println("LoadConfig finished.", string(bs))
+	log.Println("LoadConfig finished.", tools.ToJSONString(config, !log.JSONFormat))
 
 	if err := CheckConfig(); err != nil {
 		panic(fmt.Sprintf("Check config failed. %v", err))

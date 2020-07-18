@@ -148,6 +148,11 @@ var (
 		Name:  "dryrun",
 		Usage: "dry run",
 	}
+	// GatewayFlag --gateway
+	GatewayFlag = &cli.StringFlag{
+		Name:  "gateway",
+		Usage: "gateway URL address",
+	}
 )
 
 // SyncArguments command line arguments

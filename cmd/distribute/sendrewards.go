@@ -22,6 +22,7 @@ var (
 send rewards batchly according to verified input file with line format: <address> <rewards>
 `,
 		Flags: []cli.Flag{
+			utils.GatewayFlag,
 			utils.RewardTokenFlag,
 			utils.InputFileFlag,
 			utils.KeyStoreFileFlag,
@@ -36,7 +37,13 @@ send rewards batchly according to verified input file with line format: <address
 )
 
 func sendRewards(ctx *cli.Context) (err error) {
-	capi := utils.InitApp(ctx, false)
+	utils.SetLogger(ctx)
+	serverURL := ctx.String(utils.GatewayFlag.Name)
+	if serverURL == "" {
+		return fmt.Errorf("must specify gateway URL")
+	}
+
+	capi := utils.DialServer(serverURL)
 	defer capi.CloseClient()
 	distributer.SetAPICaller(capi)
 
@@ -68,7 +75,7 @@ func sendRewards(ctx *cli.Context) (err error) {
 	opt.TotalValue = totalRewards
 	err = opt.CheckSenderRewardTokenBalance()
 	if err != nil {
-		log.Errorf("[sendRewards] sender has not enough reward balance (< %v)", totalRewards)
+		log.Errorf("[sendRewards] sender %v has not enough token balance (< %v), token: %v", opt.GetSender().String(), totalRewards, opt.RewardToken)
 		return err
 	}
 

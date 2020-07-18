@@ -39,8 +39,23 @@ func (opt *Option) ByWhat() string {
 	return opt.byWhat
 }
 
+// GetSender get sender from keystore
+func (opt *Option) GetSender() common.Address {
+	return opt.BuildTxArgs.GetSender()
+}
+
+// GetChainID get chainID
+func (opt *Option) GetChainID() *big.Int {
+	return opt.BuildTxArgs.GetChainID()
+}
+
 func (opt *Option) String() string {
-	return fmt.Sprintf("%v TotalValue %v StartHeight %v EndHeight %v Exchange %v RewardToken %v DryRun %v", opt.byWhat, opt.TotalValue, opt.StartHeight, opt.EndHeight, opt.Exchange, opt.RewardToken, opt.DryRun)
+	return fmt.Sprintf(
+		"%v TotalValue %v StartHeight %v EndHeight %v Exchange %v RewardToken %v DryRun %v Sender %v ChainID %v",
+		opt.byWhat, opt.TotalValue, opt.StartHeight, opt.EndHeight,
+		opt.Exchange, opt.RewardToken, opt.DryRun,
+		opt.GetSender().String(), opt.GetChainID(),
+	)
 }
 
 func (opt *Option) deinit() {
@@ -119,11 +134,11 @@ func (opt *Option) CheckSenderRewardTokenBalance() (err error) {
 			continue
 		}
 		if senderTokenBalance.Cmp(opt.TotalValue) < 0 {
-			return fmt.Errorf("not enough reward token balance, %v < %v", senderTokenBalance, opt.TotalValue)
+			return fmt.Errorf("not enough reward token balance, %v < %v, sender: %v token: %v", senderTokenBalance, opt.TotalValue, sender.String(), opt.RewardToken)
 		}
 		break
 	}
-	log.Info("sender reward token balance is enough", "token", rewardTokenAddr.String(), "balance", senderTokenBalance, "needed", opt.TotalValue)
+	log.Info("sender reward token balance is enough", "sender", sender.String(), "token", rewardTokenAddr.String(), "balance", senderTokenBalance, "needed", opt.TotalValue)
 	return nil
 }
 

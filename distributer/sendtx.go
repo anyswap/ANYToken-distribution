@@ -18,8 +18,8 @@ var (
 
 // BuildTxArgs build tx args
 type BuildTxArgs struct {
-	KeystoreFile string
-	PasswordFile string
+	KeystoreFile string `json:"-"`
+	PasswordFile string `json:"-"`
 
 	Nonce    *uint64
 	GasLimit *uint64
@@ -30,6 +30,16 @@ type BuildTxArgs struct {
 	fromAddr    common.Address
 	chainID     *big.Int
 	chainSigner types.Signer
+}
+
+// GetSender get sender from keystore
+func (args *BuildTxArgs) GetSender() common.Address {
+	return args.fromAddr
+}
+
+// GetChainID get chainID
+func (args *BuildTxArgs) GetChainID() *big.Int {
+	return args.chainID
 }
 
 // Check check common args

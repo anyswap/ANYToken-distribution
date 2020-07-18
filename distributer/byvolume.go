@@ -17,9 +17,9 @@ func ByVolume(opt *Option) error {
 		log.Error("[byvolume] check option error", "option", opt.String(), "err", err)
 		return errCheckOptionFailed
 	}
-	accounts, volumes, err := opt.getAccountsAndVolumes()
+	accounts, volumes, err := opt.GetAccountsAndVolumes()
 	if err != nil {
-		log.Error("[byvolume] getAccountsAndVolumes error", "err", err)
+		log.Error("[byvolume] GetAccountsAndVolumes error", "err", err)
 		return errGetAccountsVolumeFailed
 	}
 	if len(accounts) == 0 {

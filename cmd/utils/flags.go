@@ -133,6 +133,11 @@ var (
 		Name:  "volumes",
 		Usage: "volumes file (line format: <address> <volume>), read from database if not specified",
 	}
+	// InputFileFlag --input
+	InputFileFlag = &cli.StringFlag{
+		Name:  "input",
+		Usage: "input file",
+	}
 	// OutputFileFlag --output
 	OutputFileFlag = &cli.StringFlag{
 		Name:  "output",

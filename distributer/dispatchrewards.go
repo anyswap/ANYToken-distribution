@@ -15,7 +15,7 @@ func dispatchRewards(opt *Option, accounts []common.Address, shares []*big.Int) 
 		log.Error("number of accounts %v is not equal to shares %v", len(accounts), len(shares))
 		return errAccountsLengthMismatch
 	}
-	totalShare := calcTotalShare(shares)
+	totalShare := CalcTotalValue(shares)
 	if totalShare.Sign() <= 0 {
 		log.Error("sum shares is zero")
 		return errNoAccountSatisfied
@@ -25,6 +25,7 @@ func dispatchRewards(opt *Option, accounts []common.Address, shares []*big.Int) 
 	log.Info("dispatchRewards", "option", opt, "totalShare", totalShare)
 
 	var reward *big.Int
+	sum := big.NewInt(0)
 	for i, share := range shares {
 		if share == nil || share.Sign() <= 0 {
 			continue
@@ -33,6 +34,19 @@ func dispatchRewards(opt *Option, accounts []common.Address, shares []*big.Int) 
 		reward.Mul(totalReward, share)
 		reward.Div(reward, totalShare)
 		rewards[i] = reward
+		sum.Add(sum, reward)
+	}
+	if sum.Cmp(totalReward) < 0 { // ensure zero rewards left
+		left := new(big.Int).Sub(totalReward, sum)
+		count := int64(len(shares))
+		avg := new(big.Int).Div(left, big.NewInt(count))
+		mod := new(big.Int).Mod(left, big.NewInt(count)).Int64()
+		for i := int64(0); i < count; i++ {
+			rewards[i].Add(rewards[i], avg)
+			if i < mod {
+				rewards[i].Add(rewards[i], big.NewInt(1))
+			}
+		}
 	}
 
 	rewardsSended, err := sendRewards(accounts, rewards, shares, opt)
@@ -68,7 +82,6 @@ func sendRewards(accounts []common.Address, rewards, shares []*big.Int, opt *Opt
 		log.Error("number of accounts %v, rewards %v, and shares %v are not equal", len(accounts), len(rewards), len(shares))
 		return rewardsSended, errAccountsLengthMismatch
 	}
-	rewardToken := common.HexToAddress(opt.RewardToken)
 	dryRun := opt.DryRun
 	var reward, share *big.Int
 	for i, account := range accounts {
@@ -78,18 +91,19 @@ func sendRewards(accounts []common.Address, rewards, shares []*big.Int, opt *Opt
 			continue
 		}
 		log.Info("sendRewards begin", "account", account.String(), "reward", reward, "share", share, "dryrun", dryRun)
-		txHash, err := opt.sendRewardsTransaction(account, reward, rewardToken, dryRun)
+		txHash, err := opt.SendRewardsTransaction(account, reward)
 		if err != nil {
 			log.Info("sendRewards failed", "account", account.String(), "reward", reward, "share", share, "dryrun", dryRun, "err", err)
 			return rewardsSended, errSendTransactionFailed
 		}
 		rewardsSended.Add(rewardsSended, reward)
-		_ = opt.writeOutput(strings.ToLower(account.String()), reward.String(), txHash.String())
+		_ = opt.WriteOutput(strings.ToLower(account.String()), reward.String(), txHash.String())
 	}
 	return rewardsSended, nil
 }
 
-func calcTotalShare(shares []*big.Int) *big.Int {
+// CalcTotalValue calc the summary
+func CalcTotalValue(shares []*big.Int) *big.Int {
 	sum := big.NewInt(0)
 	for _, share := range shares {
 		if share == nil || share.Sign() <= 0 {

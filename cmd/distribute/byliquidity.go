@@ -58,9 +58,11 @@ func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, error) {
 		err         error
 	)
 
-	rewards, err = tools.GetBigIntFromString(ctx.String(utils.TotalRewardsFlag.Name))
-	if err != nil {
-		return nil, err
+	if ctx.IsSet(utils.TotalRewardsFlag.Name) {
+		rewards, err = tools.GetBigIntFromString(ctx.String(utils.TotalRewardsFlag.Name))
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if ctx.IsSet(utils.GasPriceFlag.Name) {
@@ -89,10 +91,13 @@ func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, error) {
 	}
 
 	var inputFile string
-	if ctx.IsSet(utils.AccountsFileFlag.Name) {
+	switch {
+	case ctx.IsSet(utils.AccountsFileFlag.Name):
 		inputFile = ctx.String(utils.AccountsFileFlag.Name)
-	} else if ctx.IsSet(utils.VolumesFileFlag.Name) {
+	case ctx.IsSet(utils.VolumesFileFlag.Name):
 		inputFile = ctx.String(utils.VolumesFileFlag.Name)
+	case ctx.IsSet(utils.InputFileFlag.Name):
+		inputFile = ctx.String(utils.InputFileFlag.Name)
 	}
 
 	args := &distributer.BuildTxArgs{

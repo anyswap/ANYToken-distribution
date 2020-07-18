@@ -24,6 +24,7 @@ func initApp() {
 	app.Commands = []*cli.Command{
 		byLiquidityCommand,
 		byVolumeCommand,
+		sendRewardsCommand,
 		utils.LicenseCommand,
 		utils.VersionCommand,
 	}

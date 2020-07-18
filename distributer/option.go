@@ -59,7 +59,7 @@ func (opt *Option) checkAndInit() (err error) {
 	if !common.IsHexAddress(opt.RewardToken) {
 		return fmt.Errorf("wrong reward token: '%v'", opt.RewardToken)
 	}
-	err = opt.checkSenderRewardTokenBalance()
+	err = opt.CheckSenderRewardTokenBalance()
 	if err != nil {
 		return err
 	}
@@ -85,7 +85,8 @@ func (opt *Option) openOutputFile() (err error) {
 	return err
 }
 
-func (opt *Option) writeOutput(account, reward, txHash string) error {
+// WriteOutput write output
+func (opt *Option) WriteOutput(account, reward, txHash string) error {
 	if opt.outputFile == nil {
 		err := opt.openOutputFile()
 		if err != nil {
@@ -100,11 +101,14 @@ func (opt *Option) writeOutput(account, reward, txHash string) error {
 	return err
 }
 
-func (opt *Option) sendRewardsTransaction(account common.Address, reward *big.Int, rewardToken common.Address, dryRun bool) (txHash common.Hash, err error) {
-	return opt.BuildTxArgs.sendRewardsTransaction(account, reward, rewardToken, dryRun)
+// SendRewardsTransaction send rewards
+func (opt *Option) SendRewardsTransaction(account common.Address, reward *big.Int) (txHash common.Hash, err error) {
+	rewardToken := common.HexToAddress(opt.RewardToken)
+	return opt.BuildTxArgs.sendRewardsTransaction(account, reward, rewardToken, opt.DryRun)
 }
 
-func (opt *Option) checkSenderRewardTokenBalance() (err error) {
+// CheckSenderRewardTokenBalance check balance
+func (opt *Option) CheckSenderRewardTokenBalance() (err error) {
 	sender := opt.BuildTxArgs.fromAddr
 	rewardTokenAddr := common.HexToAddress(opt.RewardToken)
 	var senderTokenBalance *big.Int
@@ -119,6 +123,7 @@ func (opt *Option) checkSenderRewardTokenBalance() (err error) {
 		}
 		break
 	}
+	log.Info("sender reward token balance is enough", "token", rewardTokenAddr.String(), "balance", senderTokenBalance, "needed", opt.TotalValue)
 	return nil
 }
 
@@ -154,7 +159,8 @@ func (opt *Option) getAccounts() (accounts []common.Address, err error) {
 	return accounts, nil
 }
 
-func (opt *Option) getAccountsAndVolumes() (accounts []common.Address, volumes []*big.Int, err error) {
+// GetAccountsAndVolumes pass line format "<address> <amount>" from input file
+func (opt *Option) GetAccountsAndVolumes() (accounts []common.Address, volumes []*big.Int, err error) {
 	if opt.InputFile == "" {
 		accounts, volumes = mongodb.FindAccountVolumes(opt.Exchange, opt.StartHeight, opt.EndHeight)
 		return accounts, volumes, nil

@@ -21,13 +21,12 @@ const (
 )
 
 var (
-	errAccountsLengthMismatch  = errors.New("accounts length mismatch")
-	errTotalRewardsIsZero      = errors.New("total rewards is zero")
-	errCheckOptionFailed       = errors.New("check option failed")
-	errGetAccountListFailed    = errors.New("get account list failed")
-	errGetAccountsVolumeFailed = errors.New("get accounts volume failed")
-	errNoAccountSatisfied      = errors.New("no account satisfied")
-	errSendTransactionFailed   = errors.New("send transaction failed")
+	errTotalRewardsIsZero       = errors.New("total rewards is zero")
+	errCheckOptionFailed        = errors.New("check option failed")
+	errGetAccountListFailed     = errors.New("get account list failed")
+	errGetAccountsRewardsFailed = errors.New("get accounts rewards failed")
+	errNoAccountSatisfied       = errors.New("no account satisfied")
+	errSendTransactionFailed    = errors.New("send transaction failed")
 )
 
 // SetAPICaller set API caller
@@ -181,10 +180,9 @@ func waitAndCheckMissVolumeCycles(exchange string, cycleStart, cycleEnd, stable,
 func shouldRetry(err error) bool {
 	switch err {
 	case
-		errAccountsLengthMismatch,
 		errCheckOptionFailed,
 		errGetAccountListFailed,
-		errGetAccountsVolumeFailed,
+		errGetAccountsRewardsFailed,
 		errSendTransactionFailed:
 		return true
 

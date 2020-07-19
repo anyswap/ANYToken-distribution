@@ -119,7 +119,7 @@ func (args *BuildTxArgs) setDefaults() {
 	}
 }
 
-func (args *BuildTxArgs) sendRewardsTransaction(account common.Address, reward *big.Int, rewardToken common.Address, dryRun bool) (txHash common.Hash, err error) {
+func (args *BuildTxArgs) sendRewardsTransaction(account common.Address, reward *big.Int, rewardToken common.Address, dryRun bool) (txHash *common.Hash, err error) {
 	data := make([]byte, 68)
 	copy(data[:4], transferFuncHash)
 	copy(data[4:36], account.Hash().Bytes())
@@ -150,7 +150,8 @@ func (args *BuildTxArgs) sendRewardsTransaction(account common.Address, reward *
 	}
 	*args.Nonce++
 
-	txHash = signedTx.Hash()
+	signedTxHash := signedTx.Hash()
+	txHash = &signedTxHash
 	log.Info("sendRewards success", "account", account.String(), "reward", reward, "txHash", txHash.String())
 	return txHash, nil
 }

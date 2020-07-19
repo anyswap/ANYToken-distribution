@@ -10,46 +10,8 @@ import (
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 )
 
-func dispatchRewards(opt *Option, accounts []common.Address, shares []*big.Int) error {
-	if len(accounts) != len(shares) {
-		log.Error("number of accounts %v is not equal to shares %v", len(accounts), len(shares))
-		return errAccountsLengthMismatch
-	}
-	totalShare := CalcTotalValue(shares)
-	if totalShare.Sign() <= 0 {
-		log.Error("sum shares is zero")
-		return errNoAccountSatisfied
-	}
-	rewards := make([]*big.Int, len(accounts))
-	totalReward := opt.TotalValue
-	log.Info("dispatchRewards", "option", opt, "totalShare", totalShare)
-
-	var reward *big.Int
-	sum := big.NewInt(0)
-	for i, share := range shares {
-		if share == nil || share.Sign() <= 0 {
-			continue
-		}
-		reward = new(big.Int)
-		reward.Mul(totalReward, share)
-		reward.Div(reward, totalShare)
-		rewards[i] = reward
-		sum.Add(sum, reward)
-	}
-	if sum.Cmp(totalReward) < 0 { // ensure zero rewards left
-		left := new(big.Int).Sub(totalReward, sum)
-		count := int64(len(shares))
-		avg := new(big.Int).Div(left, big.NewInt(count))
-		mod := new(big.Int).Mod(left, big.NewInt(count)).Int64()
-		for i := int64(0); i < count; i++ {
-			rewards[i].Add(rewards[i], avg)
-			if i < mod {
-				rewards[i].Add(rewards[i], big.NewInt(1))
-			}
-		}
-	}
-
-	rewardsSended, err := sendRewards(accounts, rewards, shares, opt)
+func dispatchRewards(opt *Option, accounts []common.Address, rewards []*big.Int) error {
+	rewardsSended, err := sendRewards(accounts, rewards, opt)
 
 	hasSendedReward := rewardsSended.Sign() > 0
 
@@ -76,40 +38,27 @@ func dispatchRewards(opt *Option, accounts []common.Address, shares []*big.Int) 
 	return err
 }
 
-func sendRewards(accounts []common.Address, rewards, shares []*big.Int, opt *Option) (*big.Int, error) {
+func sendRewards(accounts []common.Address, rewards []*big.Int, opt *Option) (*big.Int, error) {
 	rewardsSended := big.NewInt(0)
-	if len(accounts) != len(rewards) || len(accounts) != len(shares) {
-		log.Error("number of accounts %v, rewards %v, and shares %v are not equal", len(accounts), len(rewards), len(shares))
-		return rewardsSended, errAccountsLengthMismatch
+	if len(accounts) != len(rewards) {
+		log.Error("number of accounts %v and rewards %v are not equal", len(accounts), len(rewards))
+		panic("number of accounts and rewards are not equal")
 	}
 	dryRun := opt.DryRun
-	var reward, share *big.Int
+	var reward *big.Int
 	for i, account := range accounts {
 		reward = rewards[i]
-		share = shares[i]
 		if reward == nil || reward.Sign() <= 0 {
 			continue
 		}
-		log.Info("sendRewards begin", "account", account.String(), "reward", reward, "share", share, "dryrun", dryRun)
+		log.Info("sendRewards begin", "account", account.String(), "reward", reward, "dryrun", dryRun)
 		txHash, err := opt.SendRewardsTransaction(account, reward)
 		if err != nil {
-			log.Info("sendRewards failed", "account", account.String(), "reward", reward, "share", share, "dryrun", dryRun, "err", err)
+			log.Info("sendRewards failed", "account", account.String(), "reward", reward, "dryrun", dryRun, "err", err)
 			return rewardsSended, errSendTransactionFailed
 		}
 		rewardsSended.Add(rewardsSended, reward)
-		_ = opt.WriteOutput(strings.ToLower(account.String()), reward.String(), txHash.String())
+		_ = opt.WriteSendRewardResult(account, reward, txHash)
 	}
 	return rewardsSended, nil
-}
-
-// CalcTotalValue calc the summary
-func CalcTotalValue(shares []*big.Int) *big.Int {
-	sum := big.NewInt(0)
-	for _, share := range shares {
-		if share == nil || share.Sign() <= 0 {
-			continue
-		}
-		sum.Add(sum, share)
-	}
-	return sum
 }

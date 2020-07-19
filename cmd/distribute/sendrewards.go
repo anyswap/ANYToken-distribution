@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"math/big"
-	"strings"
 
 	"github.com/anyswap/ANYToken-distribution/cmd/utils"
 	"github.com/anyswap/ANYToken-distribution/distributer"
@@ -60,7 +59,7 @@ func sendRewards(ctx *cli.Context) (err error) {
 		return fmt.Errorf("must specify input file")
 	}
 
-	accounts, rewards, err := opt.GetAccountsAndVolumesFromFile()
+	accounts, rewards, err := opt.GetAccountsAndRewardsFromFile()
 	if err != nil {
 		log.Error("[sendRewards] get accounts and rewards from input file failed", "inputfile", opt.InputFile, "err", err)
 		return err
@@ -93,7 +92,7 @@ func sendRewards(ctx *cli.Context) (err error) {
 			return fmt.Errorf("[sendRewards] send tx failed")
 		}
 		rewardsSended.Add(rewardsSended, reward)
-		_ = opt.WriteOutput(strings.ToLower(account.String()), reward.String(), txHash.String())
+		_ = opt.WriteSendRewardResult(account, reward, txHash)
 	}
 
 	log.Info("[sendRewards] rewards sended", "totalRewards", totalRewards, "rewardsSended", rewardsSended, "allRewardsSended", rewardsSended.Cmp(totalRewards) == 0)

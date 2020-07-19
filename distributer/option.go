@@ -72,6 +72,12 @@ func (opt *Option) checkAndInit() (err error) {
 	if opt.StepCount != 0 && (opt.EndHeight-opt.StartHeight)%opt.StepCount != 0 {
 		return fmt.Errorf("cycle length %v is not intergral multiple of step %v", opt.EndHeight-opt.StartHeight, opt.StepCount)
 	}
+	if opt.StepCount != 0 {
+		steps := (opt.EndHeight - opt.StartHeight) / opt.StepCount
+		if new(big.Int).Mod(opt.TotalValue, new(big.Int).SetUint64(steps)).Sign() != 0 {
+			return fmt.Errorf("total value %v is not intergral multiple of steps %v", opt.TotalValue, steps)
+		}
+	}
 
 	if !params.IsConfigedExchange(opt.Exchange) {
 		return fmt.Errorf("exchange %v is not configed", opt.Exchange)
@@ -95,6 +101,9 @@ func (opt *Option) getDefaultOutputFile() string {
 }
 
 func (opt *Option) openOutputFile() (err error) {
+	if opt.outputFile != nil {
+		return nil // already opened
+	}
 	if opt.OutputFile == "" {
 		opt.OutputFile = opt.getDefaultOutputFile()
 	}
@@ -105,40 +114,65 @@ func (opt *Option) openOutputFile() (err error) {
 	return err
 }
 
-// WriteOutput write output
-func (opt *Option) WriteOutput(account, reward, txHash string) error {
+// WriteOutputLine write output line, will append '\n' automatically
+func (opt *Option) WriteOutputLine(msg string) error {
 	if opt.outputFile == nil {
 		err := opt.openOutputFile()
 		if err != nil {
 			return err
 		}
 	}
-	msg := fmt.Sprintf("%s %s %s\n", account, reward, txHash)
-	_, err := opt.outputFile.Write([]byte(msg))
+	_, err := opt.outputFile.Write([]byte(msg + "\n"))
 	if err != nil {
-		log.Info("write output error", "msg", msg, "err", err)
+		log.Info("[write output] error", "msg", msg, "err", err)
+	} else {
+		log.Printf("[write output] %v", msg)
 	}
 	return err
+}
+
+// WriteOutput write output
+func (opt *Option) WriteOutput(contents ...string) error {
+	msg := strings.Join(contents, " ")
+	return opt.WriteOutputLine(msg)
+}
+
+// WriteLiquiditySubject write liquidity subject
+func (opt *Option) WriteLiquiditySubject(exchange string, start, end uint64, numAccounts int) error {
+	msg := fmt.Sprintf("getLiquidity exchange=%v start=%v end=%v accounts=%v", exchange, start, end, numAccounts)
+	return opt.WriteOutputLine(msg)
+}
+
+// WriteLiquidityBalance write liquidity balance
+func (opt *Option) WriteLiquidityBalance(account common.Address, value *big.Int, height uint64) error {
+	msg := fmt.Sprintf("getLiquidity %v %v height=%v", strings.ToLower(account.Hex()), value, height)
+	return opt.WriteOutputLine(msg)
+}
+
+// WriteSendRewardResult write send reward result
+func (opt *Option) WriteSendRewardResult(account common.Address, reward *big.Int, txHash *common.Hash) error {
+	prefix := "sendRewards"
+	accoutStr := strings.ToLower(account.Hex())
+	if txHash == nil {
+		return opt.WriteOutput(prefix, accoutStr, reward.String(), "dryrun")
+	}
+	return opt.WriteOutput(prefix, accoutStr, reward.String(), txHash.Hex())
 }
 
 // WriteNoVolumeOutput write output
 func (opt *Option) WriteNoVolumeOutput(exchange string, start, end uint64) error {
-	if opt.outputFile == nil {
-		err := opt.openOutputFile()
-		if err != nil {
-			return err
-		}
-	}
-	msg := fmt.Sprintf("novolume %s %d %d\n", exchange, start, end)
-	_, err := opt.outputFile.Write([]byte(msg))
-	if err != nil {
-		log.Info("write output error", "msg", msg, "err", err)
-	}
-	return err
+	msg := fmt.Sprintf("calcRewards exchange=%s start=%d end=%d novolume", exchange, start, end)
+	return opt.WriteOutputLine(msg)
+}
+
+// WriteNoVolumeSummary write no volume summary
+func (opt *Option) WriteNoVolumeSummary(exchange string, start, end, miss uint64) error {
+	msg := fmt.Sprintf("calcRewards exchange=%s start=%d end=%d novolumes=%v", exchange, start, end, miss)
+	return opt.WriteOutputLine(msg)
 }
 
 // SendRewardsTransaction send rewards
-func (opt *Option) SendRewardsTransaction(account common.Address, reward *big.Int) (txHash common.Hash, err error) {
+func (opt *Option) SendRewardsTransaction(account common.Address, reward *big.Int) (txHash *common.Hash, err error) {
 	rewardToken := common.HexToAddress(opt.RewardToken)
 	return opt.BuildTxArgs.sendRewardsTransaction(account, reward, rewardToken, opt.DryRun)
 }
@@ -195,60 +229,85 @@ func (opt *Option) getAccounts() (accounts []common.Address, err error) {
 	return accounts, nil
 }
 
-// GetAccountsAndVolumes get from file if input file exist, or else from database
-func (opt *Option) GetAccountsAndVolumes() (accounts []common.Address, volumes []*big.Int, missSteps uint64, err error) {
+// GetAccountsAndRewards get from file if input file exist, or else from database
+func (opt *Option) GetAccountsAndRewards() (accounts []common.Address, rewards []*big.Int, missSteps uint64, err error) {
 	if opt.InputFile == "" {
-		return opt.GetAccountsAndVolumesFromDB()
+		accounts, rewards, missSteps = opt.GetAccountsAndRewardsFromDB()
+	} else {
+		accounts, rewards, err = opt.GetAccountsAndRewardsFromFile()
 	}
-	accounts, volumes, err = opt.GetAccountsAndVolumesFromFile()
-	return accounts, volumes, 0, err
+	return accounts, rewards, missSteps, err
 }
 
-// GetAccountsAndVolumesFromDB get from database
-func (opt *Option) GetAccountsAndVolumesFromDB() (accounts []common.Address, volumes []*big.Int, missSteps uint64, err error) {
+// GetAccountsAndRewardsFromDB get from database
+func (opt *Option) GetAccountsAndRewardsFromDB() (accounts []common.Address, rewards []*big.Int, missSteps uint64) {
 	exchange := opt.Exchange
 	step := opt.StepCount
 	if step == 0 {
-		accounts, volumes = mongodb.FindAccountVolumes(exchange, opt.StartHeight, opt.EndHeight)
-		return accounts, volumes, 0, nil
+		accounts, rewards = opt.getSingleCycleRewardsFromDB(opt.TotalValue, exchange, opt.StartHeight, opt.EndHeight)
+		return accounts, rewards, 0
 	}
-	volumeMap := make(map[common.Address]*big.Int)
+	rewardsMap := make(map[common.Address]*big.Int)
+	steps := (opt.EndHeight - opt.StartHeight) / step
+	stepRewards := new(big.Int).Div(opt.TotalValue, new(big.Int).SetUint64(steps))
 	for start := opt.StartHeight; start < opt.EndHeight; start += step {
-		accounts, volumes = mongodb.FindAccountVolumes(exchange, start, start+step)
+		accounts, rewards = opt.getSingleCycleRewardsFromDB(stepRewards, exchange, start, start+step)
 		if len(accounts) == 0 {
-			log.Info("find miss volume", "exchange", exchange, "start", start, "end", start+step)
-			missSteps++
 			_ = opt.WriteNoVolumeOutput(exchange, start, start+step)
+			missSteps++
 			continue
 		}
 		for i, account := range accounts {
-			volume := volumes[i]
-			if volume == nil || volume.Sign() <= 0 {
+			reward := rewards[i]
+			if reward == nil || reward.Sign() <= 0 {
+				log.Warn("non positive reward exist, please check")
 				continue
 			}
-			old, exist := volumeMap[account]
+			old, exist := rewardsMap[account]
 			if exist {
-				volumeMap[account].Add(old, volume)
+				rewardsMap[account].Add(old, reward)
 			} else {
-				volumeMap[account] = volume
+				rewardsMap[account] = reward
 			}
 		}
 	}
-	length := len(volumeMap)
+	// convert map to slice
+	length := len(rewardsMap)
 	accounts = make([]common.Address, 0, length)
-	volumes = make([]*big.Int, 0, length)
-	for acc, vol := range volumeMap {
+	rewards = make([]*big.Int, 0, length)
+	for acc, reward := range rewardsMap {
 		accounts = append(accounts, acc)
-		volumes = append(volumes, vol)
+		rewards = append(rewards, reward)
 	}
 	log.Info("get account volumes from db success", "exchange", exchange, "start", opt.StartHeight, "end", opt.EndHeight, "step", opt.StepCount, "missSteps", missSteps)
-	return accounts, volumes, missSteps, nil
+	_ = opt.WriteNoVolumeSummary(exchange, opt.StartHeight, opt.EndHeight, missSteps)
+	return accounts, rewards, missSteps
 }
 
-// GetAccountsAndVolumesFromFile pass line format "<address> <amount>" from input file
-func (opt *Option) GetAccountsAndVolumesFromFile() (accounts []common.Address, volumes []*big.Int, err error) {
+func (opt *Option) getSingleCycleRewardsFromDB(totalRewards *big.Int, exchange string, startHeight, endHeight uint64) (accounts []common.Address, rewards []*big.Int) {
+	var volumes []*big.Int
+	accounts, volumes = mongodb.FindAccountVolumes(exchange, startHeight, endHeight)
+	if len(accounts) == 0 {
+		return nil, nil
+	}
+	rewards = CalcRewardsByShares(totalRewards, accounts, volumes)
+	opt.writeRewards(accounts, rewards, volumes, exchange, startHeight, endHeight, totalRewards)
+	return accounts, rewards
+}
+
+func (opt *Option) writeRewards(accounts []common.Address, rewards, shares []*big.Int, exchange string, startHeight, endHeight uint64, totalRewards *big.Int) {
+	subject := fmt.Sprintf("calcRewards exchange=%v start=%v end=%v rewards=%v accounts=%v", exchange, startHeight, endHeight, totalRewards, len(accounts))
+	_ = opt.WriteOutputLine(subject)
+	for i, account := range accounts {
+		line := fmt.Sprintf("calcRewards %v %v start=%v end=%v share=%v", strings.ToLower(account.String()), rewards[i], startHeight, endHeight, shares[i])
+		_ = opt.WriteOutputLine(line)
+	}
+}
+
+// GetAccountsAndRewardsFromFile pass line format "<address> <amount>" from input file
+func (opt *Option) GetAccountsAndRewardsFromFile() (accounts []common.Address, rewards []*big.Int, err error) {
 	if opt.InputFile == "" {
-		return nil, nil, fmt.Errorf("get account volumes from file error, no input file specified")
+		return nil, nil, fmt.Errorf("get account rewards from file error, no input file specified")
 	}
 	file, err := os.Open(opt.InputFile)
 	if err != nil {
@@ -271,23 +330,23 @@ func (opt *Option) GetAccountsAndVolumesFromFile() (accounts []common.Address, v
 			return nil, nil, fmt.Errorf("less than 2 parts in line %v", line)
 		}
 		accountStr := parts[0]
-		volumeStr := parts[1]
+		rewardStr := parts[1]
 		if !common.IsHexAddress(accountStr) {
 			return nil, nil, fmt.Errorf("wrong address in line %v", line)
 		}
-		volume, err := tools.GetBigIntFromString(volumeStr)
+		reward, err := tools.GetBigIntFromString(rewardStr)
 		if err != nil {
 			return nil, nil, err
 		}
-		if volume.Sign() <= 0 {
+		if reward.Sign() <= 0 {
 			continue
 		}
 		account := common.HexToAddress(line)
 		accounts = append(accounts, account)
-		volumes = append(volumes, volume)
+		rewards = append(rewards, reward)
 	}
 
-	return accounts, volumes, nil
+	return accounts, rewards, nil
 }
 
 func isCommentedLine(line string) bool {

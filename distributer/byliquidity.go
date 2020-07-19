@@ -46,7 +46,18 @@ func ByLiquidity(opt *Option) error {
 		log.Warn("[byliquid] no accounts. " + opt.String())
 		return errNoAccountSatisfied
 	}
-	liquids := make([]*big.Int, len(accounts))
+	liquids := opt.getLiquidityBalances(accounts)
+	rewards := CalcRewardsByShares(opt.TotalValue, accounts, liquids)
+	if len(rewards) == 0 {
+		log.Error("[byliquid] no shares.")
+		return errNoAccountSatisfied
+	}
+	return dispatchRewards(opt, accounts, rewards)
+}
+
+func (opt *Option) getLiquidityBalances(accounts []common.Address) (liquids []*big.Int) {
+	_ = opt.WriteLiquiditySubject(opt.Exchange, opt.StartHeight, opt.EndHeight, len(accounts))
+	liquids = make([]*big.Int, len(accounts))
 	countOfBlocks := opt.EndHeight - opt.StartHeight
 	// randomly pick smpale blocks to query liquidity balance, and keep the minimumn
 	quarterCount := countOfBlocks/sampleCount + 1
@@ -55,18 +66,20 @@ func ByLiquidity(opt *Option) error {
 		if height >= opt.EndHeight {
 			break
 		}
-		updateLiquidityBalance(accounts, liquids, height, opt.Exchange)
+		opt.updateLiquidityBalance(accounts, liquids, height)
 	}
-	return dispatchRewards(opt, accounts, liquids)
+	return liquids
 }
 
-func updateLiquidityBalance(accounts []common.Address, liquids []*big.Int, height uint64, exchange string) {
+func (opt *Option) updateLiquidityBalance(accounts []common.Address, liquids []*big.Int, height uint64) {
+	exchange := opt.Exchange
 	exchangeAddr := common.HexToAddress(exchange)
 	blockNumber := new(big.Int).SetUint64(height)
 	totalLiquid := big.NewInt(0)
 	for i, account := range accounts {
 		var value *big.Int
-		liquid, err := mongodb.FindLiquidityBalance(exchange, account.String(), height)
+		accoutStr := strings.ToLower(account.String())
+		liquid, err := mongodb.FindLiquidityBalance(exchange, accoutStr, height)
 		if err == nil {
 			value, _ = tools.GetBigIntFromString(liquid)
 		}
@@ -78,12 +91,12 @@ func updateLiquidityBalance(accounts []common.Address, liquids []*big.Int, heigh
 				continue
 			}
 		}
-		log.Info("[byliquid] GetLiquidityBalance success", "exchange", exchange, "account", account.String(), "height", height)
+		_ = opt.WriteLiquidityBalance(account, value, height)
 		mliq := &mongodb.MgoLiquidityBalance{
-			Key:         mongodb.GetKeyOfLiquidityBalance(exchange, account.String(), height),
+			Key:         mongodb.GetKeyOfLiquidityBalance(exchange, accoutStr, height),
 			Exchange:    strings.ToLower(exchange),
 			Pairs:       params.GetExchangePairs(exchange),
-			Account:     strings.ToLower(account.String()),
+			Account:     accoutStr,
 			BlockNumber: height,
 			Liquidity:   value.String(),
 		}

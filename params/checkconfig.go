@@ -72,16 +72,16 @@ func checkDistributeConfig() error {
 
 func (ex *ExchangeConfig) check() error {
 	if !common.IsHexAddress(ex.Exchange) {
-		return fmt.Errorf("[check exchange] wrong exchange address %v", ex.Exchange)
+		return fmt.Errorf("[check exchange] wrong exchange address '%v'", ex.Exchange)
 	}
 	if ex.Pairs == "" {
 		return fmt.Errorf("[check exchange] empty exchange pairs (exchange %v)", ex.Exchange)
 	}
-	if ex.Token == "" {
-		return fmt.Errorf("[check exchange] empty exchange token (exchange %v)", ex.Exchange)
+	if !common.IsHexAddress(ex.Token) {
+		return fmt.Errorf("[check exchange] wrong exchange token '%v' (exchange %v)", ex.Token, ex.Exchange)
 	}
 	if ex.CreationHeight == 0 {
-		return fmt.Errorf("[check exchange] empty exchange creation height (exchange %v)", ex.Exchange)
+		return fmt.Errorf("[check exchange] wrong exchange creation height '%v' (exchange %v)", ex.CreationHeight, ex.Exchange)
 	}
 	return nil
 }

@@ -50,12 +50,7 @@ func DialServer(serverURL string) *callapi.APICaller {
 func initMongodb() {
 	config := params.GetConfig()
 	dbConfig := config.MongoDB
-	mongoURL := dbConfig.DBURL
-	if dbConfig.UserName != "" || dbConfig.Password != "" {
-		mongoURL = fmt.Sprintf("%s:%s@%s", dbConfig.UserName, dbConfig.Password, dbConfig.DBURL)
-	}
-	dbName := dbConfig.DBName
-	mongodb.MongoServerInit(mongoURL, dbName)
+	mongodb.MongoServerInit([]string{dbConfig.DBURL}, dbConfig.DBName, dbConfig.UserName, dbConfig.Password)
 }
 
 func verifyConfig(capi *callapi.APICaller) error {

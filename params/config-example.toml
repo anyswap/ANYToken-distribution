@@ -23,6 +23,9 @@ RewardToken = "0xC20b5E92E1ce63Af6FE537491f75C19016ea5fb4"
 StartHeight = 2510000
 StableHeight = 30
 
+AddNodeRewards = "6600000000000000000000"
+AddNoVolumeRewards = "250000000000000000000"
+
 ByLiquidCycle = 6600
 ByLiquidRewards = "9900000000000000000000"
 ByLiquidKeystoreFile = "keystore file path"

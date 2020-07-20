@@ -75,6 +75,9 @@ type DistributeConfig struct {
 	GasLimit     uint64
 	GasPrice     string
 
+	AddNodeRewards     string
+	AddNoVolumeRewards string
+
 	ByLiquidCycle        uint64
 	ByLiquidRewards      string // unit Wei
 	ByLiquidKeystoreFile string

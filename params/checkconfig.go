@@ -115,24 +115,32 @@ func (dist *DistributeConfig) checkAddress() error {
 	return nil
 }
 
+func (dist *DistributeConfig) checkBigIntStringValue(name, value string) error {
+	if value == "" {
+		return nil
+	}
+	_, err := tools.GetBigIntFromString(value)
+	if err != nil {
+		return fmt.Errorf("[check distribute] wrong %v %v (exchange %v)", name, value, dist.Exchange)
+	}
+	return nil
+}
+
 func (dist *DistributeConfig) checkStringValue() error {
-	if dist.ByLiquidRewards != "" {
-		_, err := tools.GetBigIntFromString(dist.ByLiquidRewards)
-		if err != nil {
-			return fmt.Errorf("[check distribute] wrong by liquid rewards %v (exchange %v)", dist.ByLiquidRewards, dist.Exchange)
-		}
+	if err := dist.checkBigIntStringValue("add node rewards", dist.AddNodeRewards); err != nil {
+		return err
 	}
-	if dist.ByVolumeRewards != "" {
-		_, err := tools.GetBigIntFromString(dist.ByVolumeRewards)
-		if err != nil {
-			return fmt.Errorf("[check distribute] wrong by volume rewards %v (exchange %v)", dist.ByVolumeRewards, dist.Exchange)
-		}
+	if err := dist.checkBigIntStringValue("add no volume rewards", dist.AddNoVolumeRewards); err != nil {
+		return err
 	}
-	if dist.GasPrice != "" {
-		_, err := tools.GetBigIntFromString(dist.GasPrice)
-		if err != nil {
-			return fmt.Errorf("[check distribute] wrong gas price %v (exchange %v)", dist.GasPrice, dist.Exchange)
-		}
+	if err := dist.checkBigIntStringValue("by liquid rewards", dist.ByLiquidRewards); err != nil {
+		return err
+	}
+	if err := dist.checkBigIntStringValue("by volume rewards", dist.ByVolumeRewards); err != nil {
+		return err
+	}
+	if err := dist.checkBigIntStringValue("gas price", dist.GasPrice); err != nil {
+		return err
 	}
 	return nil
 }

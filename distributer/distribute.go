@@ -50,8 +50,9 @@ func Start(apiCaller *callapi.APICaller) {
 // every 6600 blocks distribute:
 // 	1. by liquidity rewards
 // 	2. by volume rewards
+// give configed node rewards to liquidity rewards
 // check volumes every 100 block,
-// if no volume then give this rewards to liquidity rewards
+// if no volume then give configed some of this rewards to liquidity rewards
 func startDistributeJob(distCfg *params.DistributeConfig) {
 	log.Info("[distribute] start job", "config", distCfg)
 
@@ -70,25 +71,27 @@ func startDistributeJob(distCfg *params.DistributeConfig) {
 	start := distCfg.StartHeight
 	stable := distCfg.StableHeight
 
-	var (
-		byLiquidCycleRewards *big.Int
-		byVolumeCycleRewards *big.Int
-
-		totalVolumeRewards *big.Int
-		missVolumeRewards  *big.Int
-	)
-
 	byLiquidCycleLen := distCfg.ByLiquidCycle
 	byLiquidCycleStart := calcCurCycleStart(start, stable, byLiquidCycleLen)
-	if distCfg.ByLiquidRewards != "" {
-		byLiquidCycleRewards, _ = tools.GetBigIntFromString(distCfg.ByLiquidRewards)
+	byLiquidCycleRewards, _ := tools.GetBigIntFromString(distCfg.ByLiquidRewards)
+	if byLiquidCycleRewards == nil {
+		byLiquidCycleRewards = big.NewInt(0)
 	}
 
-	byVolumeCycleLen := distCfg.ByVolumeCycle
-	if distCfg.ByVolumeRewards != "" {
-		byVolumeCycleRewards, _ = tools.GetBigIntFromString(distCfg.ByVolumeRewards)
+	addedNodeRewards, _ := tools.GetBigIntFromString(distCfg.AddNodeRewards)
+	if addedNodeRewards != nil {
+		byLiquidCycleRewards.Add(byLiquidCycleRewards, addedNodeRewards)
 	}
-	totalVolumeRewards = new(big.Int).Mul(byVolumeCycleRewards, new(big.Int).SetUint64(byLiquidCycleLen/byVolumeCycleLen))
+
+	addedNoVolumeRewardsPerCycle, _ := tools.GetBigIntFromString(distCfg.AddNoVolumeRewards)
+
+	byVolumeCycleLen := distCfg.ByVolumeCycle
+	byVolumeCycleRewards, _ := tools.GetBigIntFromString(distCfg.ByVolumeRewards)
+	if byVolumeCycleRewards == nil {
+		byVolumeCycleRewards = big.NewInt(0)
+	}
+
+	totalVolumeRewardsIfNoMissing := new(big.Int).Mul(byVolumeCycleRewards, new(big.Int).SetUint64(byLiquidCycleLen/byVolumeCycleLen))
 
 	opt := &Option{
 		Exchange:    exchange,
@@ -102,23 +105,26 @@ func startDistributeJob(distCfg *params.DistributeConfig) {
 		opt.EndHeight = curCycleEnd
 
 		missVolumeCycles := waitAndCheckMissVolumeCycles(exchange, curCycleStart, curCycleEnd, stable, byVolumeCycleLen)
-		missVolumeRewards = new(big.Int).Mul(byVolumeCycleRewards, big.NewInt(missVolumeCycles))
-
-		// give missing volume rewards to liquidity rewards sender
-		if missVolumeRewards.Sign() > 0 {
-			opt.TotalValue = missVolumeRewards
+		// give configed missing volume rewards to liquidity rewards sender
+		addedNoVolumeRewards := new(big.Int).Mul(addedNoVolumeRewardsPerCycle, big.NewInt(missVolumeCycles))
+		if addedNoVolumeRewards.Sign() > 0 {
+			opt.TotalValue = addedNoVolumeRewards
 			opt.BuildTxArgs = byVolumeArgs
 			loopSendMissingVolumeRewards(opt, byLiquidArgs.GetSender())
 		}
 
-		opt.TotalValue = new(big.Int).Add(byLiquidCycleRewards, missVolumeRewards)
+		// send by liquidity rewards
+		opt.TotalValue = new(big.Int).Add(byLiquidCycleRewards, addedNoVolumeRewards)
 		opt.BuildTxArgs = byLiquidArgs
 		loopDoUntilSuccess(ByLiquidity, opt)
 
-		opt.TotalValue = new(big.Int).Sub(totalVolumeRewards, missVolumeRewards)
+		// send by volume rewards
+		missVolumeRewards := new(big.Int).Mul(byVolumeCycleRewards, big.NewInt(missVolumeCycles))
+		opt.TotalValue = new(big.Int).Sub(totalVolumeRewardsIfNoMissing, missVolumeRewards)
 		opt.BuildTxArgs = byVolumeArgs
 		loopDoUntilSuccess(ByVolume, opt)
 
+		// start next cycle
 		curCycleStart += byVolumeCycleLen
 	}
 }

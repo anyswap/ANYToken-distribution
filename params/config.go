@@ -67,6 +67,7 @@ type ExchangeConfig struct {
 // DistributeConfig distribute config
 type DistributeConfig struct {
 	Enable       bool
+	DryRun       bool
 	Exchange     string
 	RewardToken  string
 	StartHeight  uint64

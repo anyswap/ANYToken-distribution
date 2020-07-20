@@ -96,6 +96,7 @@ func startDistributeJob(distCfg *params.DistributeConfig) {
 	opt := &Option{
 		Exchange:    exchange,
 		RewardToken: rewardToken,
+		DryRun:      distCfg.DryRun,
 	}
 
 	curCycleStart := byLiquidCycleStart

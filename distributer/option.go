@@ -87,7 +87,11 @@ func (opt *Option) checkAndInit() (err error) {
 	}
 	err = opt.CheckSenderRewardTokenBalance()
 	if err != nil {
-		return err
+		if opt.DryRun {
+			log.Warn("check sender reward token balance failed, but ignore in dry run", "err", err)
+		} else {
+			return err
+		}
 	}
 	latestBlock := capi.LoopGetLatestBlockHeader()
 	if latestBlock.Number.Uint64() < opt.EndHeight {

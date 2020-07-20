@@ -41,8 +41,7 @@ func dispatchRewards(opt *Option, accounts []common.Address, rewards []*big.Int)
 func sendRewards(accounts []common.Address, rewards []*big.Int, opt *Option) (*big.Int, error) {
 	rewardsSended := big.NewInt(0)
 	if len(accounts) != len(rewards) {
-		log.Error("number of accounts %v and rewards %v are not equal", len(accounts), len(rewards))
-		panic("number of accounts and rewards are not equal")
+		log.Fatalf("number of accounts %v and rewards %v are not equal", len(accounts), len(rewards))
 	}
 	dryRun := opt.DryRun
 	var reward *big.Int

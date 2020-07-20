@@ -28,7 +28,7 @@ func InitApp(ctx *cli.Context, withMongodb bool) *callapi.APICaller {
 	capi := DialServer(serverURL)
 
 	if err := verifyConfig(capi); err != nil {
-		panic(err)
+		log.Fatalf("verifyConfig error. %v", err)
 	}
 
 	return capi

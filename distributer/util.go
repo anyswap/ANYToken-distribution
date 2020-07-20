@@ -22,8 +22,7 @@ func CalcTotalValue(shares []*big.Int) *big.Int {
 // CalcRewardsByShares calc rewards by shares
 func CalcRewardsByShares(totalReward *big.Int, accounts []common.Address, shares []*big.Int) []*big.Int {
 	if len(accounts) != len(shares) {
-		log.Error("number of accounts %v and shares %v are not equal", len(accounts), len(shares))
-		panic("number of accounts and shares are not equal")
+		log.Fatalf("number of accounts %v and shares %v are not equal", len(accounts), len(shares))
 	}
 	totalShare := CalcTotalValue(shares)
 	if totalShare.Sign() <= 0 {

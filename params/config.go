@@ -1,7 +1,6 @@
 package params
 
 import (
-	"fmt"
 	"math"
 	"strings"
 
@@ -139,12 +138,12 @@ func SetConfig(cfg *Config) {
 func LoadConfig(configFile string) *Config {
 	log.Println("Config file is", configFile)
 	if !common.FileExist(configFile) {
-		panic(fmt.Sprintf("LoadConfig error: config file %v not exist", configFile))
+		log.Fatalf("LoadConfig error: config file %v not exist", configFile)
 	}
 
 	config := &Config{}
 	if _, err := toml.DecodeFile(configFile, &config); err != nil {
-		panic(fmt.Sprintf("LoadConfig error (toml DecodeFile): %v", err))
+		log.Fatalf("LoadConfig error (toml DecodeFile): %v", err)
 	}
 
 	SetConfig(config)
@@ -152,7 +151,7 @@ func LoadConfig(configFile string) *Config {
 	log.Println("LoadConfig finished.", tools.ToJSONString(config, !log.JSONFormat))
 
 	if err := CheckConfig(); err != nil {
-		panic(fmt.Sprintf("Check config failed. %v", err))
+		log.Fatalf("Check config failed. %v", err)
 	}
 	return config
 }

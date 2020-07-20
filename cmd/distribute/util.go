@@ -83,7 +83,8 @@ func getBuildTxArgs(ctx *cli.Context) (*distributer.BuildTxArgs, error) {
 		GasPrice:     gasPrice,
 	}
 
-	if err := args.Check(); err != nil {
+	dryRun := ctx.Bool(utils.DryRunFlag.Name)
+	if err := args.Check(dryRun); err != nil {
 		return nil, err
 	}
 

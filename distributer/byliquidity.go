@@ -46,73 +46,101 @@ func ByLiquidity(opt *Option) error {
 		log.Warn("[byliquid] no accounts. " + opt.String())
 		return errNoAccountSatisfied
 	}
-	liquids := opt.getLiquidityBalances(accounts)
-	rewards := CalcRewardsByShares(opt.TotalValue, accounts, liquids)
+	finAccounts, finLiquids, _ := opt.getLiquidityBalances(accounts)
+	rewards := CalcRewardsByShares(opt.TotalValue, finAccounts, finLiquids)
 	if len(rewards) == 0 {
 		log.Error("[byliquid] no shares.")
 		return errNoAccountSatisfied
 	}
-	return dispatchRewards(opt, accounts, rewards)
+	return dispatchRewards(opt, finAccounts, rewards)
 }
 
-func (opt *Option) getLiquidityBalances(accounts []common.Address) (liquids []*big.Int) {
+func (opt *Option) getLiquidityBalances(accounts []common.Address) ([]common.Address, []*big.Int, []uint64) {
 	_ = opt.WriteLiquiditySubject(opt.Exchange, opt.StartHeight, opt.EndHeight, len(accounts))
-	liquids = make([]*big.Int, len(accounts))
+	liquids := make([]*big.Int, len(accounts))
 	countOfBlocks := opt.EndHeight - opt.StartHeight
 	// randomly pick smpale blocks to query liquidity balance, and keep the minimumn
 	quarterCount := countOfBlocks/sampleCount + 1
+	var sampleHeights []uint64
 	for i := uint64(0); i < sampleCount; i++ {
 		height := opt.StartHeight + i*quarterCount + getRandNumber(quarterCount)
 		if height >= opt.EndHeight {
 			break
 		}
-		opt.updateLiquidityBalance(accounts, liquids, height)
+		sampleHeights = append(sampleHeights, height)
 	}
-	return liquids
+
+	minHeights := opt.updateLiquidityBalance(accounts, liquids, sampleHeights)
+
+	// pick non zero liquid balances
+	finAccounts := make([]common.Address, 0, len(accounts))
+	finLiquids := make([]*big.Int, 0, len(liquids))
+	finHeihgts := make([]uint64, 0, len(minHeights))
+	totalLiquids := big.NewInt(0)
+	for i, liquid := range liquids {
+		if liquid == nil || liquid.Sign() <= 0 {
+			continue
+		}
+		totalLiquids.Add(totalLiquids, liquid)
+		finAccounts = append(finAccounts, accounts[i])
+		finLiquids = append(finLiquids, liquids[i])
+		finHeihgts = append(finHeihgts, minHeights[i])
+	}
+	_ = opt.WriteLiquiditySummary(opt.Exchange, opt.StartHeight, opt.EndHeight, len(finAccounts), totalLiquids, opt.TotalValue)
+	for i, account := range finAccounts {
+		_ = opt.WriteLiquidityBalance(account, finLiquids[i], finHeihgts[i])
+	}
+	return finAccounts, finLiquids, finHeihgts
 }
 
-func (opt *Option) updateLiquidityBalance(accounts []common.Address, liquids []*big.Int, height uint64) {
+func (opt *Option) updateLiquidityBalance(accounts []common.Address, liquids []*big.Int, heights []uint64) (minHeights []uint64) {
+	minHeights = make([]uint64, len(accounts))
 	exchange := opt.Exchange
 	exchangeAddr := common.HexToAddress(exchange)
-	blockNumber := new(big.Int).SetUint64(height)
-	totalLiquid := big.NewInt(0)
-	for i, account := range accounts {
-		var value *big.Int
-		accoutStr := strings.ToLower(account.String())
-		liquid, err := mongodb.FindLiquidityBalance(exchange, accoutStr, height)
-		if err == nil {
-			value, _ = tools.GetBigIntFromString(liquid)
-		}
-		for value == nil {
-			value, err = capi.GetLiquidityBalance(exchangeAddr, account, blockNumber)
-			if err != nil {
-				log.Warn("[byliquid] GetLiquidityBalance error", "err", err)
-				time.Sleep(time.Second)
-				continue
+
+	for _, height := range heights {
+		blockNumber := new(big.Int).SetUint64(height)
+		totalLiquid := big.NewInt(0)
+		for i, account := range accounts {
+			var value *big.Int
+			accoutStr := strings.ToLower(account.String())
+			liquid, err := mongodb.FindLiquidityBalance(exchange, accoutStr, height)
+			if err == nil {
+				value, _ = tools.GetBigIntFromString(liquid)
+			}
+			for value == nil {
+				value, err = capi.GetLiquidityBalance(exchangeAddr, account, blockNumber)
+				if err != nil {
+					log.Warn("[byliquid] GetLiquidityBalance error", "err", err)
+					time.Sleep(time.Second)
+					continue
+				}
+			}
+			_ = opt.WriteLiquidityBalance(account, value, height)
+			mliq := &mongodb.MgoLiquidityBalance{
+				Key:         mongodb.GetKeyOfLiquidityBalance(exchange, accoutStr, height),
+				Exchange:    strings.ToLower(exchange),
+				Pairs:       params.GetExchangePairs(exchange),
+				Account:     accoutStr,
+				BlockNumber: height,
+				Liquidity:   value.String(),
+			}
+			_ = mongodb.TryDoTimes("AddLiquidityBalance "+mliq.Key, func() error {
+				return mongodb.AddLiquidityBalance(mliq)
+			})
+			totalLiquid.Add(totalLiquid, value)
+			oldVal := liquids[i]
+			if oldVal == nil || oldVal.Cmp(value) > 0 { // get minimumn liquidity balance
+				liquids[i] = value
+				minHeights[i] = height
 			}
 		}
-		_ = opt.WriteLiquidityBalance(account, value, height)
-		mliq := &mongodb.MgoLiquidityBalance{
-			Key:         mongodb.GetKeyOfLiquidityBalance(exchange, accoutStr, height),
-			Exchange:    strings.ToLower(exchange),
-			Pairs:       params.GetExchangePairs(exchange),
-			Account:     accoutStr,
-			BlockNumber: height,
-			Liquidity:   value.String(),
-		}
-		_ = mongodb.TryDoTimes("AddLiquidityBalance "+mliq.Key, func() error {
-			return mongodb.AddLiquidityBalance(mliq)
-		})
-		totalLiquid.Add(totalLiquid, value)
-		oldVal := liquids[i]
-		if oldVal == nil || oldVal.Cmp(value) > 0 { // get minimumn liquidity balance
-			liquids[i] = value
+		err := verifyTotalLiquidity(exchangeAddr, blockNumber, totalLiquid)
+		if err != nil {
+			log.Warn("[byliquid] " + err.Error())
 		}
 	}
-	err := verifyTotalLiquidity(exchangeAddr, blockNumber, totalLiquid)
-	if err != nil {
-		log.Warn("[byliquid] " + err.Error())
-	}
+	return minHeights
 }
 
 func verifyTotalLiquidity(exchangeAddr common.Address, blockNumber, totalLiquid *big.Int) error {

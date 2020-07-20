@@ -43,10 +43,12 @@ func (args *BuildTxArgs) GetChainID() *big.Int {
 }
 
 // Check check common args
-func (args *BuildTxArgs) Check() error {
-	err := args.loadKeyStore()
-	if err != nil {
-		return err
+func (args *BuildTxArgs) Check(dryRun bool) error {
+	if !dryRun {
+		err := args.loadKeyStore()
+		if err != nil {
+			return err
+		}
 	}
 	args.setDefaults()
 	return nil
@@ -120,6 +122,11 @@ func (args *BuildTxArgs) setDefaults() {
 }
 
 func (args *BuildTxArgs) sendRewardsTransaction(account common.Address, reward *big.Int, rewardToken common.Address, dryRun bool) (txHash *common.Hash, err error) {
+	if dryRun {
+		log.Info("sendRewards dry run", "account", account.String(), "reward", reward)
+		return txHash, nil
+	}
+
 	data := make([]byte, 68)
 	copy(data[:4], transferFuncHash)
 	copy(data[4:36], account.Hash().Bytes())
@@ -137,11 +144,6 @@ func (args *BuildTxArgs) sendRewardsTransaction(account common.Address, reward *
 	signedTx, err := types.SignTx(rawTx, args.chainSigner, args.keyWrapper.PrivateKey)
 	if err != nil {
 		return txHash, fmt.Errorf("sign tx failed, %v", err)
-	}
-
-	if dryRun {
-		log.Info("sendRewards dry run", "account", account.String(), "reward", reward)
-		return txHash, nil
 	}
 
 	err = capi.SendTransaction(signedTx)

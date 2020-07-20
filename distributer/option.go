@@ -147,6 +147,12 @@ func (opt *Option) WriteLiquiditySubject(exchange string, start, end uint64, num
 	return opt.WriteOutputLine(msg)
 }
 
+// WriteLiquiditySummary write liquidity summary
+func (opt *Option) WriteLiquiditySummary(exchange string, start, end uint64, numAccounts int, totalShares, totalRewards *big.Int) error {
+	msg := fmt.Sprintf("getLiquidity exchange=%v start=%v end=%v accounts=%v totalShares=%v totalRewards=%v", exchange, start, end, numAccounts, totalShares, totalRewards)
+	return opt.WriteOutputLine(msg)
+}
+
 // WriteLiquidityBalance write liquidity balance
 func (opt *Option) WriteLiquidityBalance(account common.Address, value *big.Int, height uint64) error {
 	msg := fmt.Sprintf("getLiquidity %v %v height=%v", strings.ToLower(account.Hex()), value, height)

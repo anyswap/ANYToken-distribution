@@ -49,7 +49,11 @@ func CalcRewardsByShares(totalReward *big.Int, accounts []common.Address, shares
 		avg := new(big.Int).Div(left, big.NewInt(count))
 		mod := new(big.Int).Mod(left, big.NewInt(count)).Int64()
 		for i := int64(0); i < count; i++ {
-			rewards[i].Add(rewards[i], avg)
+			if rewards[i] != nil {
+				rewards[i].Add(rewards[i], avg)
+			} else {
+				rewards[i] = avg
+			}
 			if i < mod {
 				rewards[i].Add(rewards[i], big.NewInt(1))
 			}

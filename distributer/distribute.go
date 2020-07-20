@@ -242,7 +242,7 @@ func getBuildTxArgs(byWhat string, distCfg *params.DistributeConfig) (*BuildTxAr
 		GasLimit:     gasLimitPtr,
 		GasPrice:     gasPrice,
 	}
-	err := args.Check()
+	err := args.Check(distCfg.DryRun)
 	if err != nil {
 		log.Error("check build tx args failed", "err", err)
 		return nil, err

@@ -63,6 +63,9 @@ func parseReceipt(mt *mongodb.MgoTransaction, receipt *types.Receipt) {
 
 func addExchangeReceipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, logType string) {
 	exchange := strings.ToLower(rlog.Address.String())
+	if !params.IsConfigedExchange(exchange) {
+		return
+	}
 	topics := rlog.Topics
 	address := common.BytesToAddress(topics[1].Bytes())
 	fromAmount := new(big.Int).SetBytes(topics[2].Bytes())
@@ -89,6 +92,9 @@ func addExchangeReceipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int,
 
 func addErc20Receipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, logType string) {
 	erc20Address := strings.ToLower(rlog.Address.String())
+	if !(params.IsConfigedToken(erc20Address) || params.IsConfigedExchange(erc20Address)) {
+		return
+	}
 	topics := rlog.Topics
 	from := common.BytesToAddress(topics[1].Bytes())
 	to := common.BytesToAddress(topics[2].Bytes())

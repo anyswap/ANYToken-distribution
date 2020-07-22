@@ -94,6 +94,21 @@ func IsConfigedExchange(exchange string) bool {
 	return GetExchangePairs(exchange) != ""
 }
 
+// IsConfigedToken return true if token is configed
+func IsConfigedToken(token string) bool {
+	return GetConfigedExchange(token) != ""
+}
+
+// GetConfigedExchange get configed exchange
+func GetConfigedExchange(token string) string {
+	for _, ex := range config.Exchanges {
+		if strings.EqualFold(ex.Token, token) {
+			return ex.Exchange
+		}
+	}
+	return ""
+}
+
 // GetExchangePairs get pairs from config
 func GetExchangePairs(exchange string) string {
 	for _, ex := range config.Exchanges {

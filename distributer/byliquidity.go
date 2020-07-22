@@ -52,7 +52,7 @@ func ByLiquidity(opt *Option) error {
 		log.Error("[byliquid] no shares.")
 		return errNoAccountSatisfied
 	}
-	return dispatchRewards(opt, finAccounts, rewards)
+	return dispatchLiquidityRewards(opt, finAccounts, rewards, finLiquids)
 }
 
 func (opt *Option) getLiquidityBalances(accounts []common.Address) ([]common.Address, []*big.Int, []uint64) {

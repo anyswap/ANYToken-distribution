@@ -169,7 +169,7 @@ func waitAndCheckMissVolumeCycles(exchange string, cycleStart, cycleEnd, stable,
 		latest := latestBlock.Number.Uint64()
 
 		for latest >= start+step+stable {
-			accounts, _ := mongodb.FindAccountVolumes(exchange, start, start+step)
+			accounts, _, _ := mongodb.FindAccountVolumes(exchange, start, start+step)
 			if len(accounts) == 0 {
 				log.Info("find miss volume cycle", "exchange", exchange, "start", start, "end", start+step)
 				missCycles++

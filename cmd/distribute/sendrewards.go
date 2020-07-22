@@ -93,7 +93,7 @@ func sendRewards(ctx *cli.Context) (err error) {
 			return fmt.Errorf("[sendRewards] send tx failed")
 		}
 		rewardsSended.Add(rewardsSended, reward)
-		_ = opt.WriteSendRewardResult(account, reward, txHash)
+		_ = opt.WriteSendRewardResult(account, reward, big.NewInt(0), txHash)
 	}
 
 	log.Info("[sendRewards] rewards sended", "totalRewards", totalRewards, "rewardsSended", rewardsSended, "allRewardsSended", rewardsSended.Cmp(totalRewards) == 0)

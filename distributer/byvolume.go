@@ -17,7 +17,7 @@ func ByVolume(opt *Option) error {
 		log.Error("[byvolume] check option error", "option", opt.String(), "err", err)
 		return errCheckOptionFailed
 	}
-	accounts, rewards, _, err := opt.GetAccountsAndRewards()
+	accounts, rewards, volumes, txcounts, _, err := opt.GetAccountsAndRewards()
 	if err != nil {
 		log.Error("[byvolume] GetAccountsAndRewards error", "err", err)
 		return errGetAccountsRewardsFailed
@@ -26,5 +26,5 @@ func ByVolume(opt *Option) error {
 		log.Warn("[byvolume] no accounts. " + opt.String())
 		return errNoAccountSatisfied
 	}
-	return dispatchRewards(opt, accounts, rewards)
+	return dispatchVolumeRewards(opt, accounts, rewards, volumes, txcounts)
 }

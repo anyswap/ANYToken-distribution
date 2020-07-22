@@ -285,17 +285,18 @@ func FindLiquidityBalance(exchange, account string, blockNumber uint64) (string,
 }
 
 // FindAccountVolumes find account volumes
-func FindAccountVolumes(exchange string, startHeight, endHeight uint64) (accounts []common.Address, volumes []*big.Int) {
+func FindAccountVolumes(exchange string, startHeight, endHeight uint64) (accounts []common.Address, volumes []*big.Int, txcounts []int) {
 	qexchange := bson.M{"exchange": strings.ToLower(exchange)}
 	qsheight := bson.M{"blockNumber": bson.M{"$gte": startHeight}}
 	qeheight := bson.M{"blockNumber": bson.M{"$lt": endHeight}}
 	queries := []bson.M{qexchange, qsheight, qeheight}
 	iter := collectionVolumeHistory.Find(bson.M{"$and": queries}).Iter()
 	var (
-		accountVolumesMap = make(map[common.Address]*big.Int)
-		account           common.Address
-		volume            *big.Int
-		result            MgoVolumeHistory
+		accountVolumesMap  = make(map[common.Address]*big.Int)
+		accountTxsCountMap = make(map[common.Address]int)
+		account            common.Address
+		volume             *big.Int
+		result             MgoVolumeHistory
 	)
 	for iter.Next(&result) {
 		log.Info("find volume record", "account", result.Account, "coinAmount", result.CoinAmount, "tokenAmount", result.TokenAmount, "blockNumber", result.BlockNumber, "logIndex", result.LogIndex)
@@ -307,14 +308,18 @@ func FindAccountVolumes(exchange string, startHeight, endHeight uint64) (account
 		old, exist := accountVolumesMap[account]
 		if exist {
 			accountVolumesMap[account].Add(old, volume)
+			accountTxsCountMap[account]++
 		} else {
 			accountVolumesMap[account] = volume
+			accountTxsCountMap[account] = 1
 		}
 	}
 	for acc, vol := range accountVolumesMap {
 		accounts = append(accounts, acc)
 		volumes = append(volumes, vol)
-		log.Info("find volume result", "account", acc.String(), "volume", vol)
+		txcount := accountTxsCountMap[acc]
+		txcounts = append(txcounts, txcount)
+		log.Info("find volume result", "account", acc.String(), "volume", vol, "txcount", txcount)
 	}
-	return accounts, volumes
+	return accounts, volumes, txcounts
 }

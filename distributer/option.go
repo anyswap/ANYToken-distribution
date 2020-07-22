@@ -87,11 +87,7 @@ func (opt *Option) checkAndInit() (err error) {
 	}
 	err = opt.CheckSenderRewardTokenBalance()
 	if err != nil {
-		if opt.DryRun {
-			log.Warn("check sender reward token balance failed, but ignore in dry run", "err", err)
-		} else {
-			return err
-		}
+		return err
 	}
 	latestBlock := capi.LoopGetLatestBlockHeader()
 	if latestBlock.Number.Uint64() < opt.EndHeight {
@@ -199,7 +195,12 @@ func (opt *Option) CheckSenderRewardTokenBalance() (err error) {
 			continue
 		}
 		if senderTokenBalance.Cmp(opt.TotalValue) < 0 {
-			return fmt.Errorf("not enough reward token balance, %v < %v, sender: %v token: %v", senderTokenBalance, opt.TotalValue, sender.String(), opt.RewardToken)
+			err = fmt.Errorf("not enough reward token balance, %v < %v, sender: %v token: %v", senderTokenBalance, opt.TotalValue, sender.String(), opt.RewardToken)
+			if opt.DryRun {
+				log.Warn("check sender reward token balance failed, but ignore in dry run", "err", err)
+				return nil // only warn not enough balance in dry run
+			}
+			return err
 		}
 		break
 	}

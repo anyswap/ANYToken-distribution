@@ -18,6 +18,7 @@ var (
 
 // BuildTxArgs build tx args
 type BuildTxArgs struct {
+	Sender       string
 	KeystoreFile string `json:"-"`
 	PasswordFile string `json:"-"`
 
@@ -44,12 +45,23 @@ func (args *BuildTxArgs) GetChainID() *big.Int {
 
 // Check check common args
 func (args *BuildTxArgs) Check(dryRun bool) error {
-	if !dryRun {
-		err := args.loadKeyStore()
-		if err != nil {
+	if args.Sender != "" && !common.IsHexAddress(args.Sender) {
+		return fmt.Errorf("wrong sender address '%v'", args.Sender)
+	}
+	err := args.loadKeyStore()
+	if err != nil {
+		if !dryRun {
 			return err
 		}
+		if args.Sender != "" {
+			args.fromAddr = common.HexToAddress(args.Sender)
+		}
+		log.Warn("check build tx args failed, but ignore in dry run", "err", err)
 	}
+	if !strings.EqualFold(args.Sender, args.fromAddr.String()) {
+		return fmt.Errorf("sender mismatch. sender from args = '%v', sender from keystore = '%v'", args.Sender, args.fromAddr.String())
+	}
+	log.Info("get build transaction's sender", "sender", args.Sender)
 	args.setDefaults()
 	return nil
 }
@@ -77,7 +89,9 @@ func (args *BuildTxArgs) loadKeyStore() error {
 		return err
 	}
 	args.fromAddr = args.keyWrapper.Address
-	log.Info("decrypt keystore succeed", "from", args.fromAddr.String())
+	if args.Sender == "" {
+		args.Sender = args.fromAddr.String()
+	}
 	return nil
 }
 
@@ -122,11 +136,6 @@ func (args *BuildTxArgs) setDefaults() {
 }
 
 func (args *BuildTxArgs) sendRewardsTransaction(account common.Address, reward *big.Int, rewardToken common.Address, dryRun bool) (txHash *common.Hash, err error) {
-	if dryRun {
-		log.Info("sendRewards dry run", "account", account.String(), "reward", reward)
-		return txHash, nil
-	}
-
 	data := make([]byte, 68)
 	copy(data[:4], transferFuncHash)
 	copy(data[4:36], account.Hash().Bytes())
@@ -141,9 +150,19 @@ func (args *BuildTxArgs) sendRewardsTransaction(account common.Address, reward *
 
 	rawTx := types.NewTransaction(*args.Nonce, rewardToken, big.NewInt(0), *args.GasLimit, args.GasPrice, data)
 
+	if args.keyWrapper == nil && dryRun {
+		log.Info("sendRewards dry run", "account", account.String(), "reward", reward)
+		return txHash, nil
+	}
+
 	signedTx, err := types.SignTx(rawTx, args.chainSigner, args.keyWrapper.PrivateKey)
-	if err != nil {
+	if err != nil && !dryRun {
 		return txHash, fmt.Errorf("sign tx failed, %v", err)
+	}
+
+	if dryRun {
+		log.Info("sendRewards dry run", "account", account.String(), "reward", reward)
+		return txHash, nil
 	}
 
 	err = capi.SendTransaction(signedTx)

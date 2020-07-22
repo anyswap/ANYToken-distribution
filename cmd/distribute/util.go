@@ -76,6 +76,7 @@ func getBuildTxArgs(ctx *cli.Context) (*distributer.BuildTxArgs, error) {
 	}
 
 	args := &distributer.BuildTxArgs{
+		Sender:       ctx.String(utils.SenderFlag.Name),
 		KeystoreFile: ctx.String(utils.KeyStoreFileFlag.Name),
 		PasswordFile: ctx.String(utils.PasswordFileFlag.Name),
 		Nonce:        noncePtr,

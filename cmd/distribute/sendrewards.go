@@ -24,6 +24,7 @@ send rewards batchly according to verified input file with line format: <address
 			utils.GatewayFlag,
 			utils.RewardTokenFlag,
 			utils.InputFileFlag,
+			utils.SenderFlag,
 			utils.KeyStoreFileFlag,
 			utils.PasswordFileFlag,
 			utils.GasLimitFlag,

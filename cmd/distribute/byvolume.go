@@ -23,6 +23,7 @@ distribute rewards by volume
 			utils.StepCountFlag,
 			utils.ExchangeFlag,
 			utils.VolumesFileFlag,
+			utils.SenderFlag,
 			utils.KeyStoreFileFlag,
 			utils.PasswordFileFlag,
 			utils.GasLimitFlag,

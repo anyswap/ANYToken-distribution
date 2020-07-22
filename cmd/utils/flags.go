@@ -158,6 +158,11 @@ var (
 		Name:  "gateway",
 		Usage: "gateway URL address",
 	}
+	// SenderFlag --sender
+	SenderFlag = &cli.StringFlag{
+		Name:  "sender",
+		Usage: "specify transaction's sender",
+	}
 )
 
 // SyncArguments command line arguments

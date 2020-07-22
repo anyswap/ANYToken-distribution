@@ -10,16 +10,16 @@ import (
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 )
 
-func dispatchLiquidityRewards(opt *Option, accounts []common.Address, rewards, liquids []*big.Int) error {
-	return dispatchRewards(opt, accounts, rewards, liquids, nil)
+func dispatchLiquidityRewards(opt *Option, accounts []common.Address, rewards, liquids []*big.Int, minHeights []uint64) error {
+	return dispatchRewards(opt, accounts, rewards, liquids, minHeights)
 }
 
-func dispatchVolumeRewards(opt *Option, accounts []common.Address, rewards, volumes []*big.Int, txcounts []int) error {
-	return dispatchRewards(opt, accounts, rewards, volumes, txcounts)
+func dispatchVolumeRewards(opt *Option, accounts []common.Address, rewards, shares []*big.Int, numbers []uint64) error {
+	return dispatchRewards(opt, accounts, rewards, shares, numbers)
 }
 
-func dispatchRewards(opt *Option, accounts []common.Address, rewards, volumes []*big.Int, txcounts []int) error {
-	rewardsSended, err := sendRewards(accounts, rewards, volumes, txcounts, opt)
+func dispatchRewards(opt *Option, accounts []common.Address, rewards, shares []*big.Int, numbers []uint64) error {
+	rewardsSended, err := sendRewards(accounts, rewards, shares, numbers, opt)
 
 	hasSendedReward := rewardsSended.Sign() > 0
 
@@ -46,16 +46,24 @@ func dispatchRewards(opt *Option, accounts []common.Address, rewards, volumes []
 	return err
 }
 
-func sendRewards(accounts []common.Address, rewards, volumes []*big.Int, txcounts []int, opt *Option) (*big.Int, error) {
+func sendRewards(accounts []common.Address, rewards, shares []*big.Int, numbers []uint64, opt *Option) (*big.Int, error) {
 	if len(accounts) != len(rewards) {
 		log.Fatalf("number of accounts %v and rewards %v are not equal", len(accounts), len(rewards))
 	}
-	if len(accounts) != len(volumes) {
-		log.Fatalf("number of accounts %v and volumes %v are not equal", len(accounts), len(volumes))
+	if len(accounts) != len(shares) {
+		log.Fatalf("number of accounts %v and shares %v are not equal", len(accounts), len(shares))
 	}
-	hasTxCounts := len(txcounts) != 0
-	if hasTxCounts && len(accounts) != len(txcounts) {
-		log.Fatalf("number of accounts %v and txcounts %v are not equal", len(accounts), len(txcounts))
+	if len(accounts) != len(numbers) {
+		log.Fatalf("number of accounts %v and numbers %v are not equal", len(accounts), len(numbers))
+	}
+	var keyShare, keyNumber string
+	switch opt.ByWhat() {
+	case byLiquidMethod:
+		keyShare = "liquid"
+		keyNumber = "height"
+	case byVolumeMethod:
+		keyShare = "volume"
+		keyNumber = "txcount"
 	}
 	dryRun := opt.DryRun
 	rewardsSended := big.NewInt(0)
@@ -65,22 +73,14 @@ func sendRewards(accounts []common.Address, rewards, volumes []*big.Int, txcount
 		if reward == nil || reward.Sign() <= 0 {
 			continue
 		}
-		if hasTxCounts {
-			log.Info("sendRewards begin", "account", account.String(), "reward", reward, "volume", volumes[i], "txcounts", txcounts[i], "dryrun", dryRun)
-		} else {
-			log.Info("sendRewards begin", "account", account.String(), "reward", reward, "liquid", volumes[i], "dryrun", dryRun)
-		}
+		log.Info("sendRewards begin", "account", account.String(), "reward", reward, keyShare, shares[i], keyNumber, numbers[i], "dryrun", dryRun)
 		txHash, err := opt.SendRewardsTransaction(account, reward)
 		if err != nil {
 			log.Info("sendRewards failed", "account", account.String(), "reward", reward, "dryrun", dryRun, "err", err)
 			return rewardsSended, errSendTransactionFailed
 		}
 		rewardsSended.Add(rewardsSended, reward)
-		if hasTxCounts {
-			_ = opt.WriteSendRewardWithVolumeResult(account, reward, volumes[i], txcounts[i], txHash)
-		} else {
-			_ = opt.WriteSendRewardResult(account, reward, volumes[i], txHash)
-		}
+		_ = opt.WriteSendRewardResult(account, reward, shares[i], numbers[i], txHash)
 	}
 	return rewardsSended, nil
 }

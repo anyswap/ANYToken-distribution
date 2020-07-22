@@ -46,13 +46,13 @@ func ByLiquidity(opt *Option) error {
 		log.Warn("[byliquid] no accounts. " + opt.String())
 		return errNoAccountSatisfied
 	}
-	finAccounts, finLiquids, _ := opt.getLiquidityBalances(accounts)
+	finAccounts, finLiquids, finHeihgts := opt.getLiquidityBalances(accounts)
 	rewards := CalcRewardsByShares(opt.TotalValue, finAccounts, finLiquids)
 	if len(rewards) == 0 {
 		log.Error("[byliquid] no shares.")
 		return errNoAccountSatisfied
 	}
-	return dispatchLiquidityRewards(opt, finAccounts, rewards, finLiquids)
+	return dispatchLiquidityRewards(opt, finAccounts, rewards, finLiquids, finHeihgts)
 }
 
 func (opt *Option) getLiquidityBalances(accounts []common.Address) ([]common.Address, []*big.Int, []uint64) {

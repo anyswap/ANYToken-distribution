@@ -285,7 +285,7 @@ func FindLiquidityBalance(exchange, account string, blockNumber uint64) (string,
 }
 
 // FindAccountVolumes find account volumes
-func FindAccountVolumes(exchange string, startHeight, endHeight uint64) (accounts []common.Address, volumes []*big.Int, txcounts []int) {
+func FindAccountVolumes(exchange string, startHeight, endHeight uint64) (accounts []common.Address, volumes []*big.Int, txcounts []uint64) {
 	qexchange := bson.M{"exchange": strings.ToLower(exchange)}
 	qsheight := bson.M{"blockNumber": bson.M{"$gte": startHeight}}
 	qeheight := bson.M{"blockNumber": bson.M{"$lt": endHeight}}
@@ -293,7 +293,7 @@ func FindAccountVolumes(exchange string, startHeight, endHeight uint64) (account
 	iter := collectionVolumeHistory.Find(bson.M{"$and": queries}).Iter()
 	var (
 		accountVolumesMap  = make(map[common.Address]*big.Int)
-		accountTxsCountMap = make(map[common.Address]int)
+		accountTxsCountMap = make(map[common.Address]uint64)
 		account            common.Address
 		volume             *big.Int
 		result             MgoVolumeHistory

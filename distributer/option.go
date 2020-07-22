@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -364,6 +365,7 @@ func (opt *Option) GetAccountsAndRewardsFromFile() (accounts []common.Address, r
 	}
 	defer file.Close()
 
+	re := regexp.MustCompile("[\\s,]+") // blank or comma separated
 	reader := bufio.NewReader(file)
 	for {
 		lineData, _, errf := reader.ReadLine()
@@ -374,7 +376,7 @@ func (opt *Option) GetAccountsAndRewardsFromFile() (accounts []common.Address, r
 		if isCommentedLine(line) {
 			continue
 		}
-		parts := strings.Split(line, " ")
+		parts := re.Split(line, 3)
 		if len(parts) < 2 {
 			return nil, nil, fmt.Errorf("less than 2 parts in line %v", line)
 		}

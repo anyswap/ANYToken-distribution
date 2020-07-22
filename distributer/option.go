@@ -351,7 +351,7 @@ func (opt *Option) GetAccountsAndRewardsFromFile() (accounts []common.Address, r
 		if reward.Sign() <= 0 {
 			continue
 		}
-		account := common.HexToAddress(line)
+		account := common.HexToAddress(accountStr)
 		accounts = append(accounts, account)
 		rewards = append(rewards, reward)
 	}

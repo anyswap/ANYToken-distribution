@@ -25,11 +25,12 @@ type Option struct {
 	TotalValue  *big.Int
 	StartHeight uint64 // start inclusive
 	EndHeight   uint64 // end exclusive
-	StepCount   uint64
+	StepCount   uint64 `json:",omitempty"`
 	Exchange    string
 	RewardToken string
 	InputFile   string
 	OutputFile  string
+	Heights     []uint64 `json:",omitempty"`
 	SaveDB      bool
 	DryRun      bool
 

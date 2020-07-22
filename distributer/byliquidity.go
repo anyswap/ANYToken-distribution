@@ -58,15 +58,19 @@ func ByLiquidity(opt *Option) error {
 func (opt *Option) getLiquidityBalances(accounts []common.Address) (finAccounts []common.Address, finLiquids []*big.Int, finHeights, sampleHeights []uint64) {
 	_ = opt.WriteLiquiditySubject(opt.Exchange, opt.StartHeight, opt.EndHeight, len(accounts))
 	liquids := make([]*big.Int, len(accounts))
-	countOfBlocks := opt.EndHeight - opt.StartHeight
-	// randomly pick smpale blocks to query liquidity balance, and keep the minimumn
-	quarterCount := countOfBlocks/sampleCount + 1
-	for i := uint64(0); i < sampleCount; i++ {
-		height := opt.StartHeight + i*quarterCount + getRandNumber(quarterCount)
-		if height >= opt.EndHeight {
-			break
+	if len(opt.Heights) != 0 {
+		sampleHeights = opt.Heights
+	} else {
+		countOfBlocks := opt.EndHeight - opt.StartHeight
+		// randomly pick smpale blocks to query liquidity balance, and keep the minimumn
+		quarterCount := countOfBlocks/sampleCount + 1
+		for i := uint64(0); i < sampleCount; i++ {
+			height := opt.StartHeight + i*quarterCount + getRandNumber(quarterCount)
+			if height >= opt.EndHeight {
+				break
+			}
+			sampleHeights = append(sampleHeights, height)
 		}
-		sampleHeights = append(sampleHeights, height)
 	}
 
 	minHeights := opt.updateLiquidityBalance(accounts, liquids, sampleHeights)

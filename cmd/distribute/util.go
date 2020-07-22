@@ -1,12 +1,15 @@
 package main
 
 import (
+	"fmt"
 	"math/big"
+	"regexp"
 
 	"github.com/anyswap/ANYToken-distribution/cmd/utils"
 	"github.com/anyswap/ANYToken-distribution/distributer"
 	"github.com/anyswap/ANYToken-distribution/log"
 	"github.com/anyswap/ANYToken-distribution/tools"
+	cmath "github.com/fsn-dev/fsn-go-sdk/efsn/common/math"
 	"github.com/urfave/cli/v2"
 )
 
@@ -25,6 +28,18 @@ func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, error) {
 		return nil, err
 	}
 
+	heightsStr := ctx.String(utils.HeightsFlag.Name)
+	re := regexp.MustCompile(`[\s,]+`) // blank or comma separated
+	parts := re.Split(heightsStr, -1)
+	heights := make([]uint64, 0, len(parts))
+	for _, part := range parts {
+		height, ok := cmath.ParseUint64(part)
+		if !ok {
+			return nil, fmt.Errorf("invalid height '%v' in heights '%v'", part, heightsStr)
+		}
+		heights = append(heights, height)
+	}
+
 	opt := &distributer.Option{
 		BuildTxArgs: args,
 		RewardToken: ctx.String(utils.RewardTokenFlag.Name),
@@ -35,6 +50,7 @@ func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, error) {
 		Exchange:    ctx.String(utils.ExchangeFlag.Name),
 		InputFile:   getInputFile(ctx),
 		OutputFile:  ctx.String(utils.OutputFileFlag.Name),
+		Heights:     heights,
 		SaveDB:      ctx.Bool(utils.SaveDBFlag.Name),
 		DryRun:      ctx.Bool(utils.DryRunFlag.Name),
 	}

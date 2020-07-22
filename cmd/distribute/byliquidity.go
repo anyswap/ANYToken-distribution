@@ -29,6 +29,8 @@ distribute rewards by liquidity
 			utils.GasPriceFlag,
 			utils.AccountNonceFlag,
 			utils.OutputFileFlag,
+			utils.HeightsFlag,
+			utils.SaveDBFlag,
 			utils.DryRunFlag,
 		},
 	}

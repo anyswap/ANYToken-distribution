@@ -29,6 +29,7 @@ type Option struct {
 	RewardToken string
 	InputFile   string
 	OutputFile  string
+	SaveDB      bool
 	DryRun      bool
 
 	byWhat     string
@@ -144,7 +145,7 @@ func (opt *Option) WriteOutput(contents ...string) error {
 // WriteLiquiditySubject write liquidity subject
 func (opt *Option) WriteLiquiditySubject(exchange string, start, end uint64, numAccounts int) error {
 	msg := fmt.Sprintf("getLiquidity exchange=%v start=%v end=%v accounts=%v", exchange, start, end, numAccounts)
-	//return opt.WriteOutputLine(msg)
+	// only log final result //return opt.WriteOutputLine(msg)
 	log.Println(msg)
 	return nil
 }
@@ -152,7 +153,7 @@ func (opt *Option) WriteLiquiditySubject(exchange string, start, end uint64, num
 // WriteLiquiditySummary write liquidity summary
 func (opt *Option) WriteLiquiditySummary(exchange string, start, end uint64, numAccounts int, totalShares, totalRewards *big.Int) error {
 	msg := fmt.Sprintf("getLiquidity exchange=%v start=%v end=%v accounts=%v totalShares=%v totalRewards=%v", exchange, start, end, numAccounts, totalShares, totalRewards)
-	//return opt.WriteOutputLine(msg)
+	// only log final result //return opt.WriteOutputLine(msg)
 	log.Println(msg)
 	return nil
 }
@@ -160,7 +161,7 @@ func (opt *Option) WriteLiquiditySummary(exchange string, start, end uint64, num
 // WriteLiquidityBalance write liquidity balance
 func (opt *Option) WriteLiquidityBalance(account common.Address, value *big.Int, height uint64) error {
 	msg := fmt.Sprintf("getLiquidity %v %v height=%v", strings.ToLower(account.Hex()), value, height)
-	//return opt.WriteOutputLine(msg)
+	// only log final result //return opt.WriteOutputLine(msg)
 	log.Println(msg)
 	return nil
 }
@@ -190,7 +191,7 @@ func (opt *Option) WriteSendRewardResult(account common.Address, reward, volume 
 // WriteNoVolumeOutput write output
 func (opt *Option) WriteNoVolumeOutput(exchange string, start, end uint64) error {
 	msg := fmt.Sprintf("calcRewards exchange=%s start=%d end=%d novolume", exchange, start, end)
-	//return opt.WriteOutputLine(msg)
+	// only log final result //return opt.WriteOutputLine(msg)
 	log.Println(msg)
 	return nil
 }
@@ -198,7 +199,7 @@ func (opt *Option) WriteNoVolumeOutput(exchange string, start, end uint64) error
 // WriteNoVolumeSummary write no volume summary
 func (opt *Option) WriteNoVolumeSummary(exchange string, start, end, miss uint64) error {
 	msg := fmt.Sprintf("calcRewards exchange=%s start=%d end=%d novolumes=%v", exchange, start, end, miss)
-	//return opt.WriteOutputLine(msg)
+	// only log final result //return opt.WriteOutputLine(msg)
 	log.Println(msg)
 	return nil
 }
@@ -343,11 +344,11 @@ func (opt *Option) getSingleCycleRewardsFromDB(totalRewards *big.Int, exchange s
 
 func (opt *Option) writeRewards(accounts []common.Address, rewards, shares []*big.Int, exchange string, startHeight, endHeight uint64, totalRewards *big.Int) {
 	subject := fmt.Sprintf("calcRewards exchange=%v start=%v end=%v rewards=%v accounts=%v", exchange, startHeight, endHeight, totalRewards, len(accounts))
-	//_ = opt.WriteOutputLine(subject)
+	// only log final result //_ = opt.WriteOutputLine(subject)
 	log.Println(subject)
 	for i, account := range accounts {
 		line := fmt.Sprintf("calcRewards %v %v start=%v end=%v share=%v", strings.ToLower(account.String()), rewards[i], startHeight, endHeight, shares[i])
-		//_ = opt.WriteOutputLine(line)
+		// only log final result //_ = opt.WriteOutputLine(line)
 		log.Println(line)
 	}
 }

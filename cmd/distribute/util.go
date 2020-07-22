@@ -35,6 +35,7 @@ func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, error) {
 		Exchange:    ctx.String(utils.ExchangeFlag.Name),
 		InputFile:   getInputFile(ctx),
 		OutputFile:  ctx.String(utils.OutputFileFlag.Name),
+		SaveDB:      ctx.Bool(utils.SaveDBFlag.Name),
 		DryRun:      ctx.Bool(utils.DryRunFlag.Name),
 	}
 

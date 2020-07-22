@@ -10,28 +10,29 @@ import (
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 )
 
-func dispatchLiquidityRewards(opt *Option, accounts []common.Address, rewards, liquids []*big.Int, minHeights []uint64) error {
-	return dispatchRewards(opt, accounts, rewards, liquids, minHeights)
+func dispatchLiquidityRewards(opt *Option, accounts []common.Address, rewards, liquids []*big.Int, minHeights, sampleHeights []uint64) error {
+	return dispatchRewards(opt, accounts, rewards, liquids, minHeights, sampleHeights)
 }
 
 func dispatchVolumeRewards(opt *Option, accounts []common.Address, rewards, shares []*big.Int, numbers []uint64) error {
-	return dispatchRewards(opt, accounts, rewards, shares, numbers)
+	return dispatchRewards(opt, accounts, rewards, shares, numbers, nil)
 }
 
-func dispatchRewards(opt *Option, accounts []common.Address, rewards, shares []*big.Int, numbers []uint64) error {
+func dispatchRewards(opt *Option, accounts []common.Address, rewards, shares []*big.Int, numbers, sampleHeights []uint64) error {
 	rewardsSended, err := sendRewards(accounts, rewards, shares, numbers, opt)
 
 	hasSendedReward := rewardsSended.Sign() > 0
 
 	if !opt.DryRun && hasSendedReward {
 		mdist := &mongodb.MgoDistributeInfo{
-			Exchange:    strings.ToLower(opt.Exchange),
-			Pairs:       params.GetExchangePairs(opt.Exchange),
-			ByWhat:      opt.byWhat,
-			Start:       opt.StartHeight,
-			End:         opt.EndHeight,
-			RewardToken: opt.RewardToken,
-			Rewards:     rewardsSended.String(),
+			Exchange:     strings.ToLower(opt.Exchange),
+			Pairs:        params.GetExchangePairs(opt.Exchange),
+			ByWhat:       opt.byWhat,
+			Start:        opt.StartHeight,
+			End:          opt.EndHeight,
+			RewardToken:  opt.RewardToken,
+			Rewards:      rewardsSended.String(),
+			SampleHeigts: sampleHeights,
 		}
 		_ = mongodb.TryDoTimes("AddDistributeInfo "+mdist.Pairs, func() error {
 			return mongodb.AddDistributeInfo(mdist)

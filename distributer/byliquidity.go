@@ -46,16 +46,16 @@ func ByLiquidity(opt *Option) error {
 		log.Warn("[byliquid] no accounts. " + opt.String())
 		return errNoAccountSatisfied
 	}
-	finAccounts, finLiquids, finHeihgts := opt.getLiquidityBalances(accounts)
+	finAccounts, finLiquids, finHeihgts, sampleHeights := opt.getLiquidityBalances(accounts)
 	rewards := CalcRewardsByShares(opt.TotalValue, finAccounts, finLiquids)
 	if len(rewards) == 0 {
 		log.Error("[byliquid] no shares.")
 		return errNoAccountSatisfied
 	}
-	return dispatchLiquidityRewards(opt, finAccounts, rewards, finLiquids, finHeihgts)
+	return dispatchLiquidityRewards(opt, finAccounts, rewards, finLiquids, finHeihgts, sampleHeights)
 }
 
-func (opt *Option) getLiquidityBalances(accounts []common.Address) ([]common.Address, []*big.Int, []uint64) {
+func (opt *Option) getLiquidityBalances(accounts []common.Address) ([]common.Address, []*big.Int, []uint64, []uint64) {
 	_ = opt.WriteLiquiditySubject(opt.Exchange, opt.StartHeight, opt.EndHeight, len(accounts))
 	liquids := make([]*big.Int, len(accounts))
 	countOfBlocks := opt.EndHeight - opt.StartHeight
@@ -90,7 +90,7 @@ func (opt *Option) getLiquidityBalances(accounts []common.Address) ([]common.Add
 	for i, account := range finAccounts {
 		_ = opt.WriteLiquidityBalance(account, finLiquids[i], finHeihgts[i])
 	}
-	return finAccounts, finLiquids, finHeihgts
+	return finAccounts, finLiquids, finHeihgts, sampleHeights
 }
 
 func (opt *Option) updateLiquidityBalance(accounts []common.Address, liquids []*big.Int, heights []uint64) (minHeights []uint64) {
@@ -117,17 +117,19 @@ func (opt *Option) updateLiquidityBalance(accounts []common.Address, liquids []*
 				}
 			}
 			_ = opt.WriteLiquidityBalance(account, value, height)
-			mliq := &mongodb.MgoLiquidityBalance{
-				Key:         mongodb.GetKeyOfLiquidityBalance(exchange, accoutStr, height),
-				Exchange:    strings.ToLower(exchange),
-				Pairs:       params.GetExchangePairs(exchange),
-				Account:     accoutStr,
-				BlockNumber: height,
-				Liquidity:   value.String(),
+			if !opt.DryRun || opt.SaveDB {
+				mliq := &mongodb.MgoLiquidityBalance{
+					Key:         mongodb.GetKeyOfLiquidityBalance(exchange, accoutStr, height),
+					Exchange:    strings.ToLower(exchange),
+					Pairs:       params.GetExchangePairs(exchange),
+					Account:     accoutStr,
+					BlockNumber: height,
+					Liquidity:   value.String(),
+				}
+				_ = mongodb.TryDoTimes("AddLiquidityBalance "+mliq.Key, func() error {
+					return mongodb.AddLiquidityBalance(mliq)
+				})
 			}
-			_ = mongodb.TryDoTimes("AddLiquidityBalance "+mliq.Key, func() error {
-				return mongodb.AddLiquidityBalance(mliq)
-			})
 			totalLiquid.Add(totalLiquid, value)
 			oldVal := liquids[i]
 			if oldVal == nil || oldVal.Cmp(value) > 0 { // get minimumn liquidity balance

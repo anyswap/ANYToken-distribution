@@ -8,15 +8,17 @@ import (
 )
 
 const (
-	tbSyncInfo         string = "SyncInfo"
-	tbBlocks           string = "Blocks"
-	tbTransactions     string = "Transactions"
-	tbLiquidity        string = "Liquidity"
-	tbVolume           string = "Volume"
-	tbVolumeHistory    string = "VolumeHistory"
-	tbAccounts         string = "Accounts"
-	tbLiquidityBalance string = "LiquidityBalances"
-	tbDistributeInfo   string = "DistributeInfo"
+	tbSyncInfo           string = "SyncInfo"
+	tbBlocks             string = "Blocks"
+	tbTransactions       string = "Transactions"
+	tbLiquidity          string = "Liquidity"
+	tbVolume             string = "Volume"
+	tbVolumeHistory      string = "VolumeHistory"
+	tbAccounts           string = "Accounts"
+	tbLiquidityBalance   string = "LiquidityBalances"
+	tbDistributeInfo     string = "DistributeInfo"
+	tbVolumeRewardResult string = "VolumeRewardResult"
+	tbLiquidRewardResult string = "LiquidRewardResult"
 
 	// KeyOfLatestSyncInfo key
 	KeyOfLatestSyncInfo string = "latest"
@@ -146,14 +148,50 @@ type MgoVolumeHistory struct {
 
 // MgoDistributeInfo distribute info
 type MgoDistributeInfo struct {
-	Key         bson.ObjectId `bson:"_id"`
-	Exchange    string        `bson:"exchange"`
-	Pairs       string        `bson:"pairs"`
-	ByWhat      string        `bson:"bywhat"`
-	Start       uint64        `bson:"start"`
-	End         uint64        `bson:"end"`
-	RewardToken string        `bson:"rewardToken"`
-	Rewards     string        `bson:"rewards"`
+	Key          bson.ObjectId `bson:"_id"`
+	Exchange     string        `bson:"exchange"`
+	Pairs        string        `bson:"pairs"`
+	ByWhat       string        `bson:"bywhat"`
+	Start        uint64        `bson:"start"`
+	End          uint64        `bson:"end"`
+	RewardToken  string        `bson:"rewardToken"`
+	Rewards      string        `bson:"rewards"`
+	SampleHeigts []uint64      `bson:"sampleHeights,omitempty"`
+}
+
+// MgoVolumeRewardResult volume reward
+type MgoVolumeRewardResult struct {
+	Key         string `bson:"_id"` // exchange + start + end
+	Exchange    string `bson:"exchange"`
+	Pairs       string `bson:"pairs"`
+	Start       uint64 `bson:"start"`
+	End         uint64 `bson:"end"`
+	RewardToken string `bson:"rewardToken"`
+	Account     string `bson:"account"`
+	Reward      string `bson:"reward"`
+	Volume      string `bson:"volume"`
+	TxCount     string `bson:"txcount"`
+	RewardTx    string `bson:"rewardTx"`
+}
+
+// MgoLiquidRewardResult liquidity reward
+type MgoLiquidRewardResult struct {
+	Key         string `bson:"_id"` // exchange + start + end
+	Exchange    string `bson:"exchange"`
+	Pairs       string `bson:"pairs"`
+	Start       uint64 `bson:"start"`
+	End         uint64 `bson:"end"`
+	RewardToken string `bson:"rewardToken"`
+	Account     string `bson:"account"`
+	Reward      string `bson:"reward"`
+	Liquidity   string `bson:"liquidity"`
+	Height      string `bson:"height"`
+	RewardTx    string `bson:"rewardTx"`
+}
+
+// GetKeyOfRewardResult get key
+func GetKeyOfRewardResult(exchange string, start, end uint64) string {
+	return strings.ToLower(fmt.Sprintf("%s:%d-%d", exchange, start, end))
 }
 
 // GetKeyOfExchangeAndAccount get key

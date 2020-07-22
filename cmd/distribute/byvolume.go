@@ -30,6 +30,7 @@ distribute rewards by volume
 			utils.GasPriceFlag,
 			utils.AccountNonceFlag,
 			utils.OutputFileFlag,
+			utils.SaveDBFlag,
 			utils.DryRunFlag,
 		},
 	}

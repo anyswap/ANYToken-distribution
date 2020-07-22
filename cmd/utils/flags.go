@@ -163,6 +163,16 @@ var (
 		Name:  "sender",
 		Usage: "specify transaction's sender",
 	}
+	// SaveDBFlag --savedb
+	SaveDBFlag = &cli.BoolFlag{
+		Name:  "savedb",
+		Usage: "save result to database",
+	}
+	// HeightsFlag --heights
+	HeightsFlag = &cli.StringFlag{
+		Name:  "heights",
+		Usage: "comma separated block heights",
+	}
 )
 
 // SyncArguments command line arguments

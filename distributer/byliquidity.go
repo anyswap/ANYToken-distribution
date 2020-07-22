@@ -46,22 +46,21 @@ func ByLiquidity(opt *Option) error {
 		log.Warn("[byliquid] no accounts. " + opt.String())
 		return errNoAccountSatisfied
 	}
-	finAccounts, finLiquids, finHeihgts, sampleHeights := opt.getLiquidityBalances(accounts)
+	finAccounts, finLiquids, finHeights, sampleHeights := opt.getLiquidityBalances(accounts)
 	rewards := CalcRewardsByShares(opt.TotalValue, finAccounts, finLiquids)
 	if len(rewards) == 0 {
 		log.Error("[byliquid] no shares.")
 		return errNoAccountSatisfied
 	}
-	return dispatchLiquidityRewards(opt, finAccounts, rewards, finLiquids, finHeihgts, sampleHeights)
+	return dispatchLiquidityRewards(opt, finAccounts, rewards, finLiquids, finHeights, sampleHeights)
 }
 
-func (opt *Option) getLiquidityBalances(accounts []common.Address) ([]common.Address, []*big.Int, []uint64, []uint64) {
+func (opt *Option) getLiquidityBalances(accounts []common.Address) (finAccounts []common.Address, finLiquids []*big.Int, finHeights, sampleHeights []uint64) {
 	_ = opt.WriteLiquiditySubject(opt.Exchange, opt.StartHeight, opt.EndHeight, len(accounts))
 	liquids := make([]*big.Int, len(accounts))
 	countOfBlocks := opt.EndHeight - opt.StartHeight
 	// randomly pick smpale blocks to query liquidity balance, and keep the minimumn
 	quarterCount := countOfBlocks/sampleCount + 1
-	var sampleHeights []uint64
 	for i := uint64(0); i < sampleCount; i++ {
 		height := opt.StartHeight + i*quarterCount + getRandNumber(quarterCount)
 		if height >= opt.EndHeight {
@@ -73,9 +72,9 @@ func (opt *Option) getLiquidityBalances(accounts []common.Address) ([]common.Add
 	minHeights := opt.updateLiquidityBalance(accounts, liquids, sampleHeights)
 
 	// pick non zero liquid balances
-	finAccounts := make([]common.Address, 0, len(accounts))
-	finLiquids := make([]*big.Int, 0, len(liquids))
-	finHeihgts := make([]uint64, 0, len(minHeights))
+	finAccounts = make([]common.Address, 0, len(accounts))
+	finLiquids = make([]*big.Int, 0, len(liquids))
+	finHeights = make([]uint64, 0, len(minHeights))
 	totalLiquids := big.NewInt(0)
 	for i, liquid := range liquids {
 		if liquid == nil || liquid.Sign() <= 0 {
@@ -84,13 +83,13 @@ func (opt *Option) getLiquidityBalances(accounts []common.Address) ([]common.Add
 		totalLiquids.Add(totalLiquids, liquid)
 		finAccounts = append(finAccounts, accounts[i])
 		finLiquids = append(finLiquids, liquids[i])
-		finHeihgts = append(finHeihgts, minHeights[i])
+		finHeights = append(finHeights, minHeights[i])
 	}
 	_ = opt.WriteLiquiditySummary(opt.Exchange, opt.StartHeight, opt.EndHeight, len(finAccounts), totalLiquids, opt.TotalValue)
 	for i, account := range finAccounts {
-		_ = opt.WriteLiquidityBalance(account, finLiquids[i], finHeihgts[i])
+		_ = opt.WriteLiquidityBalance(account, finLiquids[i], finHeights[i])
 	}
-	return finAccounts, finLiquids, finHeihgts, sampleHeights
+	return finAccounts, finLiquids, finHeights, sampleHeights
 }
 
 func (opt *Option) updateLiquidityBalance(accounts []common.Address, liquids []*big.Int, heights []uint64) (minHeights []uint64) {

@@ -5,15 +5,17 @@ import (
 )
 
 var (
-	collectionBlock            *mgo.Collection
-	collectionTransaction      *mgo.Collection
-	collectionSyncInfo         *mgo.Collection
-	collectionLiquidity        *mgo.Collection
-	collectionVolume           *mgo.Collection
-	collectionVolumeHistory    *mgo.Collection
-	collectionAccount          *mgo.Collection
-	collectionLiquidityBalance *mgo.Collection
-	collectionDistributeInfo   *mgo.Collection
+	collectionBlock              *mgo.Collection
+	collectionTransaction        *mgo.Collection
+	collectionSyncInfo           *mgo.Collection
+	collectionLiquidity          *mgo.Collection
+	collectionVolume             *mgo.Collection
+	collectionVolumeHistory      *mgo.Collection
+	collectionAccount            *mgo.Collection
+	collectionLiquidityBalance   *mgo.Collection
+	collectionDistributeInfo     *mgo.Collection
+	collectionVolumeRewardResult *mgo.Collection
+	collectionLiquidRewardResult *mgo.Collection
 )
 
 // do this when reconnect to the database
@@ -27,6 +29,8 @@ func deinintCollections() {
 	collectionAccount = database.C(tbAccounts)
 	collectionLiquidityBalance = database.C(tbLiquidityBalance)
 	collectionDistributeInfo = database.C(tbDistributeInfo)
+	collectionVolumeRewardResult = database.C(tbVolumeRewardResult)
+	collectionLiquidRewardResult = database.C(tbLiquidRewardResult)
 }
 
 func initCollections() {
@@ -39,6 +43,8 @@ func initCollections() {
 	initCollection(tbAccounts, &collectionAccount, "exchange")
 	initCollection(tbLiquidityBalance, &collectionLiquidityBalance, "exchange", "account", "blockNumber")
 	initCollection(tbDistributeInfo, &collectionDistributeInfo, "exchange", "bywhat")
+	initCollection(tbVolumeRewardResult, &collectionVolumeRewardResult, "exchange", "start")
+	initCollection(tbLiquidRewardResult, &collectionLiquidRewardResult, "exchange", "start")
 
 	_ = initLatestSyncInfo()
 }

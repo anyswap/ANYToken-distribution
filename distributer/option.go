@@ -178,15 +178,63 @@ func (opt *Option) WriteSendRewardFromFileResult(account common.Address, reward 
 }
 
 // WriteSendRewardResult write send reward result
-func (opt *Option) WriteSendRewardResult(account common.Address, reward, volume *big.Int, txcount uint64, txHash *common.Hash) error {
+func (opt *Option) WriteSendRewardResult(account common.Address, reward, share *big.Int, number uint64, txHash *common.Hash) error {
 	accoutStr := strings.ToLower(account.Hex())
 	rewardStr := reward.String()
-	volumeStr := volume.String()
-	txcountStr := fmt.Sprintf("%d", txcount)
-	if txHash == nil {
-		return opt.WriteOutput(accoutStr, rewardStr, volumeStr, txcountStr)
+	shareStr := share.String()
+	numStr := fmt.Sprintf("%d", number)
+	hashStr := ""
+	if txHash != nil {
+		hashStr = txHash.Hex()
 	}
-	return opt.WriteOutput(accoutStr, rewardStr, volumeStr, txcountStr, txHash.Hex())
+	if !opt.DryRun || opt.SaveDB {
+		opt.writeRewardResultToDB(accoutStr, rewardStr, shareStr, number, hashStr)
+	}
+	if txHash == nil {
+		return opt.WriteOutput(accoutStr, rewardStr, shareStr, numStr)
+	}
+	return opt.WriteOutput(accoutStr, rewardStr, shareStr, numStr, hashStr)
+}
+
+func (opt *Option) writeRewardResultToDB(accoutStr, rewardStr, shareStr string, number uint64, hashStr string) {
+	exchange := strings.ToLower(opt.Exchange)
+	pairs := params.GetExchangePairs(exchange)
+	switch opt.byWhat {
+	case byVolumeMethod:
+		mr := &mongodb.MgoVolumeRewardResult{
+			Key:         mongodb.GetKeyOfRewardResult(exchange, opt.StartHeight),
+			Exchange:    exchange,
+			Pairs:       pairs,
+			Start:       opt.StartHeight,
+			End:         opt.EndHeight,
+			RewardToken: opt.RewardToken,
+			Account:     accoutStr,
+			Reward:      rewardStr,
+			Volume:      shareStr,
+			TxCount:     number,
+			RewardTx:    hashStr,
+		}
+		_ = mongodb.TryDoTimes("AddVolumeRewardResult "+mr.Key, func() error {
+			return mongodb.AddVolumeRewardResult(mr)
+		})
+	case byLiquidMethod:
+		mr := &mongodb.MgoLiquidRewardResult{
+			Key:         mongodb.GetKeyOfRewardResult(exchange, opt.StartHeight),
+			Exchange:    exchange,
+			Pairs:       pairs,
+			Start:       opt.StartHeight,
+			End:         opt.EndHeight,
+			RewardToken: opt.RewardToken,
+			Account:     accoutStr,
+			Reward:      rewardStr,
+			Liquidity:   shareStr,
+			Height:      number,
+			RewardTx:    hashStr,
+		}
+		_ = mongodb.TryDoTimes("AddLiquidRewardResult "+mr.Key, func() error {
+			return mongodb.AddLiquidRewardResult(mr)
+		})
+	}
 }
 
 // WriteNoVolumeOutput write output
@@ -365,7 +413,7 @@ func (opt *Option) GetAccountsAndRewardsFromFile() (accounts []common.Address, r
 	}
 	defer file.Close()
 
-	re := regexp.MustCompile("[\\s,]+") // blank or comma separated
+	re := regexp.MustCompile(`[\s,]+`) // blank or comma separated
 	reader := bufio.NewReader(file)
 	for {
 		lineData, _, errf := reader.ReadLine()

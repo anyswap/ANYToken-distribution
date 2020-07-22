@@ -142,6 +142,30 @@ func AddDistributeInfo(ma *MgoDistributeInfo) error {
 	return err
 }
 
+// AddVolumeRewardResult add volume reward result
+func AddVolumeRewardResult(mr *MgoVolumeRewardResult) error {
+	err := collectionVolumeRewardResult.Insert(mr)
+	switch {
+	case err == nil:
+		log.Info("[mongodb] AddVolumeRewardResult success", "reward", mr)
+	default:
+		log.Info("[mongodb] AddVolumeRewardResult failed", "reward", mr, "err", err)
+	}
+	return err
+}
+
+// AddLiquidRewardResult add volume reward result
+func AddLiquidRewardResult(mr *MgoLiquidRewardResult) error {
+	err := collectionLiquidRewardResult.Insert(mr)
+	switch {
+	case err == nil:
+		log.Info("[mongodb] AddLiquidRewardResult success", "reward", mr)
+	default:
+		log.Info("[mongodb] AddLiquidRewardResult failed", "reward", mr, "err", err)
+	}
+	return err
+}
+
 // --------------- update ---------------------------------
 
 // UpdateSyncInfo update sync info

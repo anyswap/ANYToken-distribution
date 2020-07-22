@@ -161,7 +161,7 @@ type MgoDistributeInfo struct {
 
 // MgoVolumeRewardResult volume reward
 type MgoVolumeRewardResult struct {
-	Key         string `bson:"_id"` // exchange + start + end
+	Key         string `bson:"_id"` // exchange + start
 	Exchange    string `bson:"exchange"`
 	Pairs       string `bson:"pairs"`
 	Start       uint64 `bson:"start"`
@@ -170,13 +170,13 @@ type MgoVolumeRewardResult struct {
 	Account     string `bson:"account"`
 	Reward      string `bson:"reward"`
 	Volume      string `bson:"volume"`
-	TxCount     string `bson:"txcount"`
+	TxCount     uint64 `bson:"txcount"`
 	RewardTx    string `bson:"rewardTx"`
 }
 
 // MgoLiquidRewardResult liquidity reward
 type MgoLiquidRewardResult struct {
-	Key         string `bson:"_id"` // exchange + start + end
+	Key         string `bson:"_id"` // exchange + start
 	Exchange    string `bson:"exchange"`
 	Pairs       string `bson:"pairs"`
 	Start       uint64 `bson:"start"`
@@ -185,13 +185,13 @@ type MgoLiquidRewardResult struct {
 	Account     string `bson:"account"`
 	Reward      string `bson:"reward"`
 	Liquidity   string `bson:"liquidity"`
-	Height      string `bson:"height"`
+	Height      uint64 `bson:"height"`
 	RewardTx    string `bson:"rewardTx"`
 }
 
 // GetKeyOfRewardResult get key
-func GetKeyOfRewardResult(exchange string, start, end uint64) string {
-	return strings.ToLower(fmt.Sprintf("%s:%d-%d", exchange, start, end))
+func GetKeyOfRewardResult(exchange string, start uint64) string {
+	return strings.ToLower(fmt.Sprintf("%s:%d", exchange, start))
 }
 
 // GetKeyOfExchangeAndAccount get key

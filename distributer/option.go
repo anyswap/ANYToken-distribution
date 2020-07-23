@@ -36,6 +36,7 @@ type Option struct {
 
 	byWhat     string
 	outputFile *os.File
+	noVolumes  uint64
 }
 
 // ByWhat distribute by what method
@@ -203,7 +204,7 @@ func (opt *Option) writeRewardResultToDB(accoutStr, rewardStr, shareStr string, 
 	switch opt.byWhat {
 	case byVolumeMethod:
 		mr := &mongodb.MgoVolumeRewardResult{
-			Key:         mongodb.GetKeyOfRewardResult(exchange, opt.StartHeight),
+			Key:         mongodb.GetKeyOfRewardResult(exchange, accoutStr, opt.StartHeight),
 			Exchange:    exchange,
 			Pairs:       pairs,
 			Start:       opt.StartHeight,
@@ -220,7 +221,7 @@ func (opt *Option) writeRewardResultToDB(accoutStr, rewardStr, shareStr string, 
 		})
 	case byLiquidMethod:
 		mr := &mongodb.MgoLiquidRewardResult{
-			Key:         mongodb.GetKeyOfRewardResult(exchange, opt.StartHeight),
+			Key:         mongodb.GetKeyOfRewardResult(exchange, accoutStr, opt.StartHeight),
 			Exchange:    exchange,
 			Pairs:       pairs,
 			Start:       opt.StartHeight,
@@ -247,8 +248,8 @@ func (opt *Option) WriteNoVolumeOutput(exchange string, start, end uint64) error
 }
 
 // WriteNoVolumeSummary write no volume summary
-func (opt *Option) WriteNoVolumeSummary(exchange string, start, end, miss uint64) error {
-	msg := fmt.Sprintf("calcRewards exchange=%s start=%d end=%d novolumes=%v", exchange, start, end, miss)
+func (opt *Option) WriteNoVolumeSummary() error {
+	msg := fmt.Sprintf("calcRewards exchange=%s start=%d end=%d novolumes=%v", opt.Exchange, opt.StartHeight, opt.EndHeight, opt.noVolumes)
 	// only log final result //return opt.WriteOutputLine(msg)
 	log.Println(msg)
 	return nil
@@ -311,111 +312,102 @@ func (opt *Option) getAccounts() (accounts []common.Address, err error) {
 			return nil, fmt.Errorf("found wrong address line %v", line)
 		}
 		account := common.HexToAddress(line)
-		accounts = append(accounts, account)
+		if !IsAccountExist(account, accounts) {
+			accounts = append(accounts, account)
+		} else {
+			log.Warn("ignore duplicate account %v", account.String())
+		}
 	}
 
 	return accounts, nil
 }
 
 // GetAccountsAndRewards get from file if input file exist, or else from database
-func (opt *Option) GetAccountsAndRewards() (accounts []common.Address, rewards, volumes []*big.Int, txcounts []uint64, missSteps uint64, err error) {
+func (opt *Option) GetAccountsAndRewards() (accountStats mongodb.AccountStatSlice, err error) {
 	if opt.InputFile == "" {
-		accounts, rewards, volumes, txcounts, missSteps = opt.GetAccountsAndRewardsFromDB()
+		accountStats = opt.GetAccountsAndRewardsFromDB()
 	} else {
-		accounts, rewards, err = opt.GetAccountsAndRewardsFromFile()
+		accountStats, err = opt.GetAccountsAndRewardsFromFile()
 	}
-	return accounts, rewards, volumes, txcounts, missSteps, err
+	return accountStats, err
 }
 
 // GetAccountsAndRewardsFromDB get from database
-func (opt *Option) GetAccountsAndRewardsFromDB() (accounts []common.Address, rewards, volumes []*big.Int, txcounts []uint64, missSteps uint64) {
+func (opt *Option) GetAccountsAndRewardsFromDB() (accountStats mongodb.AccountStatSlice) {
 	exchange := opt.Exchange
 	step := opt.StepCount
 	if step == 0 {
-		accounts, rewards, volumes, txcounts = opt.getSingleCycleRewardsFromDB(opt.TotalValue, exchange, opt.StartHeight, opt.EndHeight)
-		return accounts, rewards, volumes, txcounts, 0
+		return getSingleCycleRewardsFromDB(opt.TotalValue, exchange, opt.StartHeight, opt.EndHeight)
 	}
-	rewardsMap := make(map[common.Address]*big.Int)
-	volumesMap := make(map[common.Address]*big.Int)
-	txcountsMap := make(map[common.Address]uint64)
+
+	// use map to statistic
+	finStatMap := make(map[common.Address]*mongodb.AccountStat)
+
 	steps := (opt.EndHeight - opt.StartHeight) / step
 	stepRewards := new(big.Int).Div(opt.TotalValue, new(big.Int).SetUint64(steps))
+
 	for start := opt.StartHeight; start < opt.EndHeight; start += step {
-		accounts, rewards, volumes, txcounts = opt.getSingleCycleRewardsFromDB(stepRewards, exchange, start, start+step)
-		if len(accounts) == 0 {
+		cycleStats := getSingleCycleRewardsFromDB(stepRewards, exchange, start, start+step)
+		if len(cycleStats) == 0 {
 			_ = opt.WriteNoVolumeOutput(exchange, start, start+step)
-			missSteps++
+			opt.noVolumes++
 			continue
 		}
-		for i, account := range accounts {
-			reward := rewards[i]
+		for _, stat := range cycleStats {
+			reward := stat.Reward
 			if reward == nil || reward.Sign() <= 0 {
-				log.Warn("non positive reward exist, please check")
+				log.Error("non positive reward exist, please check")
 				continue
 			}
-			old, exist := rewardsMap[account]
+			finStat, exist := finStatMap[stat.Account]
 			if exist {
-				rewardsMap[account].Add(old, reward)
-				volumesMap[account].Add(volumesMap[account], volumes[i])
-				txcountsMap[account] += txcounts[i]
+				finStat.Reward.Add(finStat.Reward, reward)
+				finStat.Share.Add(finStat.Share, stat.Share)
+				finStat.Number += stat.Number
 			} else {
-				rewardsMap[account] = reward
-				volumesMap[account] = volumes[i]
-				txcountsMap[account] = txcounts[i]
+				finStatMap[stat.Account] = stat
 			}
 		}
 	}
-	// convert map to slice
-	length := len(rewardsMap)
-	accounts = make([]common.Address, 0, length)
-	rewards = make([]*big.Int, 0, length)
-	volumes = make([]*big.Int, 0, length)
-	txcounts = make([]uint64, 0, length)
-	for acc, reward := range rewardsMap {
-		accounts = append(accounts, acc)
-		rewards = append(rewards, reward)
-		volumes = append(volumes, volumesMap[acc])
-		txcounts = append(txcounts, txcountsMap[acc])
-	}
-	log.Info("get account volumes from db success", "exchange", exchange, "start", opt.StartHeight, "end", opt.EndHeight, "step", opt.StepCount, "missSteps", missSteps)
-	_ = opt.WriteNoVolumeSummary(exchange, opt.StartHeight, opt.EndHeight, missSteps)
-	return accounts, rewards, volumes, txcounts, missSteps
+	accountStats = mongodb.ConvertToSortedSlice(finStatMap)
+	log.Info("get account volumes from db success", "exchange", exchange, "start", opt.StartHeight, "end", opt.EndHeight, "step", opt.StepCount, "missSteps", opt.noVolumes)
+	_ = opt.WriteNoVolumeSummary()
+	return accountStats
 }
 
-func (opt *Option) getSingleCycleRewardsFromDB(totalRewards *big.Int, exchange string, startHeight, endHeight uint64) (accounts []common.Address, rewards, volumes []*big.Int, txcounts []uint64) {
-	accounts, volumes, txcounts = mongodb.FindAccountVolumes(exchange, startHeight, endHeight)
-	if len(accounts) == 0 {
-		return nil, nil, nil, nil
+func getSingleCycleRewardsFromDB(totalRewards *big.Int, exchange string, startHeight, endHeight uint64) mongodb.AccountStatSlice {
+	accountStats := mongodb.FindAccountVolumes(exchange, startHeight, endHeight)
+	if len(accountStats) == 0 {
+		return nil
 	}
-	rewards = CalcRewardsByShares(totalRewards, accounts, volumes)
-	opt.writeRewards(accounts, rewards, volumes, exchange, startHeight, endHeight, totalRewards)
-	return accounts, rewards, volumes, txcounts
-}
+	accountStats.CalcRewards(totalRewards)
 
-func (opt *Option) writeRewards(accounts []common.Address, rewards, shares []*big.Int, exchange string, startHeight, endHeight uint64, totalRewards *big.Int) {
-	subject := fmt.Sprintf("calcRewards exchange=%v start=%v end=%v rewards=%v accounts=%v", exchange, startHeight, endHeight, totalRewards, len(accounts))
-	// only log final result //_ = opt.WriteOutputLine(subject)
+	subject := fmt.Sprintf("calcRewards exchange=%v start=%v end=%v rewards=%v accounts=%v", exchange, startHeight, endHeight, totalRewards, len(accountStats))
 	log.Println(subject)
-	for i, account := range accounts {
-		line := fmt.Sprintf("calcRewards %v %v start=%v end=%v share=%v", strings.ToLower(account.String()), rewards[i], startHeight, endHeight, shares[i])
-		// only log final result //_ = opt.WriteOutputLine(line)
+	for _, stat := range accountStats {
+		line := fmt.Sprintf("calcRewards %v %v start=%v end=%v share=%v", strings.ToLower(stat.Account.String()), stat.Reward, startHeight, endHeight, stat.Share)
 		log.Println(line)
 	}
+
+	return accountStats
 }
 
 // GetAccountsAndRewardsFromFile pass line format "<address> <amount>" from input file
-func (opt *Option) GetAccountsAndRewardsFromFile() (accounts []common.Address, rewards []*big.Int, err error) {
+func (opt *Option) GetAccountsAndRewardsFromFile() (accountStats mongodb.AccountStatSlice, err error) {
 	if opt.InputFile == "" {
-		return nil, nil, fmt.Errorf("get account rewards from file error, no input file specified")
+		return nil, fmt.Errorf("get account rewards from file error, no input file specified")
 	}
 	file, err := os.Open(opt.InputFile)
 	if err != nil {
-		return nil, nil, fmt.Errorf("open %v failed. %v)", opt.InputFile, err)
+		return nil, fmt.Errorf("open %v failed. %v)", opt.InputFile, err)
 	}
 	defer file.Close()
 
+	accountStats = make(mongodb.AccountStatSlice, 0)
+
 	re := regexp.MustCompile(`[\s,]+`) // blank or comma separated
 	reader := bufio.NewReader(file)
+
 	for {
 		lineData, _, errf := reader.ReadLine()
 		if errf == io.EOF {
@@ -427,26 +419,32 @@ func (opt *Option) GetAccountsAndRewardsFromFile() (accounts []common.Address, r
 		}
 		parts := re.Split(line, 3)
 		if len(parts) < 2 {
-			return nil, nil, fmt.Errorf("less than 2 parts in line %v", line)
+			return nil, fmt.Errorf("less than 2 parts in line %v", line)
 		}
 		accountStr := parts[0]
 		rewardStr := parts[1]
 		if !common.IsHexAddress(accountStr) {
-			return nil, nil, fmt.Errorf("wrong address in line %v", line)
+			return nil, fmt.Errorf("wrong address in line %v", line)
+		}
+		account := common.HexToAddress(accountStr)
+		if accountStats.IsAccountExist(account) {
+			return nil, fmt.Errorf("has duplicate account %v", accountStr)
 		}
 		reward, err := tools.GetBigIntFromString(rewardStr)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		if reward.Sign() <= 0 {
 			continue
 		}
-		account := common.HexToAddress(accountStr)
-		accounts = append(accounts, account)
-		rewards = append(rewards, reward)
+		stat := &mongodb.AccountStat{
+			Account: account,
+			Reward:  reward,
+		}
+		accountStats = append(accountStats, stat)
 	}
 
-	return accounts, rewards, nil
+	return accountStats, nil
 }
 
 func isCommentedLine(line string) bool {

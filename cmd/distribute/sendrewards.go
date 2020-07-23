@@ -60,17 +60,13 @@ func sendRewards(ctx *cli.Context) (err error) {
 		return fmt.Errorf("must specify input file")
 	}
 
-	accounts, rewards, err := opt.GetAccountsAndRewardsFromFile()
+	accountStats, err := opt.GetAccountsAndRewardsFromFile()
 	if err != nil {
 		log.Error("[sendRewards] get accounts and rewards from input file failed", "inputfile", opt.InputFile, "err", err)
 		return err
 	}
 
-	if len(accounts) != len(rewards) {
-		return fmt.Errorf("accounts length %v is not equal to rewards length %v", len(accounts), len(rewards))
-	}
-
-	totalRewards := distributer.CalcTotalValue(rewards)
+	totalRewards := accountStats.CalcTotalReward()
 
 	opt.TotalValue = totalRewards
 	err = opt.CheckSenderRewardTokenBalance()
@@ -80,8 +76,9 @@ func sendRewards(ctx *cli.Context) (err error) {
 	}
 
 	rewardsSended := big.NewInt(0)
-	for i, account := range accounts {
-		reward := rewards[i]
+	for _, stat := range accountStats {
+		account := stat.Account
+		reward := stat.Reward
 		if reward == nil || reward.Sign() <= 0 {
 			log.Info("ignore zero reward line", "account", account)
 			continue

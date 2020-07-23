@@ -1,25 +1,17 @@
 package distributer
 
 import (
+	"fmt"
 	"math/big"
 	"strings"
 
 	"github.com/anyswap/ANYToken-distribution/log"
 	"github.com/anyswap/ANYToken-distribution/mongodb"
 	"github.com/anyswap/ANYToken-distribution/params"
-	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 )
 
-func dispatchLiquidityRewards(opt *Option, accounts []common.Address, rewards, liquids []*big.Int, minHeights, sampleHeights []uint64) error {
-	return dispatchRewards(opt, accounts, rewards, liquids, minHeights, sampleHeights)
-}
-
-func dispatchVolumeRewards(opt *Option, accounts []common.Address, rewards, shares []*big.Int, numbers []uint64) error {
-	return dispatchRewards(opt, accounts, rewards, shares, numbers, nil)
-}
-
-func dispatchRewards(opt *Option, accounts []common.Address, rewards, shares []*big.Int, numbers, sampleHeights []uint64) error {
-	rewardsSended, err := sendRewards(accounts, rewards, shares, numbers, opt)
+func (opt *Option) dispatchRewards(accountStats mongodb.AccountStatSlice) error {
+	rewardsSended, err := opt.sendRewards(accountStats)
 
 	hasSendedReward := rewardsSended.Sign() > 0
 
@@ -32,7 +24,7 @@ func dispatchRewards(opt *Option, accounts []common.Address, rewards, shares []*
 			End:          opt.EndHeight,
 			RewardToken:  opt.RewardToken,
 			Rewards:      rewardsSended.String(),
-			SampleHeigts: sampleHeights,
+			SampleHeigts: opt.Heights,
 		}
 		_ = mongodb.TryDoTimes("AddDistributeInfo "+mdist.Pairs, func() error {
 			return mongodb.AddDistributeInfo(mdist)
@@ -47,44 +39,43 @@ func dispatchRewards(opt *Option, accounts []common.Address, rewards, shares []*
 	return err
 }
 
-func sendRewards(accounts []common.Address, rewards, shares []*big.Int, numbers []uint64, opt *Option) (*big.Int, error) {
-	if len(accounts) != len(rewards) {
-		log.Fatalf("number of accounts %v and rewards %v are not equal", len(accounts), len(rewards))
-	}
-	if len(accounts) != len(shares) {
-		log.Fatalf("number of accounts %v and shares %v are not equal", len(accounts), len(shares))
-	}
-	if len(accounts) != len(numbers) {
-		log.Fatalf("number of accounts %v and numbers %v are not equal", len(accounts), len(numbers))
-	}
-	var keyShare, keyNumber string
-	switch opt.ByWhat() {
+func (opt *Option) sendRewards(accountStats mongodb.AccountStatSlice) (*big.Int, error) {
+	var keyShare, keyNumber, noVolumeInfo string
+	switch opt.byWhat {
 	case byLiquidMethod:
 		keyShare = "liquidity"
 		keyNumber = "height"
 	case byVolumeMethod:
 		keyShare = "volume"
 		keyNumber = "txcount"
+		noVolumeInfo = fmt.Sprintf("novolumes=%d", opt.noVolumes)
 	}
 	// write title
-	_ = opt.WriteOutput("#account", "reward", keyShare, keyNumber, "txhash")
-	dryRun := opt.DryRun
+	if opt.DryRun {
+		if noVolumeInfo != "" {
+			_ = opt.WriteOutput("#account", "reward", keyShare, keyNumber, noVolumeInfo)
+		} else {
+			_ = opt.WriteOutput("#account", "reward", keyShare, keyNumber)
+		}
+	} else {
+		_ = opt.WriteOutput("#account", "reward", keyShare, keyNumber, "txhash")
+	}
+
 	rewardsSended := big.NewInt(0)
-	var reward *big.Int
-	for i, account := range accounts {
-		reward = rewards[i]
-		if reward == nil || reward.Sign() <= 0 {
+	for _, stat := range accountStats {
+		if stat.Reward == nil || stat.Reward.Sign() <= 0 {
+			log.Warn("empty reward stat exist", "stat", stat.String())
 			continue
 		}
-		log.Info("sendRewards begin", "account", account.String(), "reward", reward, keyShare, shares[i], keyNumber, numbers[i], "dryrun", dryRun)
-		txHash, err := opt.SendRewardsTransaction(account, reward)
+		log.Info("sendRewards begin", "account", stat.Account.String(), "reward", stat.Reward, keyShare, stat.Share, keyNumber, stat.Number, "dryrun", opt.DryRun)
+		txHash, err := opt.SendRewardsTransaction(stat.Account, stat.Reward)
 		if err != nil {
-			log.Info("sendRewards failed", "account", account.String(), "reward", reward, "dryrun", dryRun, "err", err)
+			log.Info("sendRewards failed", "account", stat.Account.String(), "reward", stat.Reward, "dryrun", opt.DryRun, "err", err)
 			return rewardsSended, errSendTransactionFailed
 		}
-		rewardsSended.Add(rewardsSended, reward)
+		rewardsSended.Add(rewardsSended, stat.Reward)
 		// write body
-		_ = opt.WriteSendRewardResult(account, reward, shares[i], numbers[i], txHash)
+		_ = opt.WriteSendRewardResult(stat.Account, stat.Reward, stat.Share, stat.Number, txHash)
 	}
 	return rewardsSended, nil
 }

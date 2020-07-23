@@ -46,21 +46,19 @@ func ByLiquidity(opt *Option) error {
 		log.Warn("[byliquid] no accounts. " + opt.String())
 		return errNoAccountSatisfied
 	}
-	finAccounts, finLiquids, finHeights, sampleHeights := opt.getLiquidityBalances(accounts)
-	rewards := CalcRewardsByShares(opt.TotalValue, finAccounts, finLiquids)
-	if len(rewards) == 0 {
-		log.Error("[byliquid] no shares.")
+	accountStats := opt.getLiquidityBalances(accounts)
+	if len(accountStats) == 0 {
+		log.Warn("[byliquid] no account satisfied. " + opt.String())
 		return errNoAccountSatisfied
 	}
-	return dispatchLiquidityRewards(opt, finAccounts, rewards, finLiquids, finHeights, sampleHeights)
+	accountStats.CalcRewards(opt.TotalValue)
+	return opt.dispatchRewards(accountStats)
 }
 
-func (opt *Option) getLiquidityBalances(accounts []common.Address) (finAccounts []common.Address, finLiquids []*big.Int, finHeights, sampleHeights []uint64) {
+func (opt *Option) getLiquidityBalances(accounts []common.Address) (accountStats mongodb.AccountStatSlice) {
 	_ = opt.WriteLiquiditySubject(opt.Exchange, opt.StartHeight, opt.EndHeight, len(accounts))
-	liquids := make([]*big.Int, len(accounts))
-	if len(opt.Heights) != 0 {
-		sampleHeights = opt.Heights
-	} else {
+
+	if len(opt.Heights) == 0 {
 		countOfBlocks := opt.EndHeight - opt.StartHeight
 		// randomly pick smpale blocks to query liquidity balance, and keep the minimumn
 		quarterCount := countOfBlocks/sampleCount + 1
@@ -69,42 +67,34 @@ func (opt *Option) getLiquidityBalances(accounts []common.Address) (finAccounts 
 			if height >= opt.EndHeight {
 				break
 			}
-			sampleHeights = append(sampleHeights, height)
+			opt.Heights = append(opt.Heights, height)
 		}
 	}
 
-	minHeights := opt.updateLiquidityBalance(accounts, liquids, sampleHeights)
+	accountStats = opt.updateLiquidityBalance(accounts)
 
-	// pick non zero liquid balances
-	finAccounts = make([]common.Address, 0, len(accounts))
-	finLiquids = make([]*big.Int, 0, len(liquids))
-	finHeights = make([]uint64, 0, len(minHeights))
-	totalLiquids := big.NewInt(0)
-	for i, liquid := range liquids {
-		if liquid == nil || liquid.Sign() <= 0 {
-			continue
-		}
-		totalLiquids.Add(totalLiquids, liquid)
-		finAccounts = append(finAccounts, accounts[i])
-		finLiquids = append(finLiquids, liquids[i])
-		finHeights = append(finHeights, minHeights[i])
+	totalLiquids := accountStats.CalcTotalShare()
+	_ = opt.WriteLiquiditySummary(opt.Exchange, opt.StartHeight, opt.EndHeight, len(accountStats), totalLiquids, opt.TotalValue)
+	for _, stat := range accountStats {
+		_ = opt.WriteLiquidityBalance(stat.Account, stat.Share, stat.Number)
 	}
-	_ = opt.WriteLiquiditySummary(opt.Exchange, opt.StartHeight, opt.EndHeight, len(finAccounts), totalLiquids, opt.TotalValue)
-	for i, account := range finAccounts {
-		_ = opt.WriteLiquidityBalance(account, finLiquids[i], finHeights[i])
-	}
-	return finAccounts, finLiquids, finHeights, sampleHeights
+	return accountStats
 }
 
-func (opt *Option) updateLiquidityBalance(accounts []common.Address, liquids []*big.Int, heights []uint64) (minHeights []uint64) {
-	minHeights = make([]uint64, len(accounts))
+func (opt *Option) updateLiquidityBalance(accounts []common.Address) (accountStats mongodb.AccountStatSlice) {
 	exchange := opt.Exchange
 	exchangeAddr := common.HexToAddress(exchange)
 
-	for _, height := range heights {
+	finStatMap := make(map[common.Address]*mongodb.AccountStat)
+
+	for _, height := range opt.Heights {
 		blockNumber := new(big.Int).SetUint64(height)
 		totalLiquid := big.NewInt(0)
-		for i, account := range accounts {
+		for _, account := range accounts {
+			finStat, exist := finStatMap[account]
+			if exist && finStat.Share.Sign() == 0 {
+				continue // find zero liquidity then no need to query anymore
+			}
 			var value *big.Int
 			accoutStr := strings.ToLower(account.String())
 			liquid, err := mongodb.FindLiquidityBalance(exchange, accoutStr, height)
@@ -134,10 +124,17 @@ func (opt *Option) updateLiquidityBalance(accounts []common.Address, liquids []*
 				})
 			}
 			totalLiquid.Add(totalLiquid, value)
-			oldVal := liquids[i]
-			if oldVal == nil || oldVal.Cmp(value) > 0 { // get minimumn liquidity balance
-				liquids[i] = value
-				minHeights[i] = height
+			if exist {
+				if finStat.Share.Cmp(value) > 0 { // get minimumn liquidity balance
+					finStat.Share = value
+					finStat.Number = height
+				}
+			} else {
+				finStatMap[account] = &mongodb.AccountStat{
+					Account: account,
+					Share:   value,
+					Number:  height,
+				}
 			}
 		}
 		err := verifyTotalLiquidity(exchangeAddr, blockNumber, totalLiquid)
@@ -145,7 +142,8 @@ func (opt *Option) updateLiquidityBalance(accounts []common.Address, liquids []*
 			log.Warn("[byliquid] " + err.Error())
 		}
 	}
-	return minHeights
+
+	return mongodb.ConvertToSortedSlice(finStatMap)
 }
 
 func verifyTotalLiquidity(exchangeAddr common.Address, blockNumber, totalLiquid *big.Int) error {

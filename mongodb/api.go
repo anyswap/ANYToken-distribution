@@ -144,7 +144,14 @@ func AddDistributeInfo(ma *MgoDistributeInfo) error {
 
 // AddVolumeRewardResult add volume reward result
 func AddVolumeRewardResult(mr *MgoVolumeRewardResult) error {
-	err := collectionVolumeRewardResult.Insert(mr)
+	var old MgoVolumeRewardResult
+	if err := collectionVolumeRewardResult.FindId(mr.Key).One(&old); err == nil {
+		if old.RewardTx != "" {
+			log.Warn("forbid overwrite exist volume reward result", "key", mr.Key)
+			return nil
+		}
+	}
+	_, err := collectionVolumeRewardResult.UpsertId(mr.Key, mr)
 	switch {
 	case err == nil:
 		log.Info("[mongodb] AddVolumeRewardResult success", "reward", mr)
@@ -156,7 +163,14 @@ func AddVolumeRewardResult(mr *MgoVolumeRewardResult) error {
 
 // AddLiquidRewardResult add volume reward result
 func AddLiquidRewardResult(mr *MgoLiquidRewardResult) error {
-	err := collectionLiquidRewardResult.Insert(mr)
+	var old MgoLiquidRewardResult
+	if err := collectionLiquidRewardResult.FindId(mr.Key).One(&old); err == nil {
+		if old.RewardTx != "" {
+			log.Warn("forbid overwrite exist liquid reward result", "key", mr.Key)
+			return nil
+		}
+	}
+	_, err := collectionLiquidRewardResult.UpsertId(mr.Key, mr)
 	switch {
 	case err == nil:
 		log.Info("[mongodb] AddLiquidRewardResult success", "reward", mr)
@@ -309,41 +323,38 @@ func FindLiquidityBalance(exchange, account string, blockNumber uint64) (string,
 }
 
 // FindAccountVolumes find account volumes
-func FindAccountVolumes(exchange string, startHeight, endHeight uint64) (accounts []common.Address, volumes []*big.Int, txcounts []uint64) {
+func FindAccountVolumes(exchange string, startHeight, endHeight uint64) AccountStatSlice {
 	qexchange := bson.M{"exchange": strings.ToLower(exchange)}
 	qsheight := bson.M{"blockNumber": bson.M{"$gte": startHeight}}
 	qeheight := bson.M{"blockNumber": bson.M{"$lt": endHeight}}
 	queries := []bson.M{qexchange, qsheight, qeheight}
 	iter := collectionVolumeHistory.Find(bson.M{"$and": queries}).Iter()
-	var (
-		accountVolumesMap  = make(map[common.Address]*big.Int)
-		accountTxsCountMap = make(map[common.Address]uint64)
-		account            common.Address
-		volume             *big.Int
-		result             MgoVolumeHistory
-	)
-	for iter.Next(&result) {
-		log.Info("find volume record", "account", result.Account, "coinAmount", result.CoinAmount, "tokenAmount", result.TokenAmount, "blockNumber", result.BlockNumber, "logIndex", result.LogIndex)
-		volume, _ = tools.GetBigIntFromString(result.CoinAmount)
+
+	statMap := make(map[common.Address]*AccountStat)
+
+	var mh MgoVolumeHistory
+	for iter.Next(&mh) {
+		log.Info("find volume record", "account", mh.Account, "coinAmount", mh.CoinAmount, "tokenAmount", mh.TokenAmount, "blockNumber", mh.BlockNumber, "logIndex", mh.LogIndex)
+		volume, _ := tools.GetBigIntFromString(mh.CoinAmount)
 		if volume == nil || volume.Sign() <= 0 {
 			continue
 		}
-		account = common.HexToAddress(result.Account)
-		old, exist := accountVolumesMap[account]
+		account := common.HexToAddress(mh.Account)
+		stat, exist := statMap[account]
 		if exist {
-			accountVolumesMap[account].Add(old, volume)
-			accountTxsCountMap[account]++
+			stat.Share.Add(stat.Share, volume)
+			stat.Number++
 		} else {
-			accountVolumesMap[account] = volume
-			accountTxsCountMap[account] = 1
+			statMap[account] = &AccountStat{
+				Account: account,
+				Share:   volume,
+				Number:  1,
+			}
 		}
 	}
-	for acc, vol := range accountVolumesMap {
-		accounts = append(accounts, acc)
-		volumes = append(volumes, vol)
-		txcount := accountTxsCountMap[acc]
-		txcounts = append(txcounts, txcount)
-		log.Info("find volume result", "account", acc.String(), "volume", vol, "txcount", txcount)
+	result := ConvertToSortedSlice(statMap)
+	for _, stat := range result {
+		log.Info("find volume result", "account", stat.Account.String(), "volume", stat.Share, "txcount", stat.Number, "start", startHeight, "end", endHeight)
 	}
-	return accounts, volumes, txcounts
+	return result
 }

@@ -17,14 +17,14 @@ func ByVolume(opt *Option) error {
 		log.Error("[byvolume] check option error", "option", opt.String(), "err", err)
 		return errCheckOptionFailed
 	}
-	accounts, rewards, volumes, txcounts, _, err := opt.GetAccountsAndRewards()
+	accountStats, err := opt.GetAccountsAndRewards()
 	if err != nil {
 		log.Error("[byvolume] GetAccountsAndRewards error", "err", err)
 		return errGetAccountsRewardsFailed
 	}
-	if len(accounts) == 0 || len(rewards) == 0 {
+	if len(accountStats) == 0 {
 		log.Warn("[byvolume] no accounts. " + opt.String())
 		return errNoAccountSatisfied
 	}
-	return dispatchVolumeRewards(opt, accounts, rewards, volumes, txcounts)
+	return opt.dispatchRewards(accountStats)
 }

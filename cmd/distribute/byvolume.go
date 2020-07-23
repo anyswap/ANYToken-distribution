@@ -39,7 +39,6 @@ distribute rewards by volume
 
 func byVolume(ctx *cli.Context) (err error) {
 	capi := utils.InitApp(ctx, true)
-	defer capi.CloseClient()
 	distributer.SetAPICaller(capi)
 
 	opt, err := getOptionAndTxArgs(ctx)
@@ -47,5 +46,6 @@ func byVolume(ctx *cli.Context) (err error) {
 		log.Fatalf("get option error: %v", err)
 	}
 
+	defer capi.CloseClient()
 	return distributer.ByVolume(opt)
 }

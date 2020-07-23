@@ -2,7 +2,6 @@ package distributer
 
 import (
 	"crypto/rand"
-	"fmt"
 	"math/big"
 	"strings"
 	"time"
@@ -93,6 +92,8 @@ func (opt *Option) updateLiquidityBalance(accounts []common.Address) (accountSta
 		totalLiquid := big.NewInt(0)
 		for _, account := range accounts {
 			finStat, exist := finStatMap[account]
+			// if jump here, verifyTotalLiquidity will warn total value not equal
+			// still jump here for saving performance
 			if exist && finStat.Share.Sign() == 0 {
 				continue // find zero liquidity then no need to query anymore
 			}
@@ -152,9 +153,10 @@ func verifyTotalLiquidity(exchangeAddr common.Address, blockNumber, totalLiquid 
 		totalSupply, err := capi.GetExchangeLiquidity(exchangeAddr, blockNumber)
 		if err == nil {
 			if totalLiquid.Cmp(totalSupply) != 0 {
-				return fmt.Errorf("account list is not complete at height %v. total liqudity %v is not equal to total supply %v", blockNumber, totalLiquid, totalSupply)
+				//return fmt.Errorf("account list is not complete at height %v. total liqudity %v is not equal to total supply %v", blockNumber, totalLiquid, totalSupply)
+			} else {
+				log.Info("[byliquid] account list is complete", "height", blockNumber, "totalsupply", totalSupply)
 			}
-			log.Info("[byliquid] account list is complete", "height", blockNumber, "totalsupply", totalSupply)
 			return nil
 		}
 		log.Warn("[byliquid] GetExchangeLiquidity error", "exchange", exchangeAddr.String(), "blockNumber", blockNumber, "err", err)

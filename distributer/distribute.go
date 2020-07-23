@@ -111,22 +111,26 @@ func startDistributeJob(distCfg *params.DistributeConfig) {
 		if addedNoVolumeRewards.Sign() > 0 {
 			opt.TotalValue = addedNoVolumeRewards
 			opt.BuildTxArgs = byVolumeArgs
+			log.Info("start send missing volume rewards", "to", byLiquidArgs.GetSender().String(), "value", addedNoVolumeRewards)
 			loopSendMissingVolumeRewards(opt, byLiquidArgs.GetSender())
 		}
 
 		// send by liquidity rewards
 		opt.TotalValue = new(big.Int).Add(byLiquidCycleRewards, addedNoVolumeRewards)
 		opt.BuildTxArgs = byLiquidArgs
+		log.Info("start send liquidity reward", "reward", opt.TotalValue)
 		loopDoUntilSuccess(ByLiquidity, opt)
 
 		// send by volume rewards
 		missVolumeRewards := new(big.Int).Mul(byVolumeCycleRewards, big.NewInt(missVolumeCycles))
 		opt.TotalValue = new(big.Int).Sub(totalVolumeRewardsIfNoMissing, missVolumeRewards)
 		opt.BuildTxArgs = byVolumeArgs
+		log.Info("start send volume reward", "reward", opt.TotalValue)
 		loopDoUntilSuccess(ByVolume, opt)
 
 		// start next cycle
 		curCycleStart += byVolumeCycleLen
+		log.Info("start next cycle", "start", curCycleStart)
 	}
 }
 
@@ -137,7 +141,11 @@ func loopSendMissingVolumeRewards(opt *Option, to common.Address) {
 	for {
 		txHash, err := opt.SendRewardsTransaction(to, value)
 		if err == nil {
-			log.Info("send missing volume rewards success", "from", from.String(), "to", to.String(), "value", value, "start", opt.StartHeight, "end", opt.EndHeight, "txHash", txHash.String())
+			var txHashStr string
+			if txHash != nil {
+				txHashStr = txHash.String()
+			}
+			log.Info("send missing volume rewards success", "from", from.String(), "to", to.String(), "value", value, "start", opt.StartHeight, "end", opt.EndHeight, "txHash", txHashStr, "dryrun", opt.DryRun)
 			break
 		}
 		log.Info("send missing volume rewards failed", "from", from.String(), "to", to.String(), "value", value, "start", opt.StartHeight, "end", opt.EndHeight, "err", err)
@@ -164,6 +172,7 @@ func waitAndCheckMissVolumeCycles(exchange string, cycleStart, cycleEnd, stable,
 	waitInterval := 60 * time.Second
 	start := cycleStart
 	for {
+		log.Info("wait to cycle end", "exchange", exchange, "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable)
 		time.Sleep(waitInterval)
 		latestBlock := capi.LoopGetLatestBlockHeader()
 		latest := latestBlock.Number.Uint64()
@@ -181,6 +190,7 @@ func waitAndCheckMissVolumeCycles(exchange string, cycleStart, cycleEnd, stable,
 			break
 		}
 	}
+	log.Info("cycle end is achieved", "exchange", exchange, "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable, "novolumes", missCycles)
 	return missCycles
 }
 

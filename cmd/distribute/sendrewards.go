@@ -44,13 +44,14 @@ func sendRewards(ctx *cli.Context) (err error) {
 	}
 
 	capi := utils.DialServer(serverURL)
-	defer capi.CloseClient()
 	distributer.SetAPICaller(capi)
 
 	opt, err := getOptionAndTxArgs(ctx)
 	if err != nil {
 		log.Fatalf("get option error: %v", err)
 	}
+
+	defer capi.CloseClient()
 
 	if !common.IsHexAddress(opt.RewardToken) {
 		return fmt.Errorf("wrong reward token: '%v'", opt.RewardToken)

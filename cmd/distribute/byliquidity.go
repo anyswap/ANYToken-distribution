@@ -39,7 +39,6 @@ distribute rewards by liquidity
 
 func byLiquidity(ctx *cli.Context) error {
 	capi := utils.InitApp(ctx, true)
-	defer capi.CloseClient()
 	distributer.SetAPICaller(capi)
 
 	opt, err := getOptionAndTxArgs(ctx)
@@ -47,5 +46,6 @@ func byLiquidity(ctx *cli.Context) error {
 		log.Fatalf("get option error: %v", err)
 	}
 
+	defer capi.CloseClient()
 	return distributer.ByLiquidity(opt)
 }

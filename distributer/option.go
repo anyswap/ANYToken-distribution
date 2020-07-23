@@ -450,5 +450,5 @@ func (opt *Option) GetAccountsAndRewardsFromFile() (accounts []common.Address, r
 }
 
 func isCommentedLine(line string) bool {
-	return strings.HasPrefix(line, "#")
+	return strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//")
 }

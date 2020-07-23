@@ -60,12 +60,14 @@ func sendRewards(accounts []common.Address, rewards, shares []*big.Int, numbers 
 	var keyShare, keyNumber string
 	switch opt.ByWhat() {
 	case byLiquidMethod:
-		keyShare = "liquid"
+		keyShare = "liquidity"
 		keyNumber = "height"
 	case byVolumeMethod:
 		keyShare = "volume"
 		keyNumber = "txcount"
 	}
+	// write title
+	_ = opt.WriteOutput("#account", "reward", keyShare, keyNumber, "txhash")
 	dryRun := opt.DryRun
 	rewardsSended := big.NewInt(0)
 	var reward *big.Int
@@ -81,6 +83,7 @@ func sendRewards(accounts []common.Address, rewards, shares []*big.Int, numbers 
 			return rewardsSended, errSendTransactionFailed
 		}
 		rewardsSended.Add(rewardsSended, reward)
+		// write body
 		_ = opt.WriteSendRewardResult(account, reward, shares[i], numbers[i], txHash)
 	}
 	return rewardsSended, nil

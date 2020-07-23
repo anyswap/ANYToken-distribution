@@ -49,8 +49,7 @@ func sendRewards(ctx *cli.Context) (err error) {
 
 	opt, err := getOptionAndTxArgs(ctx)
 	if err != nil {
-		log.Error("[sendRewards] get option and args failed", "err", err)
-		return err
+		log.Fatalf("get option error: %v", err)
 	}
 
 	if !common.IsHexAddress(opt.RewardToken) {

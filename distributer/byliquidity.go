@@ -26,6 +26,7 @@ func getRandNumber(max uint64) uint64 {
 
 // ByLiquidity distribute by liquidity
 func ByLiquidity(opt *Option) error {
+	log.Info("[byliquid] start", "option", opt.String())
 	opt.byWhat = byLiquidMethod
 	if opt.TotalValue == nil || opt.TotalValue.Sign() <= 0 {
 		log.Warn("no liquidity rewards", "option", opt.String())

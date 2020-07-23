@@ -55,6 +55,8 @@ func (args *BuildTxArgs) Check(dryRun bool) error {
 		}
 		if args.Sender != "" {
 			args.fromAddr = common.HexToAddress(args.Sender)
+		} else {
+			args.Sender = args.fromAddr.String()
 		}
 		log.Warn("check build tx args failed, but ignore in dry run", "err", err)
 	}

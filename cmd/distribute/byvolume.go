@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/anyswap/ANYToken-distribution/cmd/utils"
 	"github.com/anyswap/ANYToken-distribution/distributer"
+	"github.com/anyswap/ANYToken-distribution/log"
 	"github.com/urfave/cli/v2"
 )
 
@@ -43,7 +44,7 @@ func byVolume(ctx *cli.Context) (err error) {
 
 	opt, err := getOptionAndTxArgs(ctx)
 	if err != nil {
-		return err
+		log.Fatalf("get option error: %v", err)
 	}
 
 	return distributer.ByVolume(opt)

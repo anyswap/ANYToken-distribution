@@ -25,8 +25,8 @@ func getRandNumber(max uint64) uint64 {
 
 // ByLiquidity distribute by liquidity
 func ByLiquidity(opt *Option) error {
-	log.Info("[byliquid] start", "option", opt.String())
 	opt.byWhat = byLiquidMethod
+	log.Info("[byliquid] start", "option", opt.String())
 	if opt.TotalValue == nil || opt.TotalValue.Sign() <= 0 {
 		log.Warn("no liquidity rewards", "option", opt.String())
 		return errTotalRewardsIsZero
@@ -59,6 +59,9 @@ func (opt *Option) getLiquidityBalances(accounts []common.Address) (accountStats
 	_ = opt.WriteLiquiditySubject(opt.Exchange, opt.StartHeight, opt.EndHeight, len(accounts))
 
 	if len(opt.Heights) == 0 {
+		defer func() {
+			opt.Heights = nil
+		}()
 		countOfBlocks := opt.EndHeight - opt.StartHeight
 		// randomly pick smpale blocks to query liquidity balance, and keep the minimumn
 		quarterCount := countOfBlocks/sampleCount + 1
@@ -148,18 +151,18 @@ func (opt *Option) updateLiquidityBalance(accounts []common.Address) (accountSta
 	return mongodb.ConvertToSortedSlice(finStatMap)
 }
 
-func verifyTotalLiquidity(exchangeAddr common.Address, blockNumber, totalLiquid *big.Int) error {
+func verifyTotalLiquidity(exchangeAddr common.Address, blockNumber, totalLiquid *big.Int) (err error) {
+	var totalSupply *big.Int
 	for {
-		totalSupply, err := capi.GetExchangeLiquidity(exchangeAddr, blockNumber)
+		totalSupply, err = capi.GetExchangeLiquidity(exchangeAddr, blockNumber)
 		if err == nil {
-			if totalLiquid.Cmp(totalSupply) != 0 {
-				//return fmt.Errorf("account list is not complete at height %v. total liqudity %v is not equal to total supply %v", blockNumber, totalLiquid, totalSupply)
-			} else {
+			if totalLiquid.Cmp(totalSupply) == 0 {
 				log.Info("[byliquid] account list is complete", "height", blockNumber, "totalsupply", totalSupply)
 			}
-			return nil
+			break
 		}
 		log.Warn("[byliquid] GetExchangeLiquidity error", "exchange", exchangeAddr.String(), "blockNumber", blockNumber, "err", err)
 		time.Sleep(time.Second)
 	}
+	return err
 }

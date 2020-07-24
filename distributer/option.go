@@ -66,6 +66,7 @@ func (opt *Option) String() string {
 func (opt *Option) deinit() {
 	if opt.outputFile != nil {
 		opt.outputFile.Close()
+		opt.outputFile = nil
 	}
 }
 
@@ -105,7 +106,15 @@ func (opt *Option) checkAndInit() (err error) {
 }
 
 func (opt *Option) getDefaultOutputFile() string {
-	return fmt.Sprintf("distribute-%s-%d-%d-%s-%d.txt", opt.byWhat, opt.StartHeight, opt.EndHeight, opt.Exchange, time.Now().Unix())
+	heightsStr := ""
+	if len(opt.Heights) != 0 {
+		heightsStr = "-at"
+		for _, height := range opt.Heights {
+			heightsStr += fmt.Sprintf("-%d", height)
+		}
+	}
+	pairs := params.GetExchangePairs(opt.Exchange)
+	return fmt.Sprintf("%sReward-%s-%d-%d%s.csv", opt.byWhat, pairs, opt.StartHeight, opt.EndHeight, heightsStr)
 }
 
 func (opt *Option) openOutputFile() (err error) {
@@ -117,7 +126,9 @@ func (opt *Option) openOutputFile() (err error) {
 	}
 	opt.outputFile, err = os.OpenFile(opt.OutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
-		log.Info("open output file error", "file", opt.OutputFile)
+		log.Info("open output file error", "file", opt.OutputFile, "err", err)
+	} else {
+		log.Info("open output file success", "file", opt.OutputFile)
 	}
 	return err
 }

@@ -28,16 +28,9 @@ func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, error) {
 		return nil, err
 	}
 
-	heightsStr := ctx.String(utils.HeightsFlag.Name)
-	re := regexp.MustCompile(`[\s,]+`) // blank or comma separated
-	parts := re.Split(heightsStr, -1)
-	heights := make([]uint64, 0, len(parts))
-	for _, part := range parts {
-		height, ok := cmath.ParseUint64(part)
-		if !ok {
-			return nil, fmt.Errorf("invalid height '%v' in heights '%v'", part, heightsStr)
-		}
-		heights = append(heights, height)
+	sampleHeights, err := getSampleHeights(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	opt := &distributer.Option{
@@ -50,13 +43,31 @@ func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, error) {
 		Exchange:    ctx.String(utils.ExchangeFlag.Name),
 		InputFile:   getInputFile(ctx),
 		OutputFile:  ctx.String(utils.OutputFileFlag.Name),
-		Heights:     heights,
+		Heights:     sampleHeights,
 		SaveDB:      ctx.Bool(utils.SaveDBFlag.Name),
 		DryRun:      ctx.Bool(utils.DryRunFlag.Name),
 	}
 
 	log.Println("get option success.", tools.ToJSONString(opt, !log.JSONFormat))
 	return opt, nil
+}
+
+func getSampleHeights(ctx *cli.Context) ([]uint64, error) {
+	heightsStr := ctx.String(utils.HeightsFlag.Name)
+	re := regexp.MustCompile(`[\s,]+`) // blank or comma separated
+	parts := re.Split(heightsStr, -1)
+	heights := make([]uint64, 0, len(parts))
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		height, ok := cmath.ParseUint64(part)
+		if !ok {
+			return nil, fmt.Errorf("invalid height '%v' in heights '%v'", part, heightsStr)
+		}
+		heights = append(heights, height)
+	}
+	return heights, nil
 }
 
 func getBuildTxArgs(ctx *cli.Context) (*distributer.BuildTxArgs, error) {

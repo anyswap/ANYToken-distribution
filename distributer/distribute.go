@@ -111,25 +111,25 @@ func startDistributeJob(distCfg *params.DistributeConfig) {
 		if addedNoVolumeRewards.Sign() > 0 {
 			opt.TotalValue = addedNoVolumeRewards
 			opt.BuildTxArgs = byVolumeArgs
-			log.Info("start send missing volume rewards", "to", byLiquidArgs.GetSender().String(), "value", addedNoVolumeRewards)
+			log.Info("start send missing volume rewards", "to", byLiquidArgs.GetSender().String(), "value", addedNoVolumeRewards, "start", opt.StartHeight, "end", opt.EndHeight)
 			loopSendMissingVolumeRewards(opt, byLiquidArgs.GetSender())
 		}
 
 		// send by liquidity rewards
 		opt.TotalValue = new(big.Int).Add(byLiquidCycleRewards, addedNoVolumeRewards)
 		opt.BuildTxArgs = byLiquidArgs
-		log.Info("start send liquidity reward", "reward", opt.TotalValue)
+		log.Info("start send liquidity reward", "reward", opt.TotalValue, "start", opt.StartHeight, "end", opt.EndHeight)
 		loopDoUntilSuccess(ByLiquidity, opt)
 
 		// send by volume rewards
 		missVolumeRewards := new(big.Int).Mul(byVolumeCycleRewards, big.NewInt(missVolumeCycles))
 		opt.TotalValue = new(big.Int).Sub(totalVolumeRewardsIfNoMissing, missVolumeRewards)
 		opt.BuildTxArgs = byVolumeArgs
-		log.Info("start send volume reward", "reward", opt.TotalValue)
+		log.Info("start send volume reward", "reward", opt.TotalValue, "start", opt.StartHeight, "end", opt.EndHeight)
 		loopDoUntilSuccess(ByVolume, opt)
 
 		// start next cycle
-		curCycleStart += byVolumeCycleLen
+		curCycleStart = curCycleEnd
 		log.Info("start next cycle", "start", curCycleStart)
 	}
 }

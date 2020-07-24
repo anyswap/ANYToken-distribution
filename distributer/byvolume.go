@@ -6,8 +6,8 @@ import (
 
 // ByVolume distribute rewards by vloume
 func ByVolume(opt *Option) error {
-	log.Info("[byvolume] start", "option", opt.String())
 	opt.byWhat = byVolumeMethod
+	log.Info("[byvolume] start", "option", opt.String())
 	if opt.TotalValue == nil || opt.TotalValue.Sign() <= 0 {
 		log.Warn("no volume rewards", "option", opt.String())
 		return errTotalRewardsIsZero

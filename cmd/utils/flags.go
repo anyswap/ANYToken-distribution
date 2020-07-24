@@ -118,10 +118,17 @@ var (
 		Name:  "end",
 		Usage: "end height (end exclusive)",
 	}
+	// StableHeightFlag --stable
+	StableHeightFlag = &cli.Uint64Flag{
+		Name:  "stable",
+		Usage: "stable height",
+		Value: 30,
+	}
 	// StepCountFlag --step
 	StepCountFlag = &cli.Uint64Flag{
 		Name:  "step",
 		Usage: "step count",
+		Value: 100,
 	}
 	// ExchangeFlag --exchange
 	ExchangeFlag = &cli.StringFlag{

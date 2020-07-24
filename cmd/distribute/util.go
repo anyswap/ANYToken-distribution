@@ -34,18 +34,19 @@ func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, error) {
 	}
 
 	opt := &distributer.Option{
-		BuildTxArgs: args,
-		RewardToken: ctx.String(utils.RewardTokenFlag.Name),
-		TotalValue:  rewards,
-		StartHeight: ctx.Uint64(utils.StartHeightFlag.Name),
-		EndHeight:   ctx.Uint64(utils.EndHeightFlag.Name),
-		StepCount:   ctx.Uint64(utils.StepCountFlag.Name),
-		Exchange:    ctx.String(utils.ExchangeFlag.Name),
-		InputFile:   getInputFile(ctx),
-		OutputFile:  ctx.String(utils.OutputFileFlag.Name),
-		Heights:     sampleHeights,
-		SaveDB:      ctx.Bool(utils.SaveDBFlag.Name),
-		DryRun:      ctx.Bool(utils.DryRunFlag.Name),
+		BuildTxArgs:  args,
+		RewardToken:  ctx.String(utils.RewardTokenFlag.Name),
+		TotalValue:   rewards,
+		StartHeight:  ctx.Uint64(utils.StartHeightFlag.Name),
+		EndHeight:    ctx.Uint64(utils.EndHeightFlag.Name),
+		StableHeight: ctx.Uint64(utils.StableHeightFlag.Name),
+		StepCount:    ctx.Uint64(utils.StepCountFlag.Name),
+		Exchange:     ctx.String(utils.ExchangeFlag.Name),
+		InputFile:    getInputFile(ctx),
+		OutputFile:   ctx.String(utils.OutputFileFlag.Name),
+		Heights:      sampleHeights,
+		SaveDB:       ctx.Bool(utils.SaveDBFlag.Name),
+		DryRun:       ctx.Bool(utils.DryRunFlag.Name),
 	}
 
 	log.Println("get option success.", tools.ToJSONString(opt, !log.JSONFormat))

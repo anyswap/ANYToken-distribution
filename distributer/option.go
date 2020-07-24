@@ -21,18 +21,19 @@ const sampleCount = 4
 
 // Option distribute options
 type Option struct {
-	BuildTxArgs *BuildTxArgs
-	TotalValue  *big.Int
-	StartHeight uint64 // start inclusive
-	EndHeight   uint64 // end exclusive
-	StepCount   uint64 `json:",omitempty"`
-	Exchange    string
-	RewardToken string
-	InputFile   string
-	OutputFile  string
-	Heights     []uint64 `json:",omitempty"`
-	SaveDB      bool
-	DryRun      bool
+	BuildTxArgs  *BuildTxArgs
+	TotalValue   *big.Int
+	StartHeight  uint64 // start inclusive
+	EndHeight    uint64 // end exclusive
+	StableHeight uint64
+	StepCount    uint64 `json:",omitempty"`
+	Exchange     string
+	RewardToken  string
+	InputFile    string
+	OutputFile   string
+	Heights      []uint64 `json:",omitempty"`
+	SaveDB       bool
+	DryRun       bool
 
 	byWhat     string
 	outputFile *os.File
@@ -94,14 +95,26 @@ func (opt *Option) checkAndInit() (err error) {
 	if err != nil {
 		return err
 	}
-	latestBlock := capi.LoopGetLatestBlockHeader()
-	if latestBlock.Number.Uint64() < opt.EndHeight {
-		err = fmt.Errorf("latest height %v is lower than end height %v", latestBlock.Number, opt.EndHeight)
-		if !opt.DryRun {
-			return err
-		}
-		log.Warn("block height not satisfied, but ignore in dry run", "err", err)
+	err = opt.CheckStable()
+	if err != nil {
+		return err
 	}
+	return nil
+}
+
+// CheckStable check latest block is stable to end height
+func (opt *Option) CheckStable() error {
+	latestBlock := capi.LoopGetLatestBlockHeader()
+	if latestBlock.Number.Uint64() >= opt.EndHeight+opt.StableHeight {
+		return nil
+	}
+	if !opt.DryRun {
+		return fmt.Errorf("latest height %v is lower than end height %v plus stable height %v", latestBlock.Number, opt.EndHeight, opt.StableHeight)
+	}
+	if opt.byWhat == byLiquidMethod && len(opt.Heights) == 0 {
+		return fmt.Errorf("latest height %v is lower than end height %v plus sable height %v, please specify '--heights' option in dry run", latestBlock.Number, opt.EndHeight, opt.StableHeight)
+	}
+	log.Warn("block height not satisfied, but ignore in dry run", "latest", latestBlock.Number, "end", opt.EndHeight, "stable", opt.StableHeight)
 	return nil
 }
 

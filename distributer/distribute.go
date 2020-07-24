@@ -94,9 +94,10 @@ func startDistributeJob(distCfg *params.DistributeConfig) {
 	totalVolumeRewardsIfNoMissing := new(big.Int).Mul(byVolumeCycleRewards, new(big.Int).SetUint64(byLiquidCycleLen/byVolumeCycleLen))
 
 	opt := &Option{
-		Exchange:    exchange,
-		RewardToken: rewardToken,
-		DryRun:      distCfg.DryRun,
+		Exchange:     exchange,
+		RewardToken:  rewardToken,
+		DryRun:       distCfg.DryRun,
+		StableHeight: stable,
 	}
 
 	curCycleStart := byLiquidCycleStart
@@ -172,10 +173,10 @@ func waitAndCheckMissVolumeCycles(exchange string, cycleStart, cycleEnd, stable,
 	waitInterval := 60 * time.Second
 	start := cycleStart
 	for {
-		log.Info("wait to cycle end", "exchange", exchange, "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable)
 		time.Sleep(waitInterval)
 		latestBlock := capi.LoopGetLatestBlockHeader()
 		latest := latestBlock.Number.Uint64()
+		log.Info("wait to cycle end", "exchange", exchange, "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable, "latest", latest)
 
 		for latest >= start+step+stable {
 			accountStats := mongodb.FindAccountVolumes(exchange, start, start+step)
@@ -183,6 +184,7 @@ func waitAndCheckMissVolumeCycles(exchange string, cycleStart, cycleEnd, stable,
 				log.Info("find miss volume cycle", "exchange", exchange, "start", start, "end", start+step)
 				missCycles++
 			}
+			log.Info("has trades in range", "start", start, "end", start+step)
 			start += step // next by volume cycle
 		}
 

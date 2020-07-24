@@ -39,21 +39,36 @@ func (opt *Option) dispatchRewards(accountStats mongodb.AccountStatSlice) error 
 	return err
 }
 
+func (opt *Option) getSampleHeightsInfo() string {
+	if len(opt.Heights) == 0 {
+		return ""
+	}
+	info := "sampleHeights="
+	for i, height := range opt.Heights {
+		info += fmt.Sprintf("%d", height)
+		if i < len(opt.Heights)-1 {
+			info += "-"
+		}
+	}
+	return info
+}
+
 func (opt *Option) sendRewards(accountStats mongodb.AccountStatSlice) (*big.Int, error) {
-	var keyShare, keyNumber, noVolumeInfo string
+	var keyShare, keyNumber, extraInfo string
 	switch opt.byWhat {
 	case byLiquidMethod:
 		keyShare = "liquidity"
 		keyNumber = "height"
+		extraInfo = opt.getSampleHeightsInfo()
 	case byVolumeMethod:
 		keyShare = "volume"
 		keyNumber = "txcount"
-		noVolumeInfo = fmt.Sprintf("novolumes=%d", opt.noVolumes)
+		extraInfo = fmt.Sprintf("novolumes=%d", opt.noVolumes)
 	}
 	// write title
 	if opt.DryRun {
-		if noVolumeInfo != "" {
-			_ = opt.WriteOutput("#account", "reward", keyShare, keyNumber, noVolumeInfo)
+		if extraInfo != "" {
+			_ = opt.WriteOutput("#account", "reward", keyShare, keyNumber, extraInfo)
 		} else {
 			_ = opt.WriteOutput("#account", "reward", keyShare, keyNumber)
 		}

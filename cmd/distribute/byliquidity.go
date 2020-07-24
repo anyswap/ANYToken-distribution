@@ -21,6 +21,7 @@ distribute rewards by liquidity
 			utils.TotalRewardsFlag,
 			utils.StartHeightFlag,
 			utils.EndHeightFlag,
+			utils.StableHeightFlag,
 			utils.ExchangeFlag,
 			utils.AccountsFileFlag,
 			utils.SenderFlag,

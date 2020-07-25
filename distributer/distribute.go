@@ -118,6 +118,7 @@ func startDistributeJob(distCfg *params.DistributeConfig) {
 
 		// send by liquidity rewards
 		opt.TotalValue = new(big.Int).Add(byLiquidCycleRewards, addedNoVolumeRewards)
+		opt.Heights = nil // recalc sample heights
 		opt.BuildTxArgs = byLiquidArgs
 		log.Info("start send liquidity reward", "reward", opt.TotalValue, "start", opt.StartHeight, "end", opt.EndHeight)
 		loopDoUntilSuccess(ByLiquidity, opt)

@@ -48,9 +48,6 @@ func ByLiquidity(opt *Option) error {
 
 func (opt *Option) getLiquidityBalances(accounts []common.Address) (accountStats mongodb.AccountStatSlice) {
 	if len(opt.Heights) == 0 {
-		defer func() {
-			opt.Heights = nil
-		}()
 		opt.calcSampleHeights()
 	}
 	_ = opt.WriteLiquiditySubject(opt.Exchange, opt.StartHeight, opt.EndHeight, len(accounts))

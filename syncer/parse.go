@@ -67,7 +67,7 @@ func (w *worker) parseBlock(block *types.Block, wg *sync.WaitGroup) {
 		return mongodb.AddBlock(mb, overwrite)
 	})
 
-	if w.end == 0 {
+	if w.end == 0 && hasSyncToLatest {
 		_ = mongodb.TryDoTimes("UpdateSyncInfo "+mb.Hash, func() error {
 			return mongodb.UpdateSyncInfo(mb.Number, mb.Hash, mb.Timestamp)
 		})

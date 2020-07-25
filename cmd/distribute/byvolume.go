@@ -4,6 +4,7 @@ import (
 	"github.com/anyswap/ANYToken-distribution/cmd/utils"
 	"github.com/anyswap/ANYToken-distribution/distributer"
 	"github.com/anyswap/ANYToken-distribution/log"
+	"github.com/anyswap/ANYToken-distribution/syncer"
 	"github.com/urfave/cli/v2"
 )
 
@@ -45,6 +46,10 @@ func byVolume(ctx *cli.Context) (err error) {
 	opt, err := getOptionAndTxArgs(ctx)
 	if err != nil {
 		log.Fatalf("get option error: %v", err)
+	}
+
+	if opt.InputFile != "" {
+		syncer.WaitSyncToLatest()
 	}
 
 	defer capi.CloseClient()

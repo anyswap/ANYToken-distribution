@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/anyswap/ANYToken-distribution/tools"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
@@ -156,4 +157,40 @@ func (dist *DistributeConfig) checkCycle() error {
 		return fmt.Errorf("[check distribute] error: by liquidity cycle %v is not an integral multiple of by volume cycle %v", dist.ByLiquidCycle, dist.ByVolumeCycle)
 	}
 	return nil
+}
+
+// GetByVolumeCycleRewards get non nil big int from string
+func (dist *DistributeConfig) GetByVolumeCycleRewards() *big.Int {
+	byVolumeRewards, _ := tools.GetBigIntFromString(dist.ByVolumeRewards)
+	if byVolumeRewards == nil {
+		byVolumeRewards = big.NewInt(0)
+	}
+	return byVolumeRewards
+}
+
+// GetByLiquidCycleRewards get non nil big int from string
+func (dist *DistributeConfig) GetByLiquidCycleRewards() *big.Int {
+	byLiquidRewards, _ := tools.GetBigIntFromString(dist.ByLiquidRewards)
+	if byLiquidRewards == nil {
+		byLiquidRewards = big.NewInt(0)
+	}
+	return byLiquidRewards
+}
+
+// GetAddNodeRewards get non nil big int from string
+func (dist *DistributeConfig) GetAddNodeRewards() *big.Int {
+	addNodeRewards, _ := tools.GetBigIntFromString(dist.AddNodeRewards)
+	if addNodeRewards == nil {
+		addNodeRewards = big.NewInt(0)
+	}
+	return addNodeRewards
+}
+
+// GetAddNoVolumeRewards get non nil big int from string
+func (dist *DistributeConfig) GetAddNoVolumeRewards() *big.Int {
+	addNoVolumeRewards, _ := tools.GetBigIntFromString(dist.AddNoVolumeRewards)
+	if addNoVolumeRewards == nil {
+		addNoVolumeRewards = big.NewInt(0)
+	}
+	return addNoVolumeRewards
 }

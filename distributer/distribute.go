@@ -7,8 +7,8 @@ import (
 
 	"github.com/anyswap/ANYToken-distribution/callapi"
 	"github.com/anyswap/ANYToken-distribution/log"
-	"github.com/anyswap/ANYToken-distribution/mongodb"
 	"github.com/anyswap/ANYToken-distribution/params"
+	"github.com/anyswap/ANYToken-distribution/syncer"
 	"github.com/anyswap/ANYToken-distribution/tools"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 )
@@ -66,6 +66,8 @@ func startDistributeJob(distCfg *params.DistributeConfig) {
 		return
 	}
 
+	syncer.WaitSyncToLatest()
+
 	exchange := distCfg.Exchange
 	rewardToken := distCfg.RewardToken
 	start := distCfg.StartHeight
@@ -73,23 +75,15 @@ func startDistributeJob(distCfg *params.DistributeConfig) {
 
 	byLiquidCycleLen := distCfg.ByLiquidCycle
 	byLiquidCycleStart := calcCurCycleStart(start, stable, byLiquidCycleLen)
-	byLiquidCycleRewards, _ := tools.GetBigIntFromString(distCfg.ByLiquidRewards)
-	if byLiquidCycleRewards == nil {
-		byLiquidCycleRewards = big.NewInt(0)
-	}
+	byLiquidCycleRewards := distCfg.GetByLiquidCycleRewards()
 
-	addedNodeRewards, _ := tools.GetBigIntFromString(distCfg.AddNodeRewards)
-	if addedNodeRewards != nil {
-		byLiquidCycleRewards.Add(byLiquidCycleRewards, addedNodeRewards)
-	}
+	addedNodeRewards := distCfg.GetAddNodeRewards()
+	byLiquidCycleRewards.Add(byLiquidCycleRewards, addedNodeRewards)
 
-	addedNoVolumeRewardsPerCycle, _ := tools.GetBigIntFromString(distCfg.AddNoVolumeRewards)
+	addedNoVolumeRewardsPerCycle := distCfg.GetAddNoVolumeRewards()
 
 	byVolumeCycleLen := distCfg.ByVolumeCycle
-	byVolumeCycleRewards, _ := tools.GetBigIntFromString(distCfg.ByVolumeRewards)
-	if byVolumeCycleRewards == nil {
-		byVolumeCycleRewards = big.NewInt(0)
-	}
+	byVolumeCycleRewards := distCfg.GetByVolumeCycleRewards()
 
 	totalVolumeRewardsIfNoMissing := new(big.Int).Mul(byVolumeCycleRewards, new(big.Int).SetUint64(byLiquidCycleLen/byVolumeCycleLen))
 
@@ -106,7 +100,7 @@ func startDistributeJob(distCfg *params.DistributeConfig) {
 		opt.StartHeight = curCycleStart
 		opt.EndHeight = curCycleEnd
 
-		missVolumeCycles := waitAndCheckMissVolumeCycles(exchange, curCycleStart, curCycleEnd, stable, byVolumeCycleLen)
+		missVolumeCycles := waitAndCheckMissVolumeCycles(exchange, curCycleStart, curCycleEnd, stable, byVolumeCycleLen, byVolumeCycleRewards)
 		// give configed missing volume rewards to liquidity rewards sender
 		addedNoVolumeRewards := new(big.Int).Mul(addedNoVolumeRewardsPerCycle, big.NewInt(missVolumeCycles))
 		if addedNoVolumeRewards.Sign() > 0 {
@@ -116,19 +110,19 @@ func startDistributeJob(distCfg *params.DistributeConfig) {
 			loopSendMissingVolumeRewards(opt, byLiquidArgs.GetSender())
 		}
 
-		// send by liquidity rewards
-		opt.TotalValue = new(big.Int).Add(byLiquidCycleRewards, addedNoVolumeRewards)
-		opt.Heights = nil // recalc sample heights
-		opt.BuildTxArgs = byLiquidArgs
-		log.Info("start send liquidity reward", "reward", opt.TotalValue, "start", opt.StartHeight, "end", opt.EndHeight)
-		loopDoUntilSuccess(ByLiquidity, opt)
-
 		// send by volume rewards
 		missVolumeRewards := new(big.Int).Mul(byVolumeCycleRewards, big.NewInt(missVolumeCycles))
 		opt.TotalValue = new(big.Int).Sub(totalVolumeRewardsIfNoMissing, missVolumeRewards)
 		opt.BuildTxArgs = byVolumeArgs
 		log.Info("start send volume reward", "reward", opt.TotalValue, "start", opt.StartHeight, "end", opt.EndHeight)
 		loopDoUntilSuccess(ByVolume, opt)
+
+		// send by liquidity rewards
+		opt.TotalValue = new(big.Int).Add(byLiquidCycleRewards, addedNoVolumeRewards)
+		opt.Heights = nil // recalc sample heights
+		opt.BuildTxArgs = byLiquidArgs
+		log.Info("start send liquidity reward", "reward", opt.TotalValue, "start", opt.StartHeight, "end", opt.EndHeight)
+		loopDoUntilSuccess(ByLiquidity, opt)
 
 		// start next cycle
 		curCycleStart = curCycleEnd
@@ -170,9 +164,10 @@ func loopDoUntilSuccess(distributeFunc func(*Option) error, opt *Option) {
 	}
 }
 
-func waitAndCheckMissVolumeCycles(exchange string, cycleStart, cycleEnd, stable, step uint64) (missCycles int64) {
+func waitAndCheckMissVolumeCycles(exchange string, cycleStart, cycleEnd, stable, step uint64, volumeRewardsPerStep *big.Int) (missCycles int64) {
 	waitInterval := 60 * time.Second
 	start := cycleStart
+	retryMissCycle := 3
 	for {
 		time.Sleep(waitInterval)
 		latestBlock := capi.LoopGetLatestBlockHeader()
@@ -180,12 +175,20 @@ func waitAndCheckMissVolumeCycles(exchange string, cycleStart, cycleEnd, stable,
 		log.Info("wait to cycle end", "exchange", exchange, "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable, "latest", latest)
 
 		for latest >= start+step+stable {
-			accountStats := mongodb.FindAccountVolumes(exchange, start, start+step)
-			if len(accountStats) == 0 {
-				log.Info("find miss volume cycle", "exchange", exchange, "start", start, "end", start+step)
+			for i := 0; i < retryMissCycle; i++ {
+				accountStats := getSingleCycleRewardsFromDB(volumeRewardsPerStep, exchange, start, start+step)
+				if len(accountStats) != 0 {
+					log.Info("has trades in range", "start", start, "end", start+step, "accounts", len(accountStats))
+					break
+				}
+				if i+1 < retryMissCycle {
+					time.Sleep(3 * time.Second)
+					continue
+				}
+				log.Info("[novolume] find missing volume cycle", "exchange", exchange, "start", start, "end", start+step)
 				missCycles++
+				break
 			}
-			log.Info("has trades in range", "start", start, "end", start+step)
 			start += step // next by volume cycle
 		}
 

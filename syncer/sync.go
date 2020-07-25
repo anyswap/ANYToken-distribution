@@ -37,6 +37,8 @@ var (
 	client     *ethclient.Client
 	cliContext = context.Background()
 	workers    []*worker
+
+	hasSyncToLatest bool
 )
 
 type message struct {
@@ -132,6 +134,15 @@ func closeClient() {
 	if client != nil {
 		client.Close()
 	}
+}
+
+// WaitSyncToLatest wait sync to latest block (wait doLoopWork start)
+func WaitSyncToLatest() {
+	for !hasSyncToLatest {
+		log.Warn("wait sync to latest block")
+		time.Sleep(60 * time.Second)
+	}
+	log.Info("has sync to latest block")
 }
 
 func (s *syncer) sync() {
@@ -273,6 +284,7 @@ func (s *syncer) doLoopWork() {
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
 	go loopWorker.doSync(wg)
+	hasSyncToLatest = true
 	wg.Wait()
 	log.Info("[syncer] doLoopWork finished")
 }

@@ -56,11 +56,11 @@ func (opt *Option) getSampleHeightsInfo() string {
 func (opt *Option) sendRewards(accountStats mongodb.AccountStatSlice) (*big.Int, error) {
 	var keyShare, keyNumber, extraInfo string
 	switch opt.byWhat {
-	case byLiquidMethod:
+	case byLiquidMethodID:
 		keyShare = "liquidity"
 		keyNumber = "height"
 		extraInfo = opt.getSampleHeightsInfo()
-	case byVolumeMethod:
+	case byVolumeMethodID:
 		keyShare = "volume"
 		keyNumber = "txcount"
 		extraInfo = fmt.Sprintf("novolumes=%d", opt.noVolumes)

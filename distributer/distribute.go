@@ -7,6 +7,7 @@ import (
 
 	"github.com/anyswap/ANYToken-distribution/callapi"
 	"github.com/anyswap/ANYToken-distribution/log"
+	"github.com/anyswap/ANYToken-distribution/mongodb"
 	"github.com/anyswap/ANYToken-distribution/params"
 	"github.com/anyswap/ANYToken-distribution/syncer"
 	"github.com/anyswap/ANYToken-distribution/tools"
@@ -16,8 +17,8 @@ import (
 var capi *callapi.APICaller
 
 const (
-	byLiquidMethod = "byliquid"
-	byVolumeMethod = "byvolume"
+	byLiquidMethodID = "liquid"
+	byVolumeMethodID = "volume"
 )
 
 var (
@@ -56,78 +57,147 @@ func Start(apiCaller *callapi.APICaller) {
 func startDistributeJob(distCfg *params.DistributeConfig) {
 	log.Info("[distribute] start job", "config", distCfg)
 
-	byLiquidArgs, err := getBuildTxArgs(byLiquidMethod, distCfg)
+	runner, err := initDistributer(distCfg)
 	if err != nil {
-		return
-	}
-
-	byVolumeArgs, err := getBuildTxArgs(byVolumeMethod, distCfg)
-	if err != nil {
+		log.Error("[distribute] start failed", "err", err)
 		return
 	}
 
 	syncer.WaitSyncToLatest()
+	runner.run()
+}
 
-	exchange := distCfg.Exchange
-	rewardToken := distCfg.RewardToken
-	start := distCfg.StartHeight
-	stable := distCfg.StableHeight
+type distributeRunner struct {
+	exchange    string
+	rewardToken string
+	start       uint64
+	stable      uint64
+	dryRun      bool
 
-	byLiquidCycleLen := distCfg.ByLiquidCycle
-	byLiquidCycleStart := calcCurCycleStart(start, stable, byLiquidCycleLen)
-	byLiquidCycleRewards := distCfg.GetByLiquidCycleRewards()
+	byLiquidCycleLen     uint64
+	byLiquidCycleRewards *big.Int
 
-	addedNodeRewards := distCfg.GetAddNodeRewards()
-	byLiquidCycleRewards.Add(byLiquidCycleRewards, addedNodeRewards)
+	addedNodeRewards            *big.Int
+	addedNoVolumeRewardsPerStep *big.Int
 
-	addedNoVolumeRewardsPerCycle := distCfg.GetAddNoVolumeRewards()
+	byVolumeCycleLen     uint64
+	byVolumeCycleRewards *big.Int
+	totalVolumeCycles    uint64
+	totalVolumeRewards   *big.Int
 
-	byVolumeCycleLen := distCfg.ByVolumeCycle
-	byVolumeCycleRewards := distCfg.GetByVolumeCycleRewards()
+	byLiquidArgs *BuildTxArgs
+	byVolumeArgs *BuildTxArgs
+}
 
-	totalVolumeRewardsIfNoMissing := new(big.Int).Mul(byVolumeCycleRewards, new(big.Int).SetUint64(byLiquidCycleLen/byVolumeCycleLen))
+func initDistributer(distCfg *params.DistributeConfig) (*distributeRunner, error) {
+	var err error
+	runner := &distributeRunner{}
 
-	opt := &Option{
-		Exchange:     exchange,
-		RewardToken:  rewardToken,
-		DryRun:       distCfg.DryRun,
-		StableHeight: stable,
+	runner.byLiquidArgs, err = getBuildTxArgs(byLiquidMethodID, distCfg)
+	if err != nil {
+		return nil, err
 	}
 
-	curCycleStart := byLiquidCycleStart
+	runner.byVolumeArgs, err = getBuildTxArgs(byVolumeMethodID, distCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	runner.dryRun = distCfg.DryRun
+
+	runner.exchange = distCfg.Exchange
+	runner.rewardToken = distCfg.RewardToken
+	runner.start = distCfg.StartHeight
+	runner.stable = distCfg.StableHeight
+
+	runner.byLiquidCycleLen = distCfg.ByLiquidCycle
+	runner.byLiquidCycleRewards = distCfg.GetByLiquidCycleRewards()
+
+	runner.addedNodeRewards = distCfg.GetAddNodeRewards()
+	runner.byLiquidCycleRewards.Add(runner.byLiquidCycleRewards, runner.addedNodeRewards)
+
+	runner.addedNoVolumeRewardsPerStep = distCfg.GetAddNoVolumeRewards()
+
+	runner.byVolumeCycleLen = distCfg.ByVolumeCycle
+	runner.byVolumeCycleRewards = distCfg.GetByVolumeCycleRewards()
+	if runner.byLiquidCycleLen%runner.byVolumeCycleLen != 0 {
+		log.Fatal("liquid cycle %v is not multiple intergral of volume cycle %v", runner.byLiquidCycleLen, runner.byVolumeCycleLen)
+	}
+	runner.totalVolumeCycles = runner.byLiquidCycleLen / runner.byVolumeCycleLen
+	runner.totalVolumeRewards = new(big.Int).Mul(runner.byVolumeCycleRewards, new(big.Int).SetUint64(runner.totalVolumeCycles))
+
+	return runner, nil
+}
+
+func (runner *distributeRunner) run() {
+	curCycleStart := calcCurCycleStart(runner.start, runner.stable, runner.byLiquidCycleLen)
 	for {
-		curCycleEnd := curCycleStart + byLiquidCycleLen
-		opt.StartHeight = curCycleStart
-		opt.EndHeight = curCycleEnd
+		curCycleEnd := curCycleStart + runner.byLiquidCycleLen
+		waitCycleEnd(curCycleStart, curCycleEnd, runner.stable)
 
-		missVolumeCycles := waitAndCheckMissVolumeCycles(exchange, curCycleStart, curCycleEnd, stable, byVolumeCycleLen, byVolumeCycleRewards)
-		// give configed missing volume rewards to liquidity rewards sender
-		addedNoVolumeRewards := new(big.Int).Mul(addedNoVolumeRewardsPerCycle, big.NewInt(missVolumeCycles))
-		if addedNoVolumeRewards.Sign() > 0 {
-			opt.TotalValue = addedNoVolumeRewards
-			opt.BuildTxArgs = byVolumeArgs
-			log.Info("start send missing volume rewards", "to", byLiquidArgs.GetSender().String(), "value", addedNoVolumeRewards, "start", opt.StartHeight, "end", opt.EndHeight)
-			loopSendMissingVolumeRewards(opt, byLiquidArgs.GetSender())
-		}
+		missVolumeCycles := runner.sendVolumeRewards(curCycleStart, curCycleEnd)
 
-		// send by volume rewards
-		missVolumeRewards := new(big.Int).Mul(byVolumeCycleRewards, big.NewInt(missVolumeCycles))
-		opt.TotalValue = new(big.Int).Sub(totalVolumeRewardsIfNoMissing, missVolumeRewards)
-		opt.BuildTxArgs = byVolumeArgs
-		log.Info("start send volume reward", "reward", opt.TotalValue, "start", opt.StartHeight, "end", opt.EndHeight)
-		loopDoUntilSuccess(ByVolume, opt)
+		runner.sendMissingVolumeRewards(curCycleStart, curCycleEnd, missVolumeCycles)
 
-		// send by liquidity rewards
-		opt.TotalValue = new(big.Int).Add(byLiquidCycleRewards, addedNoVolumeRewards)
-		opt.Heights = nil // recalc sample heights
-		opt.BuildTxArgs = byLiquidArgs
-		log.Info("start send liquidity reward", "reward", opt.TotalValue, "start", opt.StartHeight, "end", opt.EndHeight)
-		loopDoUntilSuccess(ByLiquidity, opt)
+		runner.sendLiquidRewards(curCycleStart, curCycleEnd)
 
 		// start next cycle
 		curCycleStart = curCycleEnd
 		log.Info("start next cycle", "start", curCycleStart)
 	}
+}
+
+func (runner *distributeRunner) sendVolumeRewards(start, end uint64) (missVolumeCycles uint64) {
+	opt := &Option{
+		BuildTxArgs:  runner.byVolumeArgs,
+		TotalValue:   runner.totalVolumeRewards,
+		StartHeight:  start,
+		EndHeight:    end,
+		StableHeight: runner.stable,
+		StepCount:    runner.byVolumeCycleLen,
+		StepReward:   runner.byVolumeCycleRewards,
+		Exchange:     runner.exchange,
+		RewardToken:  runner.rewardToken,
+		DryRun:       runner.dryRun,
+	}
+	log.Info("start send volume reward", "option", opt.String())
+	loopDoUntilSuccess(ByVolume, opt)
+	return opt.noVolumes
+}
+
+func (runner *distributeRunner) sendMissingVolumeRewards(start, end, missVolumeCycles uint64) {
+	if missVolumeCycles == 0 || runner.addedNoVolumeRewardsPerStep.Sign() <= 0 {
+		return
+	}
+	addedNoVolumeRewards := new(big.Int).Mul(runner.addedNoVolumeRewardsPerStep, new(big.Int).SetUint64(missVolumeCycles))
+	opt := &Option{
+		BuildTxArgs:  runner.byVolumeArgs,
+		TotalValue:   addedNoVolumeRewards,
+		StartHeight:  start,
+		EndHeight:    end,
+		StableHeight: runner.stable,
+		Exchange:     runner.exchange,
+		RewardToken:  runner.rewardToken,
+		DryRun:       runner.dryRun,
+	}
+	receiver := runner.byLiquidArgs.GetSender()
+	log.Info("start send missing volume rewards", "to", receiver.String(), "value", addedNoVolumeRewards, "start", opt.StartHeight, "end", opt.EndHeight, "missVolumeCycles", missVolumeCycles)
+	loopSendMissingVolumeRewards(opt, receiver)
+}
+
+func (runner *distributeRunner) sendLiquidRewards(start, end uint64) {
+	opt := &Option{
+		BuildTxArgs:  runner.byLiquidArgs,
+		TotalValue:   runner.byLiquidCycleRewards,
+		StartHeight:  start,
+		EndHeight:    end,
+		StableHeight: runner.stable,
+		Exchange:     runner.exchange,
+		RewardToken:  runner.rewardToken,
+		DryRun:       runner.dryRun,
+	}
+	log.Info("start send liquid reward", "option", opt.String())
+	loopDoUntilSuccess(ByLiquidity, opt)
 }
 
 func loopSendMissingVolumeRewards(opt *Option, to common.Address) {
@@ -164,40 +234,23 @@ func loopDoUntilSuccess(distributeFunc func(*Option) error, opt *Option) {
 	}
 }
 
-func waitAndCheckMissVolumeCycles(exchange string, cycleStart, cycleEnd, stable, step uint64, volumeRewardsPerStep *big.Int) (missCycles int64) {
+func waitCycleEnd(cycleStart, cycleEnd, stable uint64) {
+	latest := uint64(0)
 	waitInterval := 60 * time.Second
-	start := cycleStart
-	retryMissCycle := 3
 	for {
 		time.Sleep(waitInterval)
-		latestBlock := capi.LoopGetLatestBlockHeader()
-		latest := latestBlock.Number.Uint64()
-		log.Info("wait to cycle end", "exchange", exchange, "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable, "latest", latest)
-
-		for latest >= start+step+stable {
-			for i := 0; i < retryMissCycle; i++ {
-				accountStats := getSingleCycleRewardsFromDB(volumeRewardsPerStep, exchange, start, start+step)
-				if len(accountStats) != 0 {
-					log.Info("has trades in range", "start", start, "end", start+step, "accounts", len(accountStats))
-					break
-				}
-				if i+1 < retryMissCycle {
-					time.Sleep(3 * time.Second)
-					continue
-				}
-				log.Info("[novolume] find missing volume cycle", "exchange", exchange, "start", start, "end", start+step)
-				missCycles++
-				break
-			}
-			start += step // next by volume cycle
+		syncInfo, err := mongodb.FindLatestSyncInfo()
+		if err != nil {
+			continue
 		}
+		latest = syncInfo.Number
 
 		if latest >= cycleEnd+stable {
 			break
 		}
+		log.Info("wait to cycle end", "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable, "latest", latest)
 	}
-	log.Info("cycle end is achieved", "exchange", exchange, "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable, "novolumes", missCycles)
-	return missCycles
+	log.Info("cycle end is achieved", "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable, "latest", latest)
 }
 
 func shouldRetry(err error) bool {
@@ -244,10 +297,10 @@ func getBuildTxArgs(byWhat string, distCfg *params.DistributeConfig) (*BuildTxAr
 	}
 
 	switch byWhat {
-	case byLiquidMethod:
+	case byLiquidMethodID:
 		keystoreFile = distCfg.ByLiquidKeystoreFile
 		passwordFile = distCfg.ByLiquidPasswordFile
-	case byVolumeMethod:
+	case byVolumeMethodID:
 		keystoreFile = distCfg.ByVolumeKeystoreFile
 		passwordFile = distCfg.ByVolumePasswordFile
 	}

@@ -27,6 +27,7 @@ type Option struct {
 	EndHeight    uint64 // end exclusive
 	StableHeight uint64
 	StepCount    uint64 `json:",omitempty"`
+	StepReward   *big.Int
 	Exchange     string
 	RewardToken  string
 	InputFile    string
@@ -56,10 +57,10 @@ func (opt *Option) GetChainID() *big.Int {
 }
 
 func (opt *Option) String() string {
-	return fmt.Sprintf(
-		"%v TotalValue %v StartHeight %v EndHeight %v Exchange %v RewardToken %v DryRun %v Sender %v ChainID %v",
-		opt.byWhat, opt.TotalValue, opt.StartHeight, opt.EndHeight,
-		opt.Exchange, opt.RewardToken, opt.DryRun,
+	return fmt.Sprintf("%v TotalValue %v StartHeight %v EndHeight %v StableHeight %v"+
+		" StepCount %v StepReward %v Heights %v Exchange %v RewardToken %v DryRun %v Sender %v ChainID %v",
+		opt.byWhat, opt.TotalValue, opt.StartHeight, opt.EndHeight, opt.StableHeight,
+		opt.StepCount, opt.StepReward, opt.Heights, opt.Exchange, opt.RewardToken, opt.DryRun,
 		opt.GetSender().String(), opt.GetChainID(),
 	)
 }
@@ -73,23 +74,28 @@ func (opt *Option) deinit() {
 
 func (opt *Option) checkAndInit() (err error) {
 	if opt.StartHeight >= opt.EndHeight {
-		return fmt.Errorf("empty range, start height %v >= end height %v", opt.StartHeight, opt.EndHeight)
+		return fmt.Errorf("[check option] empty range, start height %v >= end height %v", opt.StartHeight, opt.EndHeight)
 	}
-	if opt.StepCount != 0 && (opt.EndHeight-opt.StartHeight)%opt.StepCount != 0 {
-		return fmt.Errorf("cycle length %v is not intergral multiple of step %v", opt.EndHeight-opt.StartHeight, opt.StepCount)
-	}
-	if opt.StepCount != 0 {
-		steps := (opt.EndHeight - opt.StartHeight) / opt.StepCount
-		if new(big.Int).Mod(opt.TotalValue, new(big.Int).SetUint64(steps)).Sign() != 0 {
-			return fmt.Errorf("total value %v is not intergral multiple of steps %v", opt.TotalValue, steps)
+	if opt.StepCount != 0 && opt.byWhat == byVolumeMethodID {
+		length := opt.EndHeight - opt.StartHeight
+		if length%opt.StepCount != 0 {
+			return fmt.Errorf("[check option] cycle length %v is not intergral multiple of step %v", length, opt.StepCount)
 		}
+		steps := length / opt.StepCount
+		if new(big.Int).Mod(opt.TotalValue, new(big.Int).SetUint64(steps)).Sign() != 0 {
+			return fmt.Errorf("[check option] total value %v is not intergral multiple of steps %v", opt.TotalValue, steps)
+		}
+		if opt.StepReward == nil {
+			return fmt.Errorf("[check option] StepReward is not specified but with StepCount %v", opt.StepCount)
+		}
+		log.Info("[check option] check step count success", "start", opt.StartHeight, "end", opt.EndHeight, "step", opt.StepCount, "StepReward", opt.StepReward)
 	}
 
 	if !params.IsConfigedExchange(opt.Exchange) {
-		return fmt.Errorf("exchange %v is not configed", opt.Exchange)
+		return fmt.Errorf("[check option] exchange %v is not configed", opt.Exchange)
 	}
 	if !common.IsHexAddress(opt.RewardToken) {
-		return fmt.Errorf("wrong reward token: '%v'", opt.RewardToken)
+		return fmt.Errorf("[check option] wrong reward token: '%v'", opt.RewardToken)
 	}
 	err = opt.CheckSenderRewardTokenBalance()
 	if err != nil {
@@ -109,39 +115,35 @@ func (opt *Option) CheckStable() error {
 		return nil
 	}
 	if !opt.DryRun {
-		return fmt.Errorf("latest height %v is lower than end height %v plus stable height %v", latestBlock.Number, opt.EndHeight, opt.StableHeight)
+		return fmt.Errorf("[check option] latest height %v is lower than end height %v plus stable height %v", latestBlock.Number, opt.EndHeight, opt.StableHeight)
 	}
-	if opt.byWhat == byLiquidMethod && len(opt.Heights) == 0 {
-		return fmt.Errorf("latest height %v is lower than end height %v plus sable height %v, please specify '--heights' option in dry run", latestBlock.Number, opt.EndHeight, opt.StableHeight)
+	if opt.byWhat == byLiquidMethodID && len(opt.Heights) == 0 {
+		return fmt.Errorf("[check option] latest height %v is lower than end height %v plus sable height %v, please specify '--heights' option in dry run", latestBlock.Number, opt.EndHeight, opt.StableHeight)
 	}
-	log.Warn("block height not satisfied, but ignore in dry run", "latest", latestBlock.Number, "end", opt.EndHeight, "stable", opt.StableHeight)
+	log.Warn("[check option] block height not satisfied, but ignore in dry run", "latest", latestBlock.Number, "end", opt.EndHeight, "stable", opt.StableHeight)
 	return nil
 }
 
 func (opt *Option) getDefaultOutputFile() string {
-	heightsStr := ""
-	if len(opt.Heights) != 0 {
-		heightsStr = "-at"
-		for _, height := range opt.Heights {
-			heightsStr += fmt.Sprintf("-%d", height)
-		}
-	}
 	pairs := params.GetExchangePairs(opt.Exchange)
-	return fmt.Sprintf("%sReward-%s-%d-%d%s.csv", opt.byWhat, pairs, opt.StartHeight, opt.EndHeight, heightsStr)
+	timestamp := time.Now().Unix()
+	datetime := time.Unix(timestamp, 0).Format("20060102")
+	return fmt.Sprintf("%s-%sReward-%s-%d-%d-%d.csv", pairs, opt.byWhat, datetime, opt.StartHeight, opt.EndHeight, timestamp)
 }
 
 func (opt *Option) openOutputFile() (err error) {
 	if opt.outputFile != nil {
 		return nil // already opened
 	}
-	if opt.OutputFile == "" {
-		opt.OutputFile = opt.getDefaultOutputFile()
+	fileName := opt.OutputFile
+	if fileName == "" {
+		fileName = opt.getDefaultOutputFile()
 	}
-	opt.outputFile, err = os.OpenFile(opt.OutputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	opt.outputFile, err = os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
-		log.Info("open output file error", "file", opt.OutputFile, "err", err)
+		log.Info("open output file error", "file", fileName, "err", err)
 	} else {
-		log.Info("open output file success", "file", opt.OutputFile)
+		log.Info("open output file success", "file", fileName)
 	}
 	return err
 }
@@ -226,7 +228,7 @@ func (opt *Option) writeRewardResultToDB(accoutStr, rewardStr, shareStr string, 
 	exchange := strings.ToLower(opt.Exchange)
 	pairs := params.GetExchangePairs(exchange)
 	switch opt.byWhat {
-	case byVolumeMethod:
+	case byVolumeMethodID:
 		mr := &mongodb.MgoVolumeRewardResult{
 			Key:         mongodb.GetKeyOfRewardResult(exchange, accoutStr, opt.StartHeight),
 			Exchange:    exchange,
@@ -243,7 +245,7 @@ func (opt *Option) writeRewardResultToDB(accoutStr, rewardStr, shareStr string, 
 		_ = mongodb.TryDoTimes("AddVolumeRewardResult "+mr.Key, func() error {
 			return mongodb.AddVolumeRewardResult(mr)
 		})
-	case byLiquidMethod:
+	case byLiquidMethodID:
 		mr := &mongodb.MgoLiquidRewardResult{
 			Key:         mongodb.GetKeyOfRewardResult(exchange, accoutStr, opt.StartHeight),
 			Exchange:    exchange,
@@ -297,9 +299,9 @@ func (opt *Option) CheckSenderRewardTokenBalance() (err error) {
 			continue
 		}
 		if senderTokenBalance.Cmp(opt.TotalValue) < 0 {
-			err = fmt.Errorf("not enough reward token balance, %v < %v, sender: %v token: %v", senderTokenBalance, opt.TotalValue, sender.String(), opt.RewardToken)
+			err = fmt.Errorf("[check option] not enough reward token balance, %v < %v, sender: %v token: %v", senderTokenBalance, opt.TotalValue, sender.String(), opt.RewardToken)
 			if opt.DryRun {
-				log.Warn("check sender reward token balance failed, but ignore in dry run", "err", err)
+				log.Warn("[check option] check sender reward token balance failed, but ignore in dry run", "err", err)
 				return nil // only warn not enough balance in dry run
 			}
 			return err

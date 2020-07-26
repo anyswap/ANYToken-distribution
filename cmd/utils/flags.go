@@ -130,6 +130,12 @@ var (
 		Usage: "step count",
 		Value: 100,
 	}
+	// StepRewardFlag --stepReward
+	StepRewardFlag = &cli.StringFlag{
+		Name:  "stepReward",
+		Usage: "step reward",
+		Value: "250000000000000000000",
+	}
 	// ExchangeFlag --exchange
 	ExchangeFlag = &cli.StringFlag{
 		Name:  "exchange",

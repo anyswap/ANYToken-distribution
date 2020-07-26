@@ -2,12 +2,10 @@ package main
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/anyswap/ANYToken-distribution/cmd/utils"
 	"github.com/anyswap/ANYToken-distribution/distributer"
 	"github.com/anyswap/ANYToken-distribution/log"
-	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 	"github.com/urfave/cli/v2"
 )
 
@@ -36,7 +34,7 @@ send rewards batchly according to verified input file with line format: <address
 	}
 )
 
-func sendRewards(ctx *cli.Context) (err error) {
+func sendRewards(ctx *cli.Context) error {
 	utils.SetLogger(ctx)
 	serverURL := ctx.String(utils.GatewayFlag.Name)
 	if serverURL == "" {
@@ -53,46 +51,5 @@ func sendRewards(ctx *cli.Context) (err error) {
 
 	defer capi.CloseClient()
 
-	if !common.IsHexAddress(opt.RewardToken) {
-		return fmt.Errorf("wrong reward token: '%v'", opt.RewardToken)
-	}
-	if opt.InputFile == "" {
-		return fmt.Errorf("must specify input file")
-	}
-
-	accountStats, err := opt.GetAccountsAndRewardsFromFile()
-	if err != nil {
-		log.Error("[sendRewards] get accounts and rewards from input file failed", "inputfile", opt.InputFile, "err", err)
-		return err
-	}
-
-	totalRewards := accountStats.CalcTotalReward()
-
-	opt.TotalValue = totalRewards
-	err = opt.CheckSenderRewardTokenBalance()
-	if err != nil {
-		log.Errorf("[sendRewards] sender %v has not enough token balance (< %v), token: %v", opt.GetSender().String(), totalRewards, opt.RewardToken)
-		return err
-	}
-
-	rewardsSended := big.NewInt(0)
-	for _, stat := range accountStats {
-		account := stat.Account
-		reward := stat.Reward
-		if reward == nil || reward.Sign() <= 0 {
-			log.Info("ignore zero reward line", "account", account)
-			continue
-		}
-		txHash, err := opt.SendRewardsTransaction(account, reward)
-		if err != nil {
-			log.Info("[sendRewards] rewards sended", "totalRewards", totalRewards, "rewardsSended", rewardsSended, "allRewardsSended", rewardsSended.Cmp(totalRewards) == 0)
-			log.Error("[sendRewards] send tx failed", "account", account.String(), "reward", reward, "dryrun", opt.DryRun, "err", err)
-			return fmt.Errorf("[sendRewards] send tx failed")
-		}
-		rewardsSended.Add(rewardsSended, reward)
-		_ = opt.WriteSendRewardFromFileResult(account, reward, txHash)
-	}
-
-	log.Info("[sendRewards] rewards sended", "totalRewards", totalRewards, "rewardsSended", rewardsSended, "allRewardsSended", rewardsSended.Cmp(totalRewards) == 0)
-	return nil
+	return opt.SendRewards()
 }

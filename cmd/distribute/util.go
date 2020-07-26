@@ -33,9 +33,13 @@ func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, error) {
 		return nil, err
 	}
 
-	stepReward, err := tools.GetBigIntFromString(utils.StepRewardFlag.Name)
-	if err != nil {
-		return nil, err
+	stepCount := ctx.Uint64(utils.StepCountFlag.Name)
+	var stepReward *big.Int
+	if stepCount != 0 {
+		stepReward, err = tools.GetBigIntFromString(ctx.String(utils.StepRewardFlag.Name))
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	opt := &distributer.Option{
@@ -45,7 +49,7 @@ func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, error) {
 		StartHeight:  ctx.Uint64(utils.StartHeightFlag.Name),
 		EndHeight:    ctx.Uint64(utils.EndHeightFlag.Name),
 		StableHeight: ctx.Uint64(utils.StableHeightFlag.Name),
-		StepCount:    ctx.Uint64(utils.StepCountFlag.Name),
+		StepCount:    stepCount,
 		StepReward:   stepReward,
 		Exchange:     ctx.String(utils.ExchangeFlag.Name),
 		InputFile:    getInputFile(ctx),

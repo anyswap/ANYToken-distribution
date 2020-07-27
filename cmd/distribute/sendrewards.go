@@ -35,13 +35,12 @@ send rewards batchly according to verified input file with line format: <address
 )
 
 func sendRewards(ctx *cli.Context) error {
-	utils.SetLogger(ctx)
 	serverURL := ctx.String(utils.GatewayFlag.Name)
 	if serverURL == "" {
 		return fmt.Errorf("must specify gateway URL")
 	}
 
-	capi := utils.DialServer(serverURL)
+	capi := utils.InitAppWithURL(ctx, true, serverURL)
 	distributer.SetAPICaller(capi)
 
 	opt, err := getOptionAndTxArgs(ctx)
@@ -50,6 +49,5 @@ func sendRewards(ctx *cli.Context) error {
 	}
 
 	defer capi.CloseClient()
-
 	return opt.SendRewards()
 }

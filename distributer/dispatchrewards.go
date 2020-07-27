@@ -64,16 +64,14 @@ func (opt *Option) sendRewards(accountStats mongodb.AccountStatSlice) (*big.Int,
 		keyShare = "volume"
 		keyNumber = "txcount"
 		extraInfo = fmt.Sprintf("novolumes=%d", opt.noVolumes)
+	default:
+		return nil, fmt.Errorf("unknown byWhat '%v'", opt.byWhat)
 	}
 	// write title
 	if opt.DryRun {
-		if extraInfo != "" {
-			_ = opt.WriteOutput("#account", "reward", keyShare, keyNumber, extraInfo)
-		} else {
-			_ = opt.WriteOutput("#account", "reward", keyShare, keyNumber)
-		}
+		_ = opt.WriteOutput("#account", "reward", keyShare, keyNumber, extraInfo)
 	} else {
-		_ = opt.WriteOutput("#account", "reward", keyShare, keyNumber, "txhash")
+		_ = opt.WriteOutput("#account", "reward", keyShare, keyNumber, "txhash", extraInfo)
 	}
 
 	rewardsSended := big.NewInt(0)
@@ -90,7 +88,7 @@ func (opt *Option) sendRewards(accountStats mongodb.AccountStatSlice) (*big.Int,
 		}
 		rewardsSended.Add(rewardsSended, stat.Reward)
 		// write body
-		_ = opt.WriteSendRewardResult(stat.Account, stat.Reward, stat.Share, stat.Number, txHash)
+		_ = opt.WriteSendRewardResult(stat, txHash)
 	}
 	return rewardsSended, nil
 }

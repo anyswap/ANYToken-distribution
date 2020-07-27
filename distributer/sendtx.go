@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
+	"regexp"
 	"strings"
 
 	"github.com/anyswap/ANYToken-distribution/log"
+	"github.com/anyswap/ANYToken-distribution/params"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/accounts/keystore"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/core/types"
@@ -179,6 +181,19 @@ func (args *BuildTxArgs) sendRewardsTransaction(account common.Address, reward *
 	return txHash, nil
 }
 
+func addTxHashFieldToTitleLine(titleLine string) string {
+	re := regexp.MustCompile(`[\s,]+`) // blank or comma separated
+	parts := re.Split(titleLine, -1)
+	if len(parts) <= 1 {
+		return titleLine + ",txhash"
+	}
+	lastPart := parts[len(parts)-1] // extra info
+	result := strings.Join(parts[0:len(parts)-1], ",")
+	result += ",txhash,"
+	result += lastPart
+	return result
+}
+
 // SendRewards send rewards from file
 func (opt *Option) SendRewards() error {
 	defer opt.deinit()
@@ -189,10 +204,14 @@ func (opt *Option) SendRewards() error {
 		return fmt.Errorf("must specify input file")
 	}
 
-	accountStats, err := opt.GetAccountsAndRewardsFromFile()
+	accountStats, titleLine, err := opt.GetAccountsAndRewardsFromFile()
 	if err != nil {
 		log.Error("[sendRewards] get accounts and rewards from input file failed", "inputfile", opt.InputFile, "err", err)
 		return err
+	}
+	if len(accountStats) == 0 {
+		log.Warn("empty account list, no need to send reward")
+		return nil
 	}
 
 	totalRewards := accountStats.CalcTotalReward()
@@ -202,6 +221,17 @@ func (opt *Option) SendRewards() error {
 	if err != nil {
 		log.Errorf("[sendRewards] sender %v has not enough token balance (< %v), token: %v", opt.GetSender().String(), totalRewards, opt.RewardToken)
 		return err
+	}
+
+	useConfigFile := params.GetConfig() != nil
+
+	// write title
+	if useConfigFile {
+		if opt.DryRun {
+			_ = opt.WriteOutput(titleLine)
+		} else {
+			_ = opt.WriteOutput(addTxHashFieldToTitleLine(titleLine))
+		}
 	}
 
 	rewardsSended := big.NewInt(0)
@@ -219,7 +249,12 @@ func (opt *Option) SendRewards() error {
 			return fmt.Errorf("[sendRewards] send tx failed")
 		}
 		rewardsSended.Add(rewardsSended, reward)
-		_ = opt.WriteSendRewardFromFileResult(account, reward, txHash)
+		// write body
+		if useConfigFile {
+			_ = opt.WriteSendRewardResult(stat, txHash)
+		} else {
+			_ = opt.WriteSendRewardFromFileResult(account, reward, txHash)
+		}
 	}
 
 	log.Info("[sendRewards] rewards sended", "totalRewards", totalRewards, "rewardsSended", rewardsSended, "allRewardsSended", rewardsSended.Cmp(totalRewards) == 0)

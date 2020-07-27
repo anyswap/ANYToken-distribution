@@ -152,9 +152,9 @@ func SetConfig(cfg *Config) {
 
 // LoadConfig load config
 func LoadConfig(configFile string) *Config {
-	log.Println("Config file is", configFile)
+	log.Printf("Config file is '%v'\n", configFile)
 	if !common.FileExist(configFile) {
-		log.Fatalf("LoadConfig error: config file %v not exist", configFile)
+		log.Fatalf("LoadConfig error: config file '%v' not exist", configFile)
 	}
 
 	config := &Config{}

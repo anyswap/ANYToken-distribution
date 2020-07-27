@@ -205,22 +205,44 @@ func (opt *Option) WriteSendRewardFromFileResult(account common.Address, reward 
 }
 
 // WriteSendRewardResult write send reward result
-func (opt *Option) WriteSendRewardResult(account common.Address, reward, share *big.Int, number uint64, txHash *common.Hash) error {
-	accoutStr := strings.ToLower(account.Hex())
+func (opt *Option) WriteSendRewardResult(stat *mongodb.AccountStat, txHash *common.Hash) (err error) {
+	account := stat.Account
+	reward := stat.Reward
+	share := stat.Share
+	number := stat.Number
+
+	accoutStr := strings.ToLower(account.String())
 	rewardStr := reward.String()
-	shareStr := share.String()
 	numStr := fmt.Sprintf("%d", number)
-	hashStr := ""
+
+	var shareStr, hashStr string
+	if share != nil {
+		shareStr = share.String()
+	}
 	if txHash != nil {
 		hashStr = txHash.Hex()
 	}
+
+	// write output beofre write database
+	if txHash == nil {
+		if share != nil {
+			err = opt.WriteOutput(accoutStr, rewardStr, shareStr, numStr)
+		} else {
+			err = opt.WriteOutput(accoutStr, rewardStr)
+		}
+	} else {
+		if share != nil {
+			err = opt.WriteOutput(accoutStr, rewardStr, shareStr, numStr, hashStr)
+		} else {
+			err = opt.WriteOutput(accoutStr, rewardStr, hashStr)
+		}
+	}
+
 	if !opt.DryRun || opt.SaveDB {
 		opt.writeRewardResultToDB(accoutStr, rewardStr, shareStr, number, hashStr)
 	}
-	if txHash == nil {
-		return opt.WriteOutput(accoutStr, rewardStr, shareStr, numStr)
-	}
-	return opt.WriteOutput(accoutStr, rewardStr, shareStr, numStr, hashStr)
+
+	return err
 }
 
 func (opt *Option) writeRewardResultToDB(accoutStr, rewardStr, shareStr string, number uint64, hashStr string) {
@@ -352,7 +374,7 @@ func (opt *Option) GetAccountsAndRewards() (accountStats mongodb.AccountStatSlic
 	if opt.InputFile == "" {
 		accountStats = opt.GetAccountsAndRewardsFromDB()
 	} else {
-		accountStats, err = opt.GetAccountsAndRewardsFromFile()
+		accountStats, _, err = opt.GetAccountsAndRewardsFromFile()
 	}
 	return accountStats, err
 }
@@ -418,13 +440,13 @@ func getSingleCycleRewardsFromDB(totalRewards *big.Int, exchange string, startHe
 }
 
 // GetAccountsAndRewardsFromFile pass line format "<address> <amount>" from input file
-func (opt *Option) GetAccountsAndRewardsFromFile() (accountStats mongodb.AccountStatSlice, err error) {
+func (opt *Option) GetAccountsAndRewardsFromFile() (accountStats mongodb.AccountStatSlice, titleLine string, err error) {
 	if opt.InputFile == "" {
-		return nil, fmt.Errorf("get account rewards from file error, no input file specified")
+		return nil, "", fmt.Errorf("get account rewards from file error, no input file specified")
 	}
 	file, err := os.Open(opt.InputFile)
 	if err != nil {
-		return nil, fmt.Errorf("open %v failed. %v)", opt.InputFile, err)
+		return nil, "", fmt.Errorf("open %v failed. %v)", opt.InputFile, err)
 	}
 	defer file.Close()
 
@@ -432,6 +454,7 @@ func (opt *Option) GetAccountsAndRewardsFromFile() (accountStats mongodb.Account
 
 	re := regexp.MustCompile(`[\s,]+`) // blank or comma separated
 	reader := bufio.NewReader(file)
+	isTitleLine := true
 
 	for {
 		lineData, _, errf := reader.ReadLine()
@@ -440,24 +463,28 @@ func (opt *Option) GetAccountsAndRewardsFromFile() (accountStats mongodb.Account
 		}
 		line := strings.TrimSpace(string(lineData))
 		if isCommentedLine(line) {
+			if isTitleLine {
+				titleLine = line
+				isTitleLine = false
+			}
 			continue
 		}
-		parts := re.Split(line, 3)
+		parts := re.Split(line, -1)
 		if len(parts) < 2 {
-			return nil, fmt.Errorf("less than 2 parts in line %v", line)
+			return nil, "", fmt.Errorf("less than 2 parts in line %v", line)
 		}
 		accountStr := parts[0]
 		rewardStr := parts[1]
 		if !common.IsHexAddress(accountStr) {
-			return nil, fmt.Errorf("wrong address in line %v", line)
+			return nil, "", fmt.Errorf("wrong address in line %v", line)
 		}
 		account := common.HexToAddress(accountStr)
 		if accountStats.IsAccountExist(account) {
-			return nil, fmt.Errorf("has duplicate account %v", accountStr)
+			return nil, "", fmt.Errorf("has duplicate account %v", accountStr)
 		}
 		reward, err := tools.GetBigIntFromString(rewardStr)
 		if err != nil {
-			return nil, err
+			return nil, "", fmt.Errorf("wrong reward in line %v, err=%v", line, err)
 		}
 		if reward.Sign() <= 0 {
 			continue
@@ -466,10 +493,24 @@ func (opt *Option) GetAccountsAndRewardsFromFile() (accountStats mongodb.Account
 			Account: account,
 			Reward:  reward,
 		}
+		if len(parts) >= 4 {
+			shareStr := parts[2]
+			numberStr := parts[3]
+			share, err := tools.GetBigIntFromString(shareStr)
+			if err != nil {
+				return nil, "", fmt.Errorf("wrong share in line %v, err=%v", line, err)
+			}
+			number, err := tools.GetBigIntFromString(numberStr)
+			if err != nil {
+				return nil, "", fmt.Errorf("wrong number in line %v, err=%v", line, err)
+			}
+			stat.Share = share
+			stat.Number = number.Uint64()
+		}
 		accountStats = append(accountStats, stat)
 	}
 
-	return accountStats, nil
+	return accountStats, titleLine, nil
 }
 
 func isCommentedLine(line string) bool {

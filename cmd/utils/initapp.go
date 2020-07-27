@@ -14,6 +14,15 @@ import (
 
 // InitApp init app (remember close client in the caller)
 func InitApp(ctx *cli.Context, withMongodb bool) *callapi.APICaller {
+	return initApp(ctx, withMongodb, "")
+}
+
+// InitAppWithURL init app for library use (remember close client in the caller)
+func InitAppWithURL(ctx *cli.Context, withMongodb bool, serverURL string) *callapi.APICaller {
+	return initApp(ctx, withMongodb, serverURL)
+}
+
+func initApp(ctx *cli.Context, withMongodb bool, serverURL string) *callapi.APICaller {
 	SetLogger(ctx)
 	InitSyncArguments(ctx)
 
@@ -24,7 +33,10 @@ func InitApp(ctx *cli.Context, withMongodb bool) *callapi.APICaller {
 		InitMongodb()
 	}
 
-	serverURL := params.GetConfig().Gateway.APIAddress
+	if serverURL == "" {
+		serverURL = params.GetConfig().Gateway.APIAddress
+	}
+
 	capi := DialServer(serverURL)
 
 	if err := verifyConfig(capi); err != nil {

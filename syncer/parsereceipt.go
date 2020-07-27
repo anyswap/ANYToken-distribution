@@ -82,7 +82,7 @@ func addExchangeReceipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int,
 	}
 
 	mt.ExchangeReceipts = append(mt.ExchangeReceipts, exReceipt)
-	log.Info("addExchangeReceipt", "receipt", exReceipt)
+	log.Debug("addExchangeReceipt", "receipt", exReceipt)
 
 	recordAccounts(exchange, exReceipt.Pairs, address.String())
 	recordAccountVoumes(mt, exReceipt, topics[0])
@@ -110,7 +110,7 @@ func addErc20Receipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, lo
 	}
 
 	mt.Erc20Receipts = append(mt.Erc20Receipts, erc20Receipt)
-	log.Info("addErc20Receipt", "receipt", erc20Receipt)
+	log.Debug("addErc20Receipt", "receipt", erc20Receipt)
 }
 
 func recordAccounts(exchange, pairs, account string) {

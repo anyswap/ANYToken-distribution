@@ -85,7 +85,7 @@ func (opt *Option) sendRewards(accountStats mongodb.AccountStatSlice) (*big.Int,
 		log.Info("sendRewards begin", "account", stat.Account.String(), "reward", stat.Reward, keyShare, stat.Share, keyNumber, stat.Number, "dryrun", opt.DryRun)
 		txHash, err := opt.SendRewardsTransaction(stat.Account, stat.Reward)
 		if err != nil {
-			log.Info("sendRewards failed", "account", stat.Account.String(), "reward", stat.Reward, "dryrun", opt.DryRun, "err", err)
+			log.Warn("sendRewards failed", "account", stat.Account.String(), "reward", stat.Reward, "dryrun", opt.DryRun, "err", err)
 			return rewardsSended, errSendTransactionFailed
 		}
 		rewardsSended.Add(rewardsSended, stat.Reward)

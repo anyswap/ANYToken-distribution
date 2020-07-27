@@ -58,7 +58,7 @@ func checkMongoSession() {
 	for {
 		time.Sleep(60 * time.Second)
 		if err := ensureMongoConnected(); err != nil {
-			log.Info("[mongodb] check session error", "err", err)
+			log.Warn("[mongodb] check session error", "err", err)
 			log.Info("[mongodb] reconnect database", "dbName", dialInfo.Database)
 			mongoConnect()
 		}

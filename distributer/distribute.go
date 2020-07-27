@@ -214,7 +214,7 @@ func loopSendMissingVolumeRewards(opt *Option, to common.Address) {
 			log.Info("send missing volume rewards success", "from", from.String(), "to", to.String(), "value", value, "start", opt.StartHeight, "end", opt.EndHeight, "txHash", txHashStr, "dryrun", opt.DryRun)
 			break
 		}
-		log.Info("send missing volume rewards failed", "from", from.String(), "to", to.String(), "value", value, "start", opt.StartHeight, "end", opt.EndHeight, "err", err)
+		log.Warn("send missing volume rewards failed", "from", from.String(), "to", to.String(), "value", value, "start", opt.StartHeight, "end", opt.EndHeight, "err", err)
 		time.Sleep(waitInterval)
 	}
 }
@@ -224,12 +224,12 @@ func loopDoUntilSuccess(distributeFunc func(*Option) error, opt *Option) {
 	for {
 		err := distributeFunc(opt)
 		if err != nil {
-			log.Info("distribute error", "byWhat", opt.ByWhat(), "err", err)
+			log.Warn("distribute error", "byWhat", opt.ByWhat(), "err", err)
 		}
 		if !shouldRetry(err) {
 			break
 		}
-		log.Info("retry as meet error", "opt", opt.String(), "err", err)
+		log.Warn("retry as meet error", "opt", opt.String(), "err", err)
 		time.Sleep(waitInterval)
 	}
 }
@@ -248,7 +248,7 @@ func waitCycleEnd(cycleStart, cycleEnd, stable uint64) {
 		if latest >= cycleEnd+stable {
 			break
 		}
-		log.Info("wait to cycle end", "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable, "latest", latest)
+		log.Debug("wait to cycle end", "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable, "latest", latest)
 	}
 	log.Info("cycle end is achieved", "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable, "latest", latest)
 }

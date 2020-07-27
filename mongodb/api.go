@@ -67,7 +67,7 @@ func AddLiquidity(ml *MgoLiquidity, overwrite bool) (err error) {
 	if err == nil {
 		log.Info("[mongodb] AddLiquidity success", "liquidity", ml)
 	} else {
-		log.Info("[mongodb] AddLiquidity failed", "liquidity", ml, "err", err)
+		log.Warn("[mongodb] AddLiquidity failed", "liquidity", ml, "err", err)
 	}
 	return err
 }
@@ -82,7 +82,7 @@ func AddVolume(mv *MgoVolume, overwrite bool) (err error) {
 	if err == nil {
 		log.Info("[mongodb] AddVolume success", "volume", mv)
 	} else {
-		log.Info("[mongodb] AddVolume failed", "volume", mv, "err", err)
+		log.Warn("[mongodb] AddVolume failed", "volume", mv, "err", err)
 	}
 	return err
 }
@@ -96,7 +96,7 @@ func AddVolumeHistory(mv *MgoVolumeHistory) error {
 	case mgo.IsDup(err):
 		return nil
 	default:
-		log.Info("[mongodb] AddVolumeHistory failed", "volume", mv, "err", err)
+		log.Warn("[mongodb] AddVolumeHistory failed", "volume", mv, "err", err)
 	}
 	return err
 }
@@ -110,7 +110,7 @@ func AddAccount(ma *MgoAccount) error {
 	case mgo.IsDup(err):
 		return nil
 	default:
-		log.Info("[mongodb] AddAccount failed", "account", ma, "err", err)
+		log.Warn("[mongodb] AddAccount failed", "account", ma, "err", err)
 	}
 	return err
 }
@@ -124,7 +124,7 @@ func AddLiquidityBalance(ma *MgoLiquidityBalance) error {
 	case mgo.IsDup(err):
 		return nil
 	default:
-		log.Info("[mongodb] AddLiquidityBalance failed", "balance", ma, "err", err)
+		log.Warn("[mongodb] AddLiquidityBalance failed", "balance", ma, "err", err)
 	}
 	return err
 }
@@ -137,7 +137,7 @@ func AddDistributeInfo(ma *MgoDistributeInfo) error {
 	case err == nil:
 		log.Info("[mongodb] AddDistributeInfo success", "distribute", ma)
 	default:
-		log.Info("[mongodb] AddDistributeInfo failed", "distribute", ma, "err", err)
+		log.Warn("[mongodb] AddDistributeInfo failed", "distribute", ma, "err", err)
 	}
 	return err
 }
@@ -172,7 +172,7 @@ func AddVolumeRewardResult(mr *MgoVolumeRewardResult) (err error) {
 	case err == nil:
 		log.Info("[mongodb] AddVolumeRewardResult success", "reward", mr, "isUpdate", old != nil)
 	default:
-		log.Info("[mongodb] AddVolumeRewardResult failed", "reward", mr, "isUpdate", old != nil, "err", err)
+		log.Warn("[mongodb] AddVolumeRewardResult failed", "reward", mr, "isUpdate", old != nil, "err", err)
 	}
 	return err
 }
@@ -207,7 +207,7 @@ func AddLiquidRewardResult(mr *MgoLiquidRewardResult) (err error) {
 	case err == nil:
 		log.Info("[mongodb] AddLiquidRewardResult success", "reward", mr, "isUpdate", old != nil)
 	default:
-		log.Info("[mongodb] AddLiquidRewardResult failed", "reward", mr, "isUpdate", old != nil, "err", err)
+		log.Warn("[mongodb] AddLiquidRewardResult failed", "reward", mr, "isUpdate", old != nil, "err", err)
 	}
 	return err
 }

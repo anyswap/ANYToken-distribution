@@ -140,7 +140,7 @@ func (opt *Option) openOutputFile() (err error) {
 	}
 	opt.outputFile, err = os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
-		log.Info("open output file error", "file", fileName, "err", err)
+		log.Warn("open output file error", "file", fileName, "err", err)
 	} else {
 		log.Info("open output file success", "file", fileName)
 	}
@@ -157,7 +157,7 @@ func (opt *Option) WriteOutputLine(msg string) error {
 	}
 	_, err := opt.outputFile.Write([]byte(msg + "\n"))
 	if err != nil {
-		log.Info("[write output] error", "msg", msg, "err", err)
+		log.Warn("[write output] error", "msg", msg, "err", err)
 	} else {
 		log.Printf("[write output] %v", msg)
 	}

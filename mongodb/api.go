@@ -142,40 +142,72 @@ func AddDistributeInfo(ma *MgoDistributeInfo) error {
 	return err
 }
 
-// AddVolumeRewardResult add volume reward result
-func AddVolumeRewardResult(mr *MgoVolumeRewardResult) error {
-	var old MgoVolumeRewardResult
-	if err := collectionVolumeRewardResult.FindId(mr.Key).One(&old); err == nil {
-		if old.RewardTx != "" {
-			log.Warn("forbid overwrite exist volume reward result", "key", mr.Key)
-			return nil
-		}
+func getVolumeRewardUpdateItems(mr *MgoVolumeRewardResult) bson.M {
+	updates := bson.M{}
+	if mr.Reward != "" {
+		updates["reward"] = mr.Reward
 	}
-	_, err := collectionVolumeRewardResult.UpsertId(mr.Key, mr)
+	if mr.Volume != "" {
+		updates["volume"] = mr.Volume
+	}
+	if mr.TxCount != 0 {
+		updates["txcount"] = mr.TxCount
+	}
+	if mr.RewardTx != "" {
+		updates["rewardTx"] = mr.RewardTx
+	}
+	return updates
+}
+
+// AddVolumeRewardResult add volume reward result
+func AddVolumeRewardResult(mr *MgoVolumeRewardResult) (err error) {
+	old, _ := FindVolumeRewardResult(mr.Key)
+	if old == nil {
+		err = collectionVolumeRewardResult.Insert(mr)
+	} else {
+		updates := getVolumeRewardUpdateItems(mr)
+		err = collectionVolumeRewardResult.UpdateId(mr.Key, bson.M{"$set": updates})
+	}
 	switch {
 	case err == nil:
-		log.Info("[mongodb] AddVolumeRewardResult success", "reward", mr)
+		log.Info("[mongodb] AddVolumeRewardResult success", "reward", mr, "isUpdate", old != nil)
 	default:
-		log.Info("[mongodb] AddVolumeRewardResult failed", "reward", mr, "err", err)
+		log.Info("[mongodb] AddVolumeRewardResult failed", "reward", mr, "isUpdate", old != nil, "err", err)
 	}
 	return err
 }
 
-// AddLiquidRewardResult add volume reward result
-func AddLiquidRewardResult(mr *MgoLiquidRewardResult) error {
-	var old MgoLiquidRewardResult
-	if err := collectionLiquidRewardResult.FindId(mr.Key).One(&old); err == nil {
-		if old.RewardTx != "" {
-			log.Warn("forbid overwrite exist liquid reward result", "key", mr.Key)
-			return nil
-		}
+func getLiquidRewardUpdateItems(mr *MgoLiquidRewardResult) bson.M {
+	updates := bson.M{}
+	if mr.Reward != "" {
+		updates["reward"] = mr.Reward
 	}
-	_, err := collectionLiquidRewardResult.UpsertId(mr.Key, mr)
+	if mr.Liquidity != "" {
+		updates["liquidity"] = mr.Liquidity
+	}
+	if mr.Height != 0 {
+		updates["height"] = mr.Height
+	}
+	if mr.RewardTx != "" {
+		updates["rewardTx"] = mr.RewardTx
+	}
+	return updates
+}
+
+// AddLiquidRewardResult add volume reward result
+func AddLiquidRewardResult(mr *MgoLiquidRewardResult) (err error) {
+	old, _ := FindLiquidRewardResult(mr.Key)
+	if old == nil {
+		err = collectionLiquidRewardResult.Insert(mr)
+	} else {
+		updates := getLiquidRewardUpdateItems(mr)
+		err = collectionLiquidRewardResult.UpdateId(mr.Key, bson.M{"$set": updates})
+	}
 	switch {
 	case err == nil:
-		log.Info("[mongodb] AddLiquidRewardResult success", "reward", mr)
+		log.Info("[mongodb] AddLiquidRewardResult success", "reward", mr, "isUpdate", old != nil)
 	default:
-		log.Info("[mongodb] AddLiquidRewardResult failed", "reward", mr, "err", err)
+		log.Info("[mongodb] AddLiquidRewardResult failed", "reward", mr, "isUpdate", old != nil, "err", err)
 	}
 	return err
 }
@@ -275,6 +307,26 @@ func FindLatestLiquidity(exchange string) (*MgoLiquidity, error) {
 func FindLiquidity(key string) (*MgoLiquidity, error) {
 	var res MgoLiquidity
 	err := collectionLiquidity.FindId(key).One(&res)
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// FindVolumeRewardResult find volume reward result
+func FindVolumeRewardResult(key string) (*MgoVolumeRewardResult, error) {
+	var res MgoVolumeRewardResult
+	err := collectionVolumeRewardResult.FindId(key).One(&res)
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// FindLiquidRewardResult find liquid reward result
+func FindLiquidRewardResult(key string) (*MgoLiquidRewardResult, error) {
+	var res MgoLiquidRewardResult
+	err := collectionLiquidRewardResult.FindId(key).One(&res)
 	if err != nil {
 		return nil, err
 	}

@@ -25,6 +25,7 @@ func initApp() {
 		byLiquidityCommand,
 		byVolumeCommand,
 		sendRewardsCommand,
+		importRewardsCommand,
 		utils.LicenseCommand,
 		utils.VersionCommand,
 	}

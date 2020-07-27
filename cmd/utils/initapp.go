@@ -21,7 +21,7 @@ func InitApp(ctx *cli.Context, withMongodb bool) *callapi.APICaller {
 	params.LoadConfig(configFile)
 
 	if withMongodb {
-		initMongodb()
+		InitMongodb()
 	}
 
 	serverURL := params.GetConfig().Gateway.APIAddress
@@ -47,7 +47,8 @@ func DialServer(serverURL string) *callapi.APICaller {
 	return capi
 }
 
-func initMongodb() {
+// InitMongodb init mongodb by config
+func InitMongodb() {
 	config := params.GetConfig()
 	dbConfig := config.MongoDB
 	mongodb.MongoServerInit([]string{dbConfig.DBURL}, dbConfig.DBName, dbConfig.UserName, dbConfig.Password)

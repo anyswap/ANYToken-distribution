@@ -127,8 +127,7 @@ func (opt *Option) CheckStable() error {
 func (opt *Option) getDefaultOutputFile() string {
 	pairs := params.GetExchangePairs(opt.Exchange)
 	timestamp := time.Now().Unix()
-	datetime := time.Unix(timestamp, 0).Format("20060102")
-	return fmt.Sprintf("%s-%sReward-%s-%d-%d-%d.csv", pairs, opt.byWhat, datetime, opt.StartHeight, opt.EndHeight, timestamp)
+	return fmt.Sprintf("%s-%sReward-%d-%d-%d.csv", pairs, opt.byWhat, opt.StartHeight, opt.EndHeight, timestamp)
 }
 
 func (opt *Option) openOutputFile() (err error) {

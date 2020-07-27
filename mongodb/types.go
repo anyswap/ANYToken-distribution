@@ -1,6 +1,7 @@
 package mongodb
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 	"sort"
@@ -46,10 +47,16 @@ func (s AccountStatSlice) Swap(i, j int) {
 }
 
 func (s AccountStatSlice) Less(i, j int) bool {
+	var cmp int
 	if s[i].Reward != nil && s[j].Reward != nil {
-		return s[i].Reward.Cmp(s[j].Reward) > 0
+		cmp = s[i].Reward.Cmp(s[j].Reward)
+	} else {
+		cmp = s[i].Share.Cmp(s[j].Share)
 	}
-	return s[i].Share.Cmp(s[j].Share) > 0
+	if cmp != 0 {
+		return cmp > 0
+	}
+	return bytes.Compare(s[i].Account[:], s[j].Account[:]) < 0
 }
 
 // IsAccountExist is account exist in slice

@@ -2,9 +2,12 @@ package distributer
 
 import (
 	"math/big"
+	"regexp"
 
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 )
+
+var blankOrCommaSepRegexp = regexp.MustCompile(`[\s,]+`) // blank or comma separated
 
 // CalcTotalValue calc the summary
 func CalcTotalValue(shares []*big.Int) *big.Int {

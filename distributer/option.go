@@ -6,7 +6,6 @@ import (
 	"io"
 	"math/big"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
@@ -46,6 +45,31 @@ func (opt *Option) ByWhat() string {
 	return opt.byWhat
 }
 
+// GetStandardByWhat get standard byWhat
+func GetStandardByWhat(byWhat string) string {
+	switch byWhat {
+	case byLiquidMethodID, byLiquidMethodAliasID:
+		return byLiquidMethodID
+	case byVolumeMethodID, byVolumeMethodAliasID:
+		return byVolumeMethodID
+	default:
+		return ""
+	}
+}
+
+// SetByWhat set byWhat
+func (opt *Option) SetByWhat(byWhat string) error {
+	switch byWhat {
+	case byLiquidMethodID, byLiquidMethodAliasID:
+		opt.byWhat = byLiquidMethodID
+	case byVolumeMethodID, byVolumeMethodAliasID:
+		opt.byWhat = byVolumeMethodID
+	default:
+		return fmt.Errorf("unknown byWhat '%v'", byWhat)
+	}
+	return nil
+}
+
 // GetSender get sender from keystore
 func (opt *Option) GetSender() common.Address {
 	return opt.BuildTxArgs.GetSender()
@@ -58,9 +82,9 @@ func (opt *Option) GetChainID() *big.Int {
 
 func (opt *Option) String() string {
 	return fmt.Sprintf("%v TotalValue %v StartHeight %v EndHeight %v StableHeight %v"+
-		" StepCount %v StepReward %v Heights %v Exchange %v RewardToken %v DryRun %v Sender %v ChainID %v",
+		" StepCount %v StepReward %v Heights %v Exchange %v RewardToken %v DryRun %v SaveDB %v Sender %v ChainID %v",
 		opt.byWhat, opt.TotalValue, opt.StartHeight, opt.EndHeight, opt.StableHeight,
-		opt.StepCount, opt.StepReward, opt.Heights, opt.Exchange, opt.RewardToken, opt.DryRun,
+		opt.StepCount, opt.StepReward, opt.Heights, opt.Exchange, opt.RewardToken, opt.DryRun, opt.SaveDB,
 		opt.GetSender().String(), opt.GetChainID(),
 	)
 }
@@ -72,10 +96,27 @@ func (opt *Option) deinit() {
 	}
 }
 
-func (opt *Option) checkAndInit() (err error) {
+// CheckBasic check option basic
+func (opt *Option) CheckBasic() error {
 	if opt.StartHeight >= opt.EndHeight {
 		return fmt.Errorf("[check option] empty range, start height %v >= end height %v", opt.StartHeight, opt.EndHeight)
 	}
+	if opt.Exchange == "" {
+		return fmt.Errorf("[check option] must specify exchange")
+	}
+	if !params.IsConfigedExchange(opt.Exchange) {
+		return fmt.Errorf("[check option] exchange '%v' is not configed", opt.Exchange)
+	}
+	if opt.RewardToken == "" {
+		return fmt.Errorf("[check option] must specify reward token")
+	}
+	if !common.IsHexAddress(opt.RewardToken) {
+		return fmt.Errorf("[check option] wrong reward token: '%v'", opt.RewardToken)
+	}
+	return nil
+}
+
+func (opt *Option) checkAndInit() (err error) {
 	if opt.StepCount != 0 && opt.byWhat == byVolumeMethodID {
 		length := opt.EndHeight - opt.StartHeight
 		if length%opt.StepCount != 0 {
@@ -91,12 +132,6 @@ func (opt *Option) checkAndInit() (err error) {
 		log.Info("[check option] check step count success", "start", opt.StartHeight, "end", opt.EndHeight, "step", opt.StepCount, "StepReward", opt.StepReward)
 	}
 
-	if !params.IsConfigedExchange(opt.Exchange) {
-		return fmt.Errorf("[check option] exchange %v is not configed", opt.Exchange)
-	}
-	if !common.IsHexAddress(opt.RewardToken) {
-		return fmt.Errorf("[check option] wrong reward token: '%v'", opt.RewardToken)
-	}
 	err = opt.CheckSenderRewardTokenBalance()
 	if err != nil {
 		return err
@@ -285,6 +320,8 @@ func (opt *Option) writeRewardResultToDB(accoutStr, rewardStr, shareStr string, 
 		_ = mongodb.TryDoTimes("AddLiquidRewardResult "+mr.Key, func() error {
 			return mongodb.AddLiquidRewardResult(mr)
 		})
+	default:
+		log.Warn("unknown byWhat in option", "byWhat", opt.byWhat)
 	}
 }
 
@@ -454,7 +491,6 @@ func (opt *Option) GetAccountsAndRewardsFromFile() (accountStats mongodb.Account
 
 	accountStats = make(mongodb.AccountStatSlice, 0)
 
-	re := regexp.MustCompile(`[\s,]+`) // blank or comma separated
 	reader := bufio.NewReader(file)
 	isTitleLine := true
 
@@ -471,7 +507,7 @@ func (opt *Option) GetAccountsAndRewardsFromFile() (accountStats mongodb.Account
 			}
 			continue
 		}
-		parts := re.Split(line, -1)
+		parts := blankOrCommaSepRegexp.Split(line, -1)
 		if len(parts) < 2 {
 			return nil, "", fmt.Errorf("less than 2 parts in line %v", line)
 		}

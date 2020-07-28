@@ -13,6 +13,8 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+var blankOrCommaSepRegexp = regexp.MustCompile(`[\s,]+`) // blank or comma separated
+
 func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, error) {
 	var rewards *big.Int
 	if ctx.IsSet(utils.TotalRewardsFlag.Name) {
@@ -59,14 +61,25 @@ func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, error) {
 		DryRun:       ctx.Bool(utils.DryRunFlag.Name),
 	}
 
+	if ctx.IsSet(utils.RewardTyepFlag.Name) {
+		err = opt.SetByWhat(ctx.String(utils.RewardTyepFlag.Name))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err = opt.CheckBasic()
+	if err != nil {
+		return nil, err
+	}
+
 	log.Println("get option success.", tools.ToJSONString(opt, !log.JSONFormat))
 	return opt, nil
 }
 
 func getSampleHeights(ctx *cli.Context) ([]uint64, error) {
 	heightsStr := ctx.String(utils.HeightsFlag.Name)
-	re := regexp.MustCompile(`[\s,]+`) // blank or comma separated
-	parts := re.Split(heightsStr, -1)
+	parts := blankOrCommaSepRegexp.Split(heightsStr, -1)
 	heights := make([]uint64, 0, len(parts))
 	for _, part := range parts {
 		if part == "" {

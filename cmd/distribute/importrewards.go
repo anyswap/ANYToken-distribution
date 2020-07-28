@@ -6,7 +6,6 @@ import (
 	"io"
 	"math/big"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
@@ -33,8 +32,6 @@ var (
 
 	cycleLen               uint64 = 6600
 	startHeight, endHeight uint64
-
-	re = regexp.MustCompile(`[\s,]+`) // blank or comma separated
 )
 
 var (
@@ -160,7 +157,7 @@ func chekcTitleLine(titleLine string) {
 	if !isCommentedLine(titleLine) {
 		log.Fatalf("no title line in input file %v", inputFileName)
 	}
-	titleParts := re.Split(titleLine, -1)
+	titleParts := blankOrCommaSepRegexp.Split(titleLine, -1)
 	if len(titleParts) < 5 {
 		log.Fatalf("input file title line parts is less than 5. line: %v", titleLine)
 	}
@@ -222,7 +219,7 @@ func verifyFile() {
 }
 
 func processLine(line string, addToDB bool) {
-	parts := re.Split(line, -1)
+	parts := blankOrCommaSepRegexp.Split(line, -1)
 	if len(parts) < 4 {
 		log.Fatalf("wrong parts of input line: %v", line)
 	}

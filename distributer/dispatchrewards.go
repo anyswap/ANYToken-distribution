@@ -59,16 +59,21 @@ func (opt *Option) sendRewards(accountStats mongodb.AccountStatSlice) (*big.Int,
 	var keyShare, keyNumber, extraInfo string
 	switch opt.byWhat {
 	case byLiquidMethodID:
-		keyShare = "liquidity"
+		keyShare = byLiquidMethodID
 		keyNumber = "height"
 		extraInfo = opt.getSampleHeightsInfo()
 	case byVolumeMethodID:
-		keyShare = "volume"
+		keyShare = byVolumeMethodID
 		keyNumber = "txcount"
 		extraInfo = fmt.Sprintf("novolumes=%d", opt.noVolumes)
 	default:
 		return nil, fmt.Errorf("unknown byWhat '%v'", opt.byWhat)
 	}
+	// plus common extra info
+	extraInfo += fmt.Sprintf(
+		"&&start=%v&&end=%v&&totalReward=%v&&exchange=%v&&rewardToken=%v",
+		opt.StartHeight, opt.EndHeight, opt.TotalValue,
+		strings.ToLower(opt.Exchange), strings.ToLower(opt.RewardToken))
 	// write title
 	if opt.DryRun {
 		_ = opt.WriteOutput("#account", "reward", keyShare, keyNumber, extraInfo)

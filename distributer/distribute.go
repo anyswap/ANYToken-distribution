@@ -17,8 +17,10 @@ import (
 var capi *callapi.APICaller
 
 const (
-	byLiquidMethodID = "liquid"
-	byVolumeMethodID = "volume"
+	byLiquidMethodID      = "liquidity"
+	byLiquidMethodAliasID = "liquid"
+	byVolumeMethodID      = "volume"
+	byVolumeMethodAliasID = "trade"
 )
 
 var (
@@ -73,6 +75,7 @@ type distributeRunner struct {
 	start       uint64
 	stable      uint64
 	dryRun      bool
+	saveDB      bool
 
 	byLiquidCycleLen     uint64
 	byLiquidCycleRewards *big.Int
@@ -104,6 +107,7 @@ func initDistributer(distCfg *params.DistributeConfig) (*distributeRunner, error
 	}
 
 	runner.dryRun = distCfg.DryRun
+	runner.saveDB = distCfg.SaveDB
 
 	runner.exchange = distCfg.Exchange
 	runner.rewardToken = distCfg.RewardToken
@@ -158,6 +162,7 @@ func (runner *distributeRunner) sendVolumeRewards(start, end uint64) (missVolume
 		StepReward:   runner.byVolumeCycleRewards,
 		Exchange:     runner.exchange,
 		RewardToken:  runner.rewardToken,
+		SaveDB:       runner.saveDB,
 		DryRun:       runner.dryRun,
 	}
 	log.Info("start send volume reward", "option", opt.String())
@@ -178,11 +183,14 @@ func (runner *distributeRunner) sendMissingVolumeRewards(start, end, missVolumeC
 		StableHeight: runner.stable,
 		Exchange:     runner.exchange,
 		RewardToken:  runner.rewardToken,
+		SaveDB:       runner.saveDB,
 		DryRun:       runner.dryRun,
 	}
 	receiver := runner.byLiquidArgs.GetSender()
 	log.Info("start send missing volume rewards", "to", receiver.String(), "value", addedNoVolumeRewards, "start", opt.StartHeight, "end", opt.EndHeight, "missVolumeCycles", missVolumeCycles)
 	loopSendMissingVolumeRewards(opt, receiver)
+
+	runner.byLiquidCycleRewards.Add(runner.byLiquidCycleRewards, addedNoVolumeRewards)
 }
 
 func (runner *distributeRunner) sendLiquidRewards(start, end uint64) {
@@ -194,6 +202,7 @@ func (runner *distributeRunner) sendLiquidRewards(start, end uint64) {
 		StableHeight: runner.stable,
 		Exchange:     runner.exchange,
 		RewardToken:  runner.rewardToken,
+		SaveDB:       runner.saveDB,
 		DryRun:       runner.dryRun,
 	}
 	log.Info("start send liquid reward", "option", opt.String())
@@ -241,6 +250,7 @@ func waitCycleEnd(cycleStart, cycleEnd, stable uint64) {
 		time.Sleep(waitInterval)
 		syncInfo, err := mongodb.FindLatestSyncInfo()
 		if err != nil {
+			log.Warn("find latest sync info failed", "err", err)
 			continue
 		}
 		latest = syncInfo.Number
@@ -248,7 +258,7 @@ func waitCycleEnd(cycleStart, cycleEnd, stable uint64) {
 		if latest >= cycleEnd+stable {
 			break
 		}
-		log.Debug("wait to cycle end", "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable, "latest", latest)
+		log.Info("wait to cycle end", "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable, "latest", latest)
 	}
 	log.Info("cycle end is achieved", "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable, "latest", latest)
 }

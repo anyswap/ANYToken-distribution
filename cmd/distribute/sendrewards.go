@@ -20,7 +20,11 @@ send rewards batchly according to verified input file with line format: <address
 `,
 		Flags: []cli.Flag{
 			utils.GatewayFlag,
+			utils.RewardTyepFlag,
+			utils.ExchangeFlag,
 			utils.RewardTokenFlag,
+			utils.StartHeightFlag,
+			utils.EndHeightFlag,
 			utils.InputFileFlag,
 			utils.SenderFlag,
 			utils.KeyStoreFileFlag,
@@ -29,6 +33,7 @@ send rewards batchly according to verified input file with line format: <address
 			utils.GasPriceFlag,
 			utils.AccountNonceFlag,
 			utils.OutputFileFlag,
+			utils.SaveDBFlag,
 			utils.DryRunFlag,
 		},
 	}
@@ -49,5 +54,5 @@ func sendRewards(ctx *cli.Context) error {
 	}
 
 	defer capi.CloseClient()
-	return opt.SendRewards()
+	return opt.SendRewardsFromFile()
 }

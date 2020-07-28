@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
-	"regexp"
 	"strings"
 
 	"github.com/anyswap/ANYToken-distribution/log"
-	"github.com/anyswap/ANYToken-distribution/params"
+	"github.com/anyswap/ANYToken-distribution/mongodb"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/accounts/keystore"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/core/types"
@@ -182,8 +181,7 @@ func (args *BuildTxArgs) sendRewardsTransaction(account common.Address, reward *
 }
 
 func addTxHashFieldToTitleLine(titleLine string) string {
-	re := regexp.MustCompile(`[\s,]+`) // blank or comma separated
-	parts := re.Split(titleLine, -1)
+	parts := blankOrCommaSepRegexp.Split(titleLine, -1)
 	if len(parts) <= 1 {
 		return titleLine + ",txhash"
 	}
@@ -194,45 +192,81 @@ func addTxHashFieldToTitleLine(titleLine string) string {
 	return result
 }
 
-// SendRewards send rewards from file
-func (opt *Option) SendRewards() error {
-	defer opt.deinit()
-	if !common.IsHexAddress(opt.RewardToken) {
-		return fmt.Errorf("wrong reward token: '%v'", opt.RewardToken)
+func (opt *Option) checkTitleLine(titleLine string) (err error) {
+	if !isCommentedLine(titleLine) {
+		return fmt.Errorf("title line '%v' is not comment line", titleLine)
 	}
-	if opt.InputFile == "" {
-		return fmt.Errorf("must specify input file")
+	titleParts := blankOrCommaSepRegexp.Split(titleLine, -1)
+	if len(titleParts) < 5 {
+		return fmt.Errorf("title line parts is less than 5. %v", titleLine)
 	}
+	methodID := titleParts[2]
+	if opt.byWhat == "" {
+		err = opt.SetByWhat(methodID)
+		if err != nil {
+			return err
+		}
+	} else if opt.byWhat != GetStandardByWhat(methodID) {
+		return fmt.Errorf("byWhat mismatch. from arg %v, from file %v", opt.byWhat, methodID)
+	}
+	return nil
+}
 
+func (opt *Option) checkSendRewardsFromFile() (mongodb.AccountStatSlice, bool, error) {
+	if opt.InputFile == "" {
+		return nil, false, fmt.Errorf("must specify input file")
+	}
 	accountStats, titleLine, err := opt.GetAccountsAndRewardsFromFile()
 	if err != nil {
 		log.Error("[sendRewards] get accounts and rewards from input file failed", "inputfile", opt.InputFile, "err", err)
-		return err
+		return nil, false, err
 	}
 	if len(accountStats) == 0 {
 		log.Warn("empty account list, no need to send reward")
-		return nil
+		return nil, false, nil
 	}
 
-	totalRewards := accountStats.CalcTotalReward()
+	err = opt.checkTitleLine(titleLine)
+	if err != nil {
+		log.Error("check title line failed", "titleLine", titleLine, "err", err)
+		return nil, false, err
+	}
 
-	opt.TotalValue = totalRewards
+	// assign total value before check balance
+	opt.TotalValue = accountStats.CalcTotalReward()
 	err = opt.CheckSenderRewardTokenBalance()
 	if err != nil {
-		log.Errorf("[sendRewards] sender %v has not enough token balance (< %v), token: %v", opt.GetSender().String(), totalRewards, opt.RewardToken)
+		return nil, false, err
+	}
+
+	err = opt.CheckBasic()
+	canSaveDB := err == nil
+	if !canSaveDB && opt.SaveDB {
+		return nil, false, fmt.Errorf("can not savedb as error %v", err)
+	}
+
+	// write title
+	switch {
+	case opt.DryRun:
+		_ = opt.WriteOutput(titleLine)
+	case canSaveDB:
+		_ = opt.WriteOutput(addTxHashFieldToTitleLine(titleLine))
+	default:
+		_ = opt.WriteOutput("#account,reward,txhash")
+	}
+
+	return accountStats, canSaveDB, nil
+}
+
+// SendRewardsFromFile send rewards from file
+func (opt *Option) SendRewardsFromFile() error {
+	accountStats, canSaveDB, err := opt.checkSendRewardsFromFile()
+	if err != nil {
 		return err
 	}
 
-	useConfigFile := params.GetConfig() != nil
-
-	// write title
-	if useConfigFile {
-		if opt.DryRun {
-			_ = opt.WriteOutput(titleLine)
-		} else {
-			_ = opt.WriteOutput(addTxHashFieldToTitleLine(titleLine))
-		}
-	}
+	log.Info("call SendRewardsFromFile", "option", opt)
+	defer opt.deinit()
 
 	rewardsSended := big.NewInt(0)
 	for _, stat := range accountStats {
@@ -244,19 +278,19 @@ func (opt *Option) SendRewards() error {
 		}
 		txHash, err := opt.SendRewardsTransaction(account, reward)
 		if err != nil {
-			log.Info("[sendRewards] rewards sended", "totalRewards", totalRewards, "rewardsSended", rewardsSended, "allRewardsSended", rewardsSended.Cmp(totalRewards) == 0)
+			log.Info("[sendRewards] rewards sended", "totalRewards", opt.TotalValue, "rewardsSended", rewardsSended, "allRewardsSended", rewardsSended.Cmp(opt.TotalValue) == 0)
 			log.Error("[sendRewards] send tx failed", "account", account.String(), "reward", reward, "dryrun", opt.DryRun, "err", err)
 			return fmt.Errorf("[sendRewards] send tx failed")
 		}
 		rewardsSended.Add(rewardsSended, reward)
 		// write body
-		if useConfigFile {
+		if opt.DryRun || canSaveDB {
 			_ = opt.WriteSendRewardResult(stat, txHash)
 		} else {
 			_ = opt.WriteSendRewardFromFileResult(account, reward, txHash)
 		}
 	}
 
-	log.Info("[sendRewards] rewards sended", "totalRewards", totalRewards, "rewardsSended", rewardsSended, "allRewardsSended", rewardsSended.Cmp(totalRewards) == 0)
+	log.Info("[sendRewards] rewards sended", "totalRewards", opt.TotalValue, "rewardsSended", rewardsSended, "allRewardsSended", rewardsSended.Cmp(opt.TotalValue) == 0)
 	return nil
 }

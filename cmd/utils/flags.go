@@ -151,16 +151,6 @@ var (
 		Name:  "volumes",
 		Usage: "volumes file (line format: <address> <volume>), read from database if not specified",
 	}
-	// StatisticFileFlag --statistic
-	StatisticFileFlag = &cli.StringFlag{
-		Name:  "statistic",
-		Usage: "statistic file, line format: <account> <reward> <share> <number>",
-	}
-	// ResultFileFlag --result
-	ResultFileFlag = &cli.StringFlag{
-		Name:  "result",
-		Usage: "result file, line format: <account> <reward> <txhash>",
-	}
 	// InputFileFlag --input
 	InputFileFlag = &cli.StringFlag{
 		Name:  "input",
@@ -195,6 +185,11 @@ var (
 	HeightsFlag = &cli.StringFlag{
 		Name:  "heights",
 		Usage: "comma separated block heights",
+	}
+	// RewardTyepFlag --rewardType
+	RewardTyepFlag = &cli.StringFlag{
+		Name:  "rewardType",
+		Usage: "reward type (ie. liquidity/liquid,volume/trade). parse from title line if missing.",
 	}
 )
 

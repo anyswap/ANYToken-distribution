@@ -19,12 +19,9 @@ import (
 )
 
 var (
-	statisticFile string
-	resultFile    string
-	statFile      *os.File
-	resFile       *os.File
-	statReader    *bufio.Reader
-	resReader     *bufio.Reader
+	inputFileName string
+	inputFile     *os.File
+	inputReader   *bufio.Reader
 
 	dryRun         bool
 	rewardType     string
@@ -44,45 +41,28 @@ var (
 	importRewardsCommand = &cli.Command{
 		Action:    importRewards,
 		Name:      "importrewards",
-		Usage:     "import send rewards result to database",
+		Usage:     "import rewards result to database",
 		ArgsUsage: " ",
 		Description: `
-import send rewards result to database.
+import rewards result to database.
+input file line format is: <account>,<reward>.<share>,<number>[,<txhash>]
 `,
 		Flags: []cli.Flag{
+			utils.RewardTyepFlag,
 			utils.ExchangeFlag,
 			utils.RewardTokenFlag,
 			utils.StartHeightFlag,
 			utils.EndHeightFlag,
-			utils.StatisticFileFlag,
-			utils.ResultFileFlag,
+			utils.InputFileFlag,
 			utils.DryRunFlag,
 		},
 	}
 )
 
 func importRewards(ctx *cli.Context) error {
-	utils.SetLogger(ctx)
-
-	configFile := utils.GetConfigFilePath(ctx)
-	params.LoadConfig(configFile)
-
-	statisticFile = ctx.String(utils.StatisticFileFlag.Name)
-	if statisticFile == "" {
-		log.Fatal("must specify --statistic option to specify statistic file")
-	}
-
-	resultFile = ctx.String(utils.ResultFileFlag.Name)
-	if resultFile == "" {
-		log.Fatal("must specify --result option to specify result file")
-	}
-
-	if ctx.IsSet(utils.ExchangeFlag.Name) {
-		exchange = ctx.String(utils.ExchangeFlag.Name)
-	}
-
-	if ctx.IsSet(utils.RewardTokenFlag.Name) {
-		rewardToken = ctx.String(utils.RewardTokenFlag.Name)
+	inputFileName = ctx.String(utils.InputFileFlag.Name)
+	if inputFileName == "" {
+		log.Fatal("must specify --input option to specify input file")
 	}
 
 	isStartHeightSet := ctx.IsSet(utils.StartHeightFlag.Name)
@@ -105,10 +85,27 @@ func importRewards(ctx *cli.Context) error {
 		}
 	}
 
-	dryRun = ctx.Bool(utils.DryRunFlag.Name)
-	if !dryRun {
-		utils.InitMongodb()
+	if endHeight-startHeight != cycleLen {
+		log.Fatalf("cycle length %v = end %v - start %v is not equal to %v", endHeight-startHeight, endHeight, startHeight, cycleLen)
 	}
+
+	if ctx.IsSet(utils.ExchangeFlag.Name) {
+		exchange = ctx.String(utils.ExchangeFlag.Name)
+	}
+
+	if ctx.IsSet(utils.RewardTokenFlag.Name) {
+		rewardToken = ctx.String(utils.RewardTokenFlag.Name)
+	}
+
+	if ctx.IsSet(utils.RewardTyepFlag.Name) {
+		rewardTypeStr := ctx.String(utils.RewardTyepFlag.Name)
+		checkRewardType(rewardTypeStr)
+	}
+
+	dryRun = ctx.Bool(utils.DryRunFlag.Name)
+
+	capi := utils.InitApp(ctx, true)
+	defer capi.CloseClient()
 
 	log.Info("run importRewards", "exchange", exchange, "rewardToken", rewardToken, "startHeight", startHeight, "endHeight", endHeight, "dryRun", dryRun)
 
@@ -119,57 +116,57 @@ func importRewards(ctx *cli.Context) error {
 
 func openFile() {
 	var err error
-
-	if statisticFile != "" {
-		statFile, err = os.Open(statisticFile)
-		if err != nil {
-			log.Fatalf("open %v failed. %v)", statisticFile, err)
-		}
-		log.Info("open statistic file success", "file", statisticFile)
-		statReader = bufio.NewReader(statFile)
-
-		titleLineData, _, _ := statReader.ReadLine()
-		titleLine := strings.TrimSpace(string(titleLineData))
-		chekcStatisticTitleLine(titleLine)
+	inputFile, err = os.Open(inputFileName)
+	if err != nil {
+		log.Fatalf("open %v failed. %v)", inputFileName, err)
 	}
+	log.Info("open input file success", "file", inputFileName)
+	inputReader = bufio.NewReader(inputFile)
 
-	if resultFile != "" {
-		resFile, err = os.Open(resultFile)
-		if err != nil {
-			log.Fatalf("open %v failed. %v)", resultFile, err)
-		}
-		log.Info("open result file success", "file", resultFile)
-		resReader = bufio.NewReader(resFile)
-	}
+	titleLineData, _, _ := inputReader.ReadLine()
+	titleLine := strings.TrimSpace(string(titleLineData))
+	chekcTitleLine(titleLine)
 }
 
 func closeFile() {
-	if statFile != nil {
-		statFile.Close()
+	inputFile.Close()
+}
+
+func checkRewardType(rewardTypeStr string) {
+	var mismatch bool
+	switch rewardTypeStr {
+	case "liquid", "liquidity":
+		isLiquidReward = true
+		if isVolumeReward {
+			mismatch = true
+		}
+	case "volume", "trade":
+		isVolumeReward = true
+		if isLiquidReward {
+			mismatch = true
+		}
+	default:
+		log.Fatalf("unknown reward type '%v'", rewardTypeStr)
 	}
-	if resFile != nil {
-		resFile.Close()
+	if rewardType == "" {
+		rewardType = rewardTypeStr
+	}
+	if mismatch {
+		log.Fatalf("reward type mismatch. from arg %v, from file %v", rewardType, rewardTypeStr)
 	}
 }
 
-func chekcStatisticTitleLine(titleLine string) {
+func chekcTitleLine(titleLine string) {
 	if !isCommentedLine(titleLine) {
-		log.Fatalf("no title line in statistic file %v", statisticFile)
+		log.Fatalf("no title line in input file %v", inputFileName)
 	}
 	titleParts := re.Split(titleLine, -1)
-	if len(titleParts) != 5 {
-		log.Fatalf("statistic file title line parts is not 5. line: %v", titleLine)
+	if len(titleParts) < 5 {
+		log.Fatalf("input file title line parts is less than 5. line: %v", titleLine)
 	}
-	rewardType = titleParts[2]
-	switch rewardType {
-	case "liquid", "liquidity":
-		isLiquidReward = true
-	case "volume", "trade":
-		isVolumeReward = true
-	default:
-		log.Fatalf("unknown reward type '%v' in title line %v", rewardType, titleLine)
-	}
-	log.Info("get reward type success", "rewardType", rewardType)
+	rewardTypeStr := titleParts[2]
+	checkRewardType(rewardTypeStr)
+	log.Info("check reward type in title line success", "rewardType", rewardTypeStr)
 }
 
 func isCommentedLine(line string) bool {
@@ -177,9 +174,6 @@ func isCommentedLine(line string) bool {
 }
 
 func readOneLine(reader *bufio.Reader) string {
-	if reader == nil {
-		return ""
-	}
 	for {
 		slineData, _, err := reader.ReadLine()
 		if err == io.EOF {
@@ -194,178 +188,106 @@ func readOneLine(reader *bufio.Reader) string {
 }
 
 func processFile() {
-	log.Info("start process file", "statisticFile", statisticFile, "resultFile", resultFile, "dryRun", dryRun)
+	log.Info("start process file", "inputFileName", inputFileName, "dryRun", dryRun)
 	openFile()
 	defer closeFile()
 
-	if statFile != nil && resFile != nil {
-		compareAndVerifyFile()
-	}
+	verifyFile()
 
 	for {
-		statLine := readOneLine(statReader)
-		resLine := readOneLine(resReader)
-		if statLine == "" && resLine == "" {
+		line := readOneLine(inputReader)
+		if line == "" {
 			log.Info("read to file end")
 			break
 		}
-		processLine(statLine, resLine)
+		processLine(line, true)
 	}
-	log.Info("process file finish.", "rewardType", rewardType, "statisticFile", statisticFile, "resultFile", resultFile, "dryRun", dryRun)
+	log.Info("process file finish.", "rewardType", rewardType, "inputFileName", inputFileName, "dryRun", dryRun)
 }
 
-func compareAndVerifyFile() {
+func verifyFile() {
 	for {
-		statLine := readOneLine(statReader)
-		resLine := readOneLine(resReader)
-		if statLine == "" && resLine == "" {
+		line := readOneLine(inputReader)
+		if line == "" {
 			break
 		}
-		statParts := re.Split(statLine, -1)
-		resParts := re.Split(resLine, -1)
-		if len(statParts) != 4 {
-			log.Fatalf("wrong parts of statistic line: %v", statLine)
-		}
-		if len(resParts) != 3 {
-			log.Fatalf("wrong parts of result line: %v", resLine)
-		}
-		if statParts[0] != resParts[0] || statParts[1] != resParts[1] {
-			log.Fatalf("line mismatch. statLine '%v', resLine '%v'", statLine, resLine)
-		}
+		processLine(line, false)
 	}
-	log.Info("compare and verify statistics and result file succeess")
+	log.Info("verify input file success")
 	var err error
-	_, err = statFile.Seek(0, 0)
+	_, err = inputFile.Seek(0, 0)
 	if err != nil {
-		log.Warn("seek statistic file failed", "err", err)
-	}
-	_, err = resFile.Seek(0, 0)
-	if err != nil {
-		log.Warn("seek result file failed", "err", err)
+		log.Warn("seek input file failed", "err", err)
 	}
 }
 
-func processLine(statLine, resLine string) {
-	var (
-		statAccount                       common.Address
-		statReward, statShare, statNumber *big.Int
-
-		resAccount common.Address
-		resReward  *big.Int
-		txhash     common.Hash
-	)
-	if statLine != "" {
-		statAccount, statReward, statShare, statNumber = parseStatisticLine(statLine)
-		accountStr := strings.ToLower(statAccount.String())
-		log.Trace("read statistic line success", "account", accountStr, "reward", statReward, "share", statShare, "number", statNumber)
-	}
-
-	if resLine != "" {
-		resAccount, resReward, txhash = parseResultLine(resLine)
-		accountStr := strings.ToLower(resAccount.String())
-		log.Trace("read result line success", "account", accountStr, "reward", "resReward", "txhash", txhash.String())
-	}
-
-	if statLine != "" && resLine != "" {
-		if statAccount != resAccount || statReward.Cmp(resReward) != 0 {
-			log.Fatalf("line mismatch. statLine %v, resLine %v", statLine, resLine)
-		}
-	}
-
-	var account common.Address
-	var reward, share, number *big.Int
-	if statReward != nil {
-		account = statAccount
-		reward = statReward
-		share = statShare
-		number = statNumber
-	} else {
-		account = resAccount
-		reward = resReward
-	}
-	addRewardResultToDB(account, reward, share, number, txhash)
-}
-
-func parseResultLine(line string) (account common.Address, reward *big.Int, txhash common.Hash) {
+func processLine(line string, addToDB bool) {
 	parts := re.Split(line, -1)
-	if len(parts) != 3 {
-		log.Fatalf("wrong parts of result line: %v", line)
-	}
-	accountStr := parts[0]
-	rewardStr := parts[1]
-	txHashStr := parts[2]
-	if !common.IsHexAddress(accountStr) {
-		log.Fatalf("wrong address in result line: %v", line)
-	}
-	account = common.HexToAddress(accountStr)
-	var ok bool
-	reward, ok = new(big.Int).SetString(rewardStr, 10)
-	if !ok {
-		log.Fatalf("wrong reward in result line: %v", line)
-	}
-	txhash = common.HexToHash(txHashStr)
-	if txhash.String() != txHashStr {
-		log.Fatalf("wrong txhash in result line: %v", line)
-	}
-	return account, reward, txhash
-}
-
-func parseStatisticLine(line string) (account common.Address, reward, share, number *big.Int) {
-	parts := re.Split(line, -1)
-	if len(parts) != 4 {
-		log.Fatalf("wrong parts of statistic line: %v", line)
+	if len(parts) < 4 {
+		log.Fatalf("wrong parts of input line: %v", line)
 	}
 	accountStr := parts[0]
 	rewardStr := parts[1]
 	shareStr := parts[2]
 	numberStr := parts[3]
 	if !common.IsHexAddress(accountStr) {
-		log.Fatalf("wrong address in statistic line: %v", line)
+		log.Fatalf("wrong address in input line: %v", line)
 	}
-	account = common.HexToAddress(accountStr)
-	var ok bool
-	reward, ok = new(big.Int).SetString(rewardStr, 10)
+	account := common.HexToAddress(accountStr)
+	reward, ok := new(big.Int).SetString(rewardStr, 10)
 	if !ok {
-		log.Fatalf("wrong reward in statistic line: %v", line)
+		log.Fatalf("wrong reward in input line: %v", line)
 	}
-	share, ok = new(big.Int).SetString(shareStr, 10)
+	share, ok := new(big.Int).SetString(shareStr, 10)
 	if !ok {
-		log.Fatalf("wrong share in statistic line: %v", line)
+		log.Fatalf("wrong share in input line: %v", line)
 	}
-	number, ok = new(big.Int).SetString(numberStr, 10)
+	number, ok := new(big.Int).SetString(numberStr, 10)
 	if !ok {
-		log.Fatalf("wrong number in statistic line: %v", line)
+		log.Fatalf("wrong number in input line: %v", line)
 	}
-	return account, reward, share, number
+	var txhash *common.Hash
+	if len(parts) >= 4 {
+		txHashStr := parts[4]
+		hash := common.HexToHash(txHashStr)
+		if hash.String() != txHashStr {
+			log.Fatalf("wrong txhash in input line: %v", line)
+		}
+		txhash = &hash
+	}
+
+	if addToDB {
+		accountStr := strings.ToLower(account.String())
+		txHashStr := ""
+		if txhash != nil {
+			txHashStr = txhash.String()
+		}
+		log.Trace("read input line success", "account", accountStr, "reward", reward, "share", share, "number", number, "txhash", txHashStr)
+		addRewardResultToDB(account, reward, share, number, txhash)
+	}
 }
 
-func addRewardResultToDB(account common.Address, reward, share, number *big.Int, txhash common.Hash) {
+func addRewardResultToDB(account common.Address, reward, share, number *big.Int, txhash *common.Hash) {
 	accoutStr := strings.ToLower(account.String())
 	rewardStr := reward.String()
 	pairs := params.GetExchangePairs(exchange)
+	shareStr := share.String()
+	numVal := number.Uint64()
+
+	var hashStr string
+	if txhash != nil {
+		hashStr = txhash.Hex()
+	}
 
 	if dryRun {
 		subject := fmt.Sprintf("[dryRun] add %v reward result", rewardType)
 		log.Info(subject,
 			"account", accoutStr, "reward", reward,
-			"share", share, "number", number, "txhash", txhash.String(),
+			"share", share, "number", number, "txhash", hashStr,
 			"exchange", exchange, "pairs", pairs, "rewardToken", rewardToken,
 			"startHeight", startHeight, "endHeight", endHeight,
 		)
 		return
-	}
-
-	var shareStr string
-	if share != nil {
-		shareStr = share.String()
-	}
-	var numVal uint64
-	if number != nil {
-		numVal = number.Uint64()
-	}
-	var hashStr string
-	if txhash != (common.Hash{}) {
-		hashStr = txhash.String()
 	}
 
 	switch {

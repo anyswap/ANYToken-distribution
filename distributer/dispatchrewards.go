@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/anyswap/ANYToken-distribution/log"
 	"github.com/anyswap/ANYToken-distribution/mongodb"
@@ -25,6 +26,7 @@ func (opt *Option) dispatchRewards(accountStats mongodb.AccountStatSlice) error 
 			RewardToken:  opt.RewardToken,
 			Rewards:      rewardsSended.String(),
 			SampleHeigts: opt.Heights,
+			Timestamp:    uint64(time.Now().Unix()),
 		}
 		_ = mongodb.TryDoTimes("AddDistributeInfo "+mdist.Pairs, func() error {
 			return mongodb.AddDistributeInfo(mdist)

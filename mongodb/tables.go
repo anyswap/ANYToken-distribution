@@ -157,6 +157,7 @@ type MgoDistributeInfo struct {
 	RewardToken  string        `bson:"rewardToken"`
 	Rewards      string        `bson:"rewards"`
 	SampleHeigts []uint64      `bson:"sampleHeights,omitempty"`
+	Timestamp    uint64        `bson:"timestamp"`
 }
 
 // MgoVolumeRewardResult volume reward
@@ -172,6 +173,7 @@ type MgoVolumeRewardResult struct {
 	Volume      string `bson:"volume"`
 	TxCount     uint64 `bson:"txcount"`
 	RewardTx    string `bson:"rewardTx"`
+	Timestamp   uint64 `bson:"timestamp"`
 }
 
 // MgoLiquidRewardResult liquidity reward
@@ -187,6 +189,7 @@ type MgoLiquidRewardResult struct {
 	Liquidity   string `bson:"liquidity"`
 	Height      uint64 `bson:"height"`
 	RewardTx    string `bson:"rewardTx"`
+	Timestamp   uint64 `bson:"timestamp"`
 }
 
 // GetKeyOfRewardResult get key

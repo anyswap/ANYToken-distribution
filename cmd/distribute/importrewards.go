@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/anyswap/ANYToken-distribution/cmd/utils"
 	"github.com/anyswap/ANYToken-distribution/log"
@@ -381,6 +382,7 @@ func addRewardResultToDB(account common.Address, reward, share, number *big.Int,
 			Volume:      shareStr,
 			TxCount:     numVal,
 			RewardTx:    hashStr,
+			Timestamp:   uint64(time.Now().Unix()),
 		}
 		_ = mongodb.TryDoTimes("AddVolumeRewardResult "+mr.Key, func() error {
 			return mongodb.AddVolumeRewardResult(mr)
@@ -398,6 +400,7 @@ func addRewardResultToDB(account common.Address, reward, share, number *big.Int,
 			Liquidity:   shareStr,
 			Height:      numVal,
 			RewardTx:    hashStr,
+			Timestamp:   uint64(time.Now().Unix()),
 		}
 		_ = mongodb.TryDoTimes("AddLiquidRewardResult "+mr.Key, func() error {
 			return mongodb.AddLiquidRewardResult(mr)

@@ -262,6 +262,7 @@ func (opt *Option) writeRewardResultToDB(accoutStr, rewardStr, shareStr string, 
 			Volume:      shareStr,
 			TxCount:     number,
 			RewardTx:    hashStr,
+			Timestamp:   uint64(time.Now().Unix()),
 		}
 		_ = mongodb.TryDoTimes("AddVolumeRewardResult "+mr.Key, func() error {
 			return mongodb.AddVolumeRewardResult(mr)
@@ -279,6 +280,7 @@ func (opt *Option) writeRewardResultToDB(accoutStr, rewardStr, shareStr string, 
 			Liquidity:   shareStr,
 			Height:      number,
 			RewardTx:    hashStr,
+			Timestamp:   uint64(time.Now().Unix()),
 		}
 		_ = mongodb.TryDoTimes("AddLiquidRewardResult "+mr.Key, func() error {
 			return mongodb.AddLiquidRewardResult(mr)

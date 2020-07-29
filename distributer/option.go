@@ -104,7 +104,7 @@ func (opt *Option) CheckBasic() error {
 	if opt.Exchange == "" {
 		return fmt.Errorf("[check option] must specify exchange")
 	}
-	if !params.IsConfigedExchange(opt.Exchange) {
+	if (!opt.DryRun || opt.SaveDB) && !params.IsConfigedExchange(opt.Exchange) {
 		return fmt.Errorf("[check option] exchange '%v' is not configed", opt.Exchange)
 	}
 	if opt.RewardToken == "" {

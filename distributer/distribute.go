@@ -65,7 +65,6 @@ func startDistributeJob(distCfg *params.DistributeConfig) {
 		return
 	}
 
-	syncer.WaitSyncToLatest()
 	runner.run()
 }
 
@@ -135,6 +134,7 @@ func initDistributer(distCfg *params.DistributeConfig) (*distributeRunner, error
 
 func (runner *distributeRunner) run() {
 	curCycleStart := calcCurCycleStart(runner.start, runner.stable, runner.byLiquidCycleLen)
+	syncer.WaitSyncToLatest()
 	for {
 		curCycleEnd := curCycleStart + runner.byLiquidCycleLen
 		waitCycleEnd(curCycleStart, curCycleEnd, runner.stable)

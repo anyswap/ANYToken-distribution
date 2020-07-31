@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"math/big"
 	"sync"
@@ -106,6 +107,12 @@ func applyArguments() {
 	}
 	if args.SyncOverwrite != nil {
 		overwrite = *args.SyncOverwrite
+	}
+
+	if startHeight != 0 && endHeight == 0 {
+		_ = mongodb.TryDoTimes("UpdateSyncInfo "+fmt.Sprintf("%d", startHeight), func() error {
+			return mongodb.UpdateSyncInfo(startHeight, "", uint64(time.Now().Unix()))
+		})
 	}
 }
 

@@ -88,8 +88,12 @@ func AddVolume(mv *MgoVolume, overwrite bool) (err error) {
 }
 
 // AddVolumeHistory add volume history
-func AddVolumeHistory(mv *MgoVolumeHistory) error {
-	err := collectionVolumeHistory.Insert(mv)
+func AddVolumeHistory(mv *MgoVolumeHistory, overwrite bool) (err error) {
+	if overwrite {
+		_, err = collectionVolumeHistory.UpsertId(mv.Key, mv)
+	} else {
+		err = collectionVolumeHistory.Insert(mv)
+	}
 	switch {
 	case err == nil:
 		log.Info("[mongodb] AddVolumeHistory success", "volume", mv)

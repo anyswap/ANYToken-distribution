@@ -207,3 +207,16 @@ func (c *APICaller) GetChainID() (*big.Int, error) {
 func (c *APICaller) SuggestGasPrice() (*big.Int, error) {
 	return c.client.SuggestGasPrice(c.context)
 }
+
+// IsNodeSyncing return if full node is in syncing state
+func (c *APICaller) IsNodeSyncing() bool {
+	for {
+		progress, err := c.client.SyncProgress(c.context)
+		if err == nil {
+			log.Info("call eth_syncing success", "progress", progress)
+			return progress != nil
+		}
+		log.Warn("call eth_syncing failed", "err", err)
+		time.Sleep(c.rpcRetryInterval)
+	}
+}

@@ -157,7 +157,7 @@ func recordAccountVoumes(mt *mongodb.MgoTransaction, exReceipt *mongodb.Exchange
 		LogIndex:    exReceipt.LogIndex,
 	}
 	_ = mongodb.TryDoTimes("AddVolumeHistory "+mv.Key, func() error {
-		return mongodb.AddVolumeHistory(mv)
+		return mongodb.AddVolumeHistory(mv, overwrite)
 	})
 }
 

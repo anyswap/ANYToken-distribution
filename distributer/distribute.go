@@ -132,9 +132,22 @@ func initDistributer(distCfg *params.DistributeConfig) (*distributeRunner, error
 	return runner, nil
 }
 
+func waitNodeSyncFinish() {
+	for {
+		isNodeSyncing := capi.IsNodeSyncing()
+		if !isNodeSyncing {
+			break
+		}
+		log.Warn("wait node syncing finish in process")
+		time.Sleep(60 * time.Second)
+	}
+	log.Info("wait node syncing finish success")
+}
+
 func (runner *distributeRunner) run() {
-	curCycleStart := calcCurCycleStart(runner.start, runner.stable, runner.byLiquidCycleLen)
+	waitNodeSyncFinish()
 	syncer.WaitSyncToLatest()
+	curCycleStart := calcCurCycleStart(runner.start, runner.stable, runner.byLiquidCycleLen)
 	for {
 		curCycleEnd := curCycleStart + runner.byLiquidCycleLen
 		waitCycleEnd(curCycleStart, curCycleEnd, runner.stable)

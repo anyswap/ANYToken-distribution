@@ -31,10 +31,11 @@ func timestampToDate(timestamp uint64) string {
 	return time.Unix(int64(timestamp), 0).Format("2006-01-02 15:04:05")
 }
 
-func parseReceipt(mt *mongodb.MgoTransaction, receipt *types.Receipt) {
+func parseReceipt(mt *mongodb.MgoTransaction, receipt *types.Receipt) (savedb bool) {
 	if receipt == nil || receipt.Status == 0 {
-		return
+		return false
 	}
+	var save bool
 	for idx, rlog := range receipt.Logs {
 		if len(rlog.Topics) == 0 {
 			continue
@@ -46,25 +47,29 @@ func parseReceipt(mt *mongodb.MgoTransaction, receipt *types.Receipt) {
 
 		switch rlog.Topics[0] {
 		case topicAddLiquidity:
-			addExchangeReceipt(mt, rlog, idx, "AddLiquidity")
+			save = addExchangeReceipt(mt, rlog, idx, "AddLiquidity")
 		case topicRemoveLiquidity:
-			addExchangeReceipt(mt, rlog, idx, "RemoveLiquidity")
+			save = addExchangeReceipt(mt, rlog, idx, "RemoveLiquidity")
 		case topicTokenPurchase:
-			addExchangeReceipt(mt, rlog, idx, "TokenPurchase")
+			save = addExchangeReceipt(mt, rlog, idx, "TokenPurchase")
 		case topicEthPurchase:
-			addExchangeReceipt(mt, rlog, idx, "EthPurchase")
+			save = addExchangeReceipt(mt, rlog, idx, "EthPurchase")
 		case topicTransfer:
-			addErc20Receipt(mt, rlog, idx, "Transfer")
+			save = addErc20Receipt(mt, rlog, idx, "Transfer")
 		case topicApproval:
-			addErc20Receipt(mt, rlog, idx, "Approval")
+			save = addErc20Receipt(mt, rlog, idx, "Approval")
+		}
+		if save {
+			savedb = true
 		}
 	}
+	return savedb
 }
 
-func addExchangeReceipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, logType string) {
+func addExchangeReceipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, logType string) bool {
 	exchange := strings.ToLower(rlog.Address.String())
 	if !params.IsConfigedExchange(exchange) {
-		return
+		return false
 	}
 	topics := rlog.Topics
 	address := common.BytesToAddress(topics[1].Bytes())
@@ -88,12 +93,13 @@ func addExchangeReceipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int,
 	recordAccountVoumes(mt, exReceipt, topics[0])
 
 	updateVolumes(mt, exReceipt, topics[0])
+	return true
 }
 
-func addErc20Receipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, logType string) {
+func addErc20Receipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, logType string) bool {
 	erc20Address := strings.ToLower(rlog.Address.String())
 	if !(params.IsConfigedToken(erc20Address) || params.IsConfigedExchange(erc20Address)) {
-		return
+		return false
 	}
 	topics := rlog.Topics
 	from := common.BytesToAddress(topics[1].Bytes())
@@ -111,6 +117,7 @@ func addErc20Receipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, lo
 
 	mt.Erc20Receipts = append(mt.Erc20Receipts, erc20Receipt)
 	log.Debug("addErc20Receipt", "receipt", erc20Receipt)
+	return true
 }
 
 func recordAccounts(exchange, pairs, account string) {

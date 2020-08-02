@@ -110,13 +110,16 @@ func (w *worker) parseTx(i int, tx *types.Transaction, block *types.Block, recei
 	}
 	mt.Timestamp = block.Time().Uint64()
 
+	var savedb bool
 	if receipt != nil && len(receipt.Logs) != 0 {
-		parseReceipt(mt, receipt)
+		savedb = parseReceipt(mt, receipt)
 	}
 
-	_ = mongodb.TryDoTimes("AddTransaction "+mt.Key, func() error {
-		return mongodb.AddTransaction(mt, overwrite)
-	})
+	if savedb {
+		_ = mongodb.TryDoTimes("AddTransaction "+mt.Key, func() error {
+			return mongodb.AddTransaction(mt, overwrite)
+		})
+	}
 }
 
 func getTxSender(tx *types.Transaction) common.Address {

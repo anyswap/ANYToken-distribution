@@ -3,7 +3,6 @@ package params
 import (
 	"errors"
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/anyswap/ANYToken-distribution/tools"
@@ -46,15 +45,10 @@ func CheckConfig() (err error) {
 }
 
 func checkExchangeConfig() error {
-	var total float64
 	for _, ex := range config.Exchanges {
 		if err := ex.check(); err != nil {
 			return err
 		}
-		total += ex.Percentage
-	}
-	if math.Abs(total-100) > 1e-18 {
-		return fmt.Errorf("[check exchange] total percentage %v is not 100%%", total)
 	}
 	return nil
 }

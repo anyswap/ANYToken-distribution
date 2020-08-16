@@ -60,7 +60,6 @@ type ExchangeConfig struct {
 	Pairs          string
 	Exchange       string
 	Token          string
-	Percentage     float64
 	CreationHeight uint64
 }
 

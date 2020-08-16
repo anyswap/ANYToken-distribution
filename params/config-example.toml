@@ -43,5 +43,4 @@ ByVolumePasswordFile = "password file path"
 Pairs = "ANY"
 Exchange = "0x4dee5f0705ff478b452419375610155b5873ef5b"
 Token = "0xC20b5E92E1ce63Af6FE537491f75C19016ea5fb4"
-Percentage = 100.0
 CreationHeight = 2387654

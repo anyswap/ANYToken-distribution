@@ -80,7 +80,7 @@ func AddVolume(mv *MgoVolume, overwrite bool) (err error) {
 		err = collectionVolume.Insert(mv)
 	}
 	if err == nil {
-		log.Info("[mongodb] AddVolume success", "volume", mv)
+		log.Debug("[mongodb] AddVolume success", "volume", mv)
 	} else {
 		log.Warn("[mongodb] AddVolume failed", "volume", mv, "err", err)
 	}
@@ -258,7 +258,7 @@ func UpdateVolumeWithReceipt(exr *ExchangeReceipt, blockHash string, blockNumber
 		oldTokenVal, _ := tools.GetBigIntFromString(curVol.TokenVolume24h)
 		coinVal.Add(coinVal, oldCoinVal)
 		tokenVal.Add(tokenVal, oldTokenVal)
-		log.Info("[mongodb] update volume", "oldCoins", oldCoinVal, "newCoins", coinVal, "oldTokens", oldTokenVal, "newTokens", tokenVal)
+		log.Debug("[mongodb] update volume", "pairs", exr.Pairs, "logType", exr.LogType, "oldCoins", oldCoinVal, "newCoins", coinVal, "oldTokens", oldTokenVal, "newTokens", tokenVal)
 	}
 
 	return AddVolume(&MgoVolume{

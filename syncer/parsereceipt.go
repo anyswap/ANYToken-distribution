@@ -86,6 +86,13 @@ func addExchangeReceipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int,
 		TokenToAmount:   toAmount.String(),
 	}
 
+	switch rlog.Topics[0] {
+	case topicAddLiquidity:
+		log.Info("[parse] add liquidity", "exchange", exReceipt.Exchange, "pairs", exReceipt.Pairs, "address", exReceipt.Address, "fromAmount", exReceipt.TokenFromAmount, "toAmount", exReceipt.TokenToAmount)
+	case topicRemoveLiquidity:
+		log.Info("[parse] remove liquidity", "exchange", exReceipt.Exchange, "pairs", exReceipt.Pairs, "address", exReceipt.Address, "fromAmount", exReceipt.TokenFromAmount, "toAmount", exReceipt.TokenToAmount)
+	}
+
 	mt.ExchangeReceipts = append(mt.ExchangeReceipts, exReceipt)
 	log.Debug("addExchangeReceipt", "receipt", exReceipt)
 
@@ -182,7 +189,12 @@ func updateVolumes(mt *mongodb.MgoTransaction, exReceipt *mongodb.ExchangeReceip
 	}
 
 	timestamp := getDayBegin(mt.Timestamp)
-	log.Info("[parse] update volume", "txHash", mt.Hash, "logIndex", exReceipt.LogIndex, "logType", exReceipt.LogType, "exchange", exReceipt.Exchange, "pairs", exReceipt.Pairs, "timestamp", timestampToDate(mt.Timestamp))
+	log.Debug("[parse] update volume", "txHash", mt.Hash,
+		"logIndex", exReceipt.LogIndex, "logType", exReceipt.LogType,
+		"exchange", exReceipt.Exchange, "pairs", exReceipt.Pairs,
+		"tokenFromAmount", exReceipt.TokenFromAmount,
+		"tokenToAmount", exReceipt.TokenToAmount,
+		"timestamp", timestampToDate(mt.Timestamp))
 
 	_ = mongodb.TryDoTimes("UpdateVolume "+mt.Hash, func() error {
 		return mongodb.UpdateVolumeWithReceipt(exReceipt, mt.BlockHash, mt.BlockNumber, timestamp)

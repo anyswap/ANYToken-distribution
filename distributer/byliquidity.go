@@ -195,7 +195,7 @@ func getRandNumbers(seedBlock, max, count uint64) (numbers []uint64) {
 	header := capi.LoopGetBlockHeader(new(big.Int).SetUint64(seedBlock))
 	log.Info("get seed block hash success", "hash", header.Hash().String())
 	dhash := common.Keccak256Hash(header.Hash().Bytes(), header.Number.Bytes())
-	for i := uint64(0); i < count; i++ {
+	for i := uint64(1); i <= count; i++ {
 		rehash := common.Keccak256Hash(dhash.Bytes(), new(big.Int).SetUint64(i).Bytes())
 		rand.Seed(new(big.Int).SetBytes(rehash.Bytes()).Int64())
 		number := uint64(rand.Intn(int(max)))

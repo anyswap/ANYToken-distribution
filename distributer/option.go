@@ -16,7 +16,7 @@ import (
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 )
 
-const sampleCount = 4
+const sampleCount = 1
 
 // Option distribute options
 type Option struct {

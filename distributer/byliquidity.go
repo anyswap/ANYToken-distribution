@@ -1,7 +1,6 @@
 package distributer
 
 import (
-	"fmt"
 	"math/big"
 	"math/rand"
 	"strings"
@@ -69,7 +68,10 @@ func (opt *Option) updateLiquidityBalance(accounts []common.Address) (accountSta
 	// pick smpale blocks to query liquidity balance, and keep the minimumn
 	for i, height := range opt.Heights {
 		blockNumber := new(big.Int).SetUint64(height)
+		totalSupply := capi.LoopGetExchangeLiquidity(exchangeAddr, blockNumber)
+		exCoinBalance := capi.LoopGetCoinBalance(exchangeAddr, blockNumber)
 		totalLiquid := big.NewInt(0)
+		totalCoinBalance := big.NewInt(0)
 		for _, account := range accounts {
 			finStat, exist := finStatMap[account]
 			// if jump here, verifyTotalLiquidity will warn total value not equal
@@ -79,18 +81,18 @@ func (opt *Option) updateLiquidityBalance(accounts []common.Address) (accountSta
 			}
 			var value *big.Int
 			accoutStr := strings.ToLower(account.String())
-			liquid, err := mongodb.FindLiquidityBalance(exchange, accoutStr, height)
+			liquidStr, err := mongodb.FindLiquidityBalance(exchange, accoutStr, height)
 			if err == nil {
-				value, _ = tools.GetBigIntFromString(liquid)
+				value, _ = tools.GetBigIntFromString(liquidStr)
 			}
 			for value == nil {
-				value, err = capi.GetLiquidityBalance(exchangeAddr, account, blockNumber)
-				if err != nil {
-					log.Warn("[byliquid] GetLiquidityBalance error", "err", err)
-					time.Sleep(time.Second)
-					continue
-				}
+				value = capi.LoopGetLiquidityBalance(exchangeAddr, account, blockNumber)
 			}
+			totalLiquid.Add(totalLiquid, value)
+			// convert liquid balance to coin balance
+			coinBalance := new(big.Int).Mul(value, exCoinBalance)
+			coinBalance.Div(coinBalance, totalSupply)
+			totalCoinBalance.Add(totalCoinBalance, coinBalance)
 			_ = opt.WriteLiquidityBalance(account, value, height)
 			mliq := &mongodb.MgoLiquidityBalance{
 				Key:         mongodb.GetKeyOfLiquidityBalance(exchange, accoutStr, height),
@@ -103,90 +105,48 @@ func (opt *Option) updateLiquidityBalance(accounts []common.Address) (accountSta
 			_ = mongodb.TryDoTimes("AddLiquidityBalance "+mliq.Key, func() error {
 				return mongodb.AddLiquidityBalance(mliq)
 			})
-			totalLiquid.Add(totalLiquid, value)
 			if exist {
 				if finStat.Share.Cmp(value) > 0 { // get minimumn liquidity balance
-					finStat.Share = value
+					finStat.Share = coinBalance
 					finStat.Number = height
 				}
 			} else {
 				finStatMap[account] = &mongodb.AccountStat{
 					Account: account,
-					Share:   value,
+					Share:   coinBalance,
 					Number:  height,
 				}
 			}
 		}
-		err := verifyTotalLiquidity(exchangeAddr, blockNumber, totalLiquid, i == 0)
-		if err != nil {
-			log.Warn("[byliquid] " + err.Error())
+		if totalLiquid.Cmp(totalSupply) == 0 {
+			log.Info("[byliquid] account list is complete", "exchange", exchange, "height", blockNumber, "totalsupply", totalSupply)
+		} else if i == 0 {
+			log.Warn("[byliquid] account list is not complete", "exchange", exchange, "height", blockNumber, "totalsupply", totalSupply, "totalLiquid", totalLiquid)
+			time.Sleep(time.Second)
 		}
+		leftValue := new(big.Int).Sub(exCoinBalance, totalCoinBalance)
+		distLeftValue(finStatMap, leftValue)
 	}
 
 	return mongodb.ConvertToSortedSlice(finStatMap)
 }
 
-// StoreLiquidityBalanceAtHeight store liquidity balance at specified height
-func StoreLiquidityBalanceAtHeight(exchange string, height uint64) {
-	accounts := mongodb.FindAllAccounts(exchange)
-	if len(accounts) == 0 {
+func distLeftValue(finStatMap map[common.Address]*mongodb.AccountStat, leftValue *big.Int) {
+	if leftValue.Sign() <= 0 {
 		return
 	}
-
-	exchangeAddr := common.HexToAddress(exchange)
-
-	blockNumber := new(big.Int).SetUint64(height)
-	totalLiquid := big.NewInt(0)
-	for _, account := range accounts {
-		var value *big.Int
-		accoutStr := strings.ToLower(account.String())
-		liquid, err := mongodb.FindLiquidityBalance(exchange, accoutStr, height)
-		if err == nil {
-			value, _ = tools.GetBigIntFromString(liquid)
+	stats := mongodb.ConvertToSortedSlice(finStatMap)
+	numAccounts := big.NewInt(int64(len(stats)))
+	avg := new(big.Int).Div(leftValue, numAccounts)
+	mod := new(big.Int).Mod(leftValue, numAccounts).Uint64()
+	for i, stat := range stats {
+		share := stat.Share
+		if avg.Sign() > 0 {
+			share.Add(share, avg)
 		}
-		for value == nil {
-			value, err = capi.GetLiquidityBalance(exchangeAddr, account, blockNumber)
-			if err != nil {
-				log.Warn("[store] GetLiquidityBalance error", "err", err)
-				time.Sleep(time.Second)
-				continue
-			}
+		if uint64(i) < mod {
+			share.Add(share, big.NewInt(1))
 		}
-		mliq := &mongodb.MgoLiquidityBalance{
-			Key:         mongodb.GetKeyOfLiquidityBalance(exchange, accoutStr, height),
-			Exchange:    strings.ToLower(exchange),
-			Pairs:       params.GetExchangePairs(exchange),
-			Account:     accoutStr,
-			BlockNumber: height,
-			Liquidity:   value.String(),
-		}
-		_ = mongodb.TryDoTimes("AddLiquidityBalance "+mliq.Key, func() error {
-			return mongodb.AddLiquidityBalance(mliq)
-		})
-		totalLiquid.Add(totalLiquid, value)
-	}
-	err := verifyTotalLiquidity(exchangeAddr, blockNumber, totalLiquid, true)
-	if err != nil {
-		log.Warn("[store] verify total liquidity equal failed", "err", err)
-	}
-}
-
-func verifyTotalLiquidity(exchangeAddr common.Address, blockNumber, totalLiquid *big.Int, strict bool) error {
-	for {
-		totalSupply, err := capi.GetExchangeLiquidity(exchangeAddr, blockNumber)
-		if err != nil {
-			log.Warn("[byliquid] GetExchangeLiquidity error", "exchange", exchangeAddr.String(), "blockNumber", blockNumber, "err", err)
-			time.Sleep(time.Second)
-			continue
-		}
-		if totalLiquid.Cmp(totalSupply) == 0 {
-			log.Info("[byliquid] account list is complete", "height", blockNumber, "totalsupply", totalSupply)
-			return nil
-		}
-		if strict {
-			return fmt.Errorf("[byliquid] account list is not complete. height=%v totalsupply=%v totalLiquid=%v", blockNumber, totalSupply, totalLiquid)
-		}
-		return nil
 	}
 }
 

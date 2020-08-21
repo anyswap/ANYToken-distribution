@@ -57,35 +57,6 @@ func (c *APICaller) CloseClient() {
 	}
 }
 
-// LoopGetBlockHeader loop get block header
-func (c *APICaller) LoopGetBlockHeader(blockNumber *big.Int) *types.Header {
-	for {
-		header, err := c.client.HeaderByNumber(c.context, blockNumber)
-		if err == nil {
-			return header
-		}
-		log.Error("[callapi] get block header failed.", "blockNumber", blockNumber, "err", err)
-		time.Sleep(c.rpcRetryInterval)
-	}
-}
-
-// LoopGetLatestBlockHeader loop get latest block header
-func (c *APICaller) LoopGetLatestBlockHeader() *types.Header {
-	for {
-		header, err := c.client.HeaderByNumber(c.context, nil)
-		if err == nil {
-			log.Info("[callapi] get latest block header succeed.",
-				"number", header.Number,
-				"hash", header.Hash().String(),
-				"timestamp", header.Time,
-			)
-			return header
-		}
-		log.Error("[callapi] get latest block header failed.", "err", err)
-		time.Sleep(c.rpcRetryInterval)
-	}
-}
-
 // GetCoinBalance get coin balance
 func (c *APICaller) GetCoinBalance(account common.Address, blockNumber *big.Int) (balance *big.Int, err error) {
 	for i := 0; i < c.rpcRetryCount; i++ {
@@ -103,6 +74,11 @@ func (c *APICaller) GetCoinBalance(account common.Address, blockNumber *big.Int)
 
 // GetExchangeLiquidity get exchange liquidity
 func (c *APICaller) GetExchangeLiquidity(exchange common.Address, blockNumber *big.Int) (*big.Int, error) {
+	return c.GetTokenTotalSupply(exchange, blockNumber)
+}
+
+// GetTokenTotalSupply get token total spply
+func (c *APICaller) GetTokenTotalSupply(token common.Address, blockNumber *big.Int) (*big.Int, error) {
 	var (
 		res []byte
 		err error
@@ -110,7 +86,7 @@ func (c *APICaller) GetExchangeLiquidity(exchange common.Address, blockNumber *b
 		totalSupplyFuncHash = common.FromHex("0x18160ddd")
 	)
 	msg := ethereum.CallMsg{
-		To:   &exchange,
+		To:   &token,
 		Data: totalSupplyFuncHash,
 	}
 	for i := 0; i < c.rpcRetryCount; i++ {
@@ -120,7 +96,7 @@ func (c *APICaller) GetExchangeLiquidity(exchange common.Address, blockNumber *b
 		}
 	}
 	if err != nil {
-		log.Warn("[callapi] GetExchangeLiquidity error", "exchange", exchange.String(), "blockNumber", blockNumber, "err", err)
+		log.Warn("[callapi] GetTokenTotalSupply error", "token", token.String(), "blockNumber", blockNumber, "err", err)
 		return nil, err
 	}
 	return common.GetBigInt(res, 0, 32), nil

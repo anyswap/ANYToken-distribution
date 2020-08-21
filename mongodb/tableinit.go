@@ -12,6 +12,7 @@ var (
 	collectionVolume             *mgo.Collection
 	collectionVolumeHistory      *mgo.Collection
 	collectionAccount            *mgo.Collection
+	collectionTokenAccount       *mgo.Collection
 	collectionLiquidityBalance   *mgo.Collection
 	collectionDistributeInfo     *mgo.Collection
 	collectionVolumeRewardResult *mgo.Collection
@@ -27,6 +28,7 @@ func deinintCollections() {
 	collectionVolume = database.C(tbVolume)
 	collectionVolumeHistory = database.C(tbVolumeHistory)
 	collectionAccount = database.C(tbAccounts)
+	collectionTokenAccount = database.C(tbTokenAccounts)
 	collectionLiquidityBalance = database.C(tbLiquidityBalance)
 	collectionDistributeInfo = database.C(tbDistributeInfo)
 	collectionVolumeRewardResult = database.C(tbVolumeRewardResult)
@@ -41,6 +43,7 @@ func initCollections() {
 	initCollection(tbVolume, &collectionVolume, "exchange", "timestamp")
 	initCollection(tbVolumeHistory, &collectionVolumeHistory, "exchange", "account", "blockNumber")
 	initCollection(tbAccounts, &collectionAccount, "exchange")
+	initCollection(tbTokenAccounts, &collectionTokenAccount, "token")
 	initCollection(tbLiquidityBalance, &collectionLiquidityBalance, "exchange", "account", "blockNumber")
 	initCollection(tbDistributeInfo, &collectionDistributeInfo, "exchange", "bywhat")
 	initCollection(tbVolumeRewardResult, &collectionVolumeRewardResult, "exchange", "start")

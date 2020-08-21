@@ -119,6 +119,16 @@ func GetExchangePairs(exchange string) string {
 	return ""
 }
 
+// GetExchangeToken get exchane token from config
+func GetExchangeToken(exchange string) string {
+	for _, ex := range config.Exchanges {
+		if strings.EqualFold(ex.Exchange, exchange) {
+			return ex.Token
+		}
+	}
+	return ""
+}
+
 // GetTokenAddress get token address from config
 func GetTokenAddress(exchange string) string {
 	for _, ex := range config.Exchanges {

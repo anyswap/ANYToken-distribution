@@ -91,6 +91,8 @@ func addExchangeReceipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int,
 		log.Info("[parse] add liquidity", "exchange", exReceipt.Exchange, "pairs", exReceipt.Pairs, "address", exReceipt.Address, "fromAmount", exReceipt.TokenFromAmount, "toAmount", exReceipt.TokenToAmount)
 	case topicRemoveLiquidity:
 		log.Info("[parse] remove liquidity", "exchange", exReceipt.Exchange, "pairs", exReceipt.Pairs, "address", exReceipt.Address, "fromAmount", exReceipt.TokenFromAmount, "toAmount", exReceipt.TokenToAmount)
+	case topicTokenPurchase:
+		recordTokenAccounts(params.GetExchangeToken(exchange), exReceipt.Address)
 	}
 
 	mt.ExchangeReceipts = append(mt.ExchangeReceipts, exReceipt)
@@ -124,6 +126,8 @@ func addErc20Receipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, lo
 
 	mt.Erc20Receipts = append(mt.Erc20Receipts, erc20Receipt)
 	log.Debug("addErc20Receipt", "receipt", erc20Receipt)
+
+	recordTokenAccounts(erc20Address, erc20Receipt.To)
 	return true
 }
 
@@ -136,6 +140,17 @@ func recordAccounts(exchange, pairs, account string) {
 	}
 	_ = mongodb.TryDoTimes("AddAccount "+ma.Key, func() error {
 		return mongodb.AddAccount(ma)
+	})
+}
+
+func recordTokenAccounts(token, account string) {
+	ma := &mongodb.MgoTokenAccount{
+		Key:     mongodb.GetKeyOfTokenAndAccount(token, account),
+		Token:   strings.ToLower(token),
+		Account: strings.ToLower(account),
+	}
+	_ = mongodb.TryDoTimes("AddTokenAccount "+ma.Key, func() error {
+		return mongodb.AddTokenAccount(ma)
 	})
 }
 

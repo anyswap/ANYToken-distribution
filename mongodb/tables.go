@@ -15,6 +15,7 @@ const (
 	tbVolume             string = "Volume"
 	tbVolumeHistory      string = "VolumeHistory"
 	tbAccounts           string = "Accounts"
+	tbTokenAccounts      string = "TokenAccounts"
 	tbLiquidityBalance   string = "LiquidityBalances"
 	tbDistributeInfo     string = "DistributeInfo"
 	tbVolumeRewardResult string = "VolumeRewardResult"
@@ -121,6 +122,13 @@ type MgoAccount struct {
 	Account  string `bson:"account"`
 }
 
+// MgoTokenAccount token account
+type MgoTokenAccount struct {
+	Key     string `bson:"_id"` // token + account
+	Token   string `bson:"token"`
+	Account string `bson:"account"`
+}
+
 // MgoLiquidityBalance liquidity balance
 type MgoLiquidityBalance struct {
 	Key         string `bson:"_id"` // exchange + account + blockNumber
@@ -200,6 +208,11 @@ func GetKeyOfRewardResult(exchange, account string, start uint64) string {
 // GetKeyOfExchangeAndAccount get key
 func GetKeyOfExchangeAndAccount(exchange, account string) string {
 	return strings.ToLower(fmt.Sprintf("%s:%s", exchange, account))
+}
+
+// GetKeyOfTokenAndAccount get key
+func GetKeyOfTokenAndAccount(token, account string) string {
+	return strings.ToLower(fmt.Sprintf("%s:%s", token, account))
 }
 
 // GetKeyOfExchangeAndTimestamp get key

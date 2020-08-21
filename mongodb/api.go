@@ -119,6 +119,20 @@ func AddAccount(ma *MgoAccount) error {
 	return err
 }
 
+// AddTokenAccount add token account
+func AddTokenAccount(ma *MgoTokenAccount) error {
+	err := collectionTokenAccount.Insert(ma)
+	switch {
+	case err == nil:
+		log.Info("[mongodb] AddTokenAccount success", "account", ma)
+	case mgo.IsDup(err):
+		return nil
+	default:
+		log.Warn("[mongodb] AddTokenAccount failed", "account", ma, "err", err)
+	}
+	return err
+}
+
 // AddLiquidityBalance add liquidity balance
 func AddLiquidityBalance(ma *MgoLiquidityBalance) error {
 	err := collectionLiquidityBalance.Insert(ma)
@@ -361,6 +375,16 @@ func FindVolume(key string) (*MgoVolume, error) {
 func FindAllAccounts(exchange string) (accounts []common.Address) {
 	iter := collectionAccount.Find(bson.M{"exchange": strings.ToLower(exchange)}).Iter()
 	var result MgoAccount
+	for iter.Next(&result) {
+		accounts = append(accounts, common.HexToAddress(result.Account))
+	}
+	return accounts
+}
+
+// FindAllTokenAccounts find accounts
+func FindAllTokenAccounts(token string) (accounts []common.Address) {
+	iter := collectionTokenAccount.Find(bson.M{"token": strings.ToLower(token)}).Iter()
+	var result MgoTokenAccount
 	for iter.Next(&result) {
 		accounts = append(accounts, common.HexToAddress(result.Account))
 	}

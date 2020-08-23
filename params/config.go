@@ -19,7 +19,7 @@ type Config struct {
 	MongoDB    *MongoDBConfig
 	Gateway    *GatewayConfig
 	Sync       *SyncConfig
-	Distribute []*DistributeConfig
+	Distribute *DistributeConfig
 	Exchanges  []*ExchangeConfig
 }
 
@@ -61,6 +61,7 @@ type ExchangeConfig struct {
 	Exchange       string
 	Token          string
 	CreationHeight uint64
+	LiquidWeight   uint64
 }
 
 // DistributeConfig distribute config
@@ -68,7 +69,6 @@ type DistributeConfig struct {
 	Enable       bool
 	DryRun       bool
 	SaveDB       bool
-	Exchange     string
 	RewardToken  string
 	StartHeight  uint64
 	StableHeight uint64

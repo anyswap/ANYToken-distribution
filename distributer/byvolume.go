@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/anyswap/ANYToken-distribution/log"
+	"github.com/anyswap/ANYToken-distribution/mongodb"
 )
 
 // ByVolume distribute rewards by vloume
@@ -25,13 +26,15 @@ func ByVolume(opt *Option) error {
 		log.Error("[byvolume] GetAccountsAndRewards error", "err", err)
 		return errGetAccountsRewardsFailed
 	}
-	if len(accountStats) == 0 {
-		log.Warn("[byvolume] no accounts. " + opt.String())
-		return errNoAccountSatisfied
+	if len(accountStats) != len(opt.Exchanges) {
+		log.Warn("[byvolume] account list is not complete. " + opt.String())
+		return errAccountsNotComplete
 	}
+	totalReward := opt.TotalValue
 	if opt.noVolumes > 0 && opt.StepReward.Sign() > 0 {
 		subReward := new(big.Int).Mul(opt.StepReward, new(big.Int).SetUint64(opt.noVolumes))
-		opt.TotalValue.Sub(opt.TotalValue, subReward)
+		totalReward.Sub(totalReward, subReward)
 	}
+	mongodb.CalcWeightedRewards(accountStats, totalReward, nil)
 	return opt.dispatchRewards(accountStats)
 }

@@ -44,21 +44,31 @@ func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, error) {
 		}
 	}
 
+	weights := ctx.Int64Slice(utils.WeightSliceFlag.Name)
+	liquidWeights := make([]uint64, len(weights))
+	for i, w := range weights {
+		if w < 0 {
+			return nil, fmt.Errorf("non positive weight %v", w)
+		}
+		liquidWeights[i] = uint64(w)
+	}
+
 	opt := &distributer.Option{
-		BuildTxArgs:  args,
-		RewardToken:  ctx.String(utils.RewardTokenFlag.Name),
-		TotalValue:   rewards,
-		StartHeight:  ctx.Uint64(utils.StartHeightFlag.Name),
-		EndHeight:    ctx.Uint64(utils.EndHeightFlag.Name),
-		StableHeight: ctx.Uint64(utils.StableHeightFlag.Name),
-		StepCount:    stepCount,
-		StepReward:   stepReward,
-		Exchange:     ctx.String(utils.ExchangeFlag.Name),
-		InputFile:    getInputFile(ctx),
-		OutputFile:   ctx.String(utils.OutputFileFlag.Name),
-		Heights:      sampleHeights,
-		SaveDB:       ctx.Bool(utils.SaveDBFlag.Name),
-		DryRun:       ctx.Bool(utils.DryRunFlag.Name),
+		BuildTxArgs:   args,
+		RewardToken:   ctx.String(utils.RewardTokenFlag.Name),
+		TotalValue:    rewards,
+		StartHeight:   ctx.Uint64(utils.StartHeightFlag.Name),
+		EndHeight:     ctx.Uint64(utils.EndHeightFlag.Name),
+		StableHeight:  ctx.Uint64(utils.StableHeightFlag.Name),
+		StepCount:     stepCount,
+		StepReward:    stepReward,
+		Exchanges:     ctx.StringSlice(utils.ExchangeSliceFlag.Name),
+		LiquidWeights: liquidWeights,
+		InputFiles:    ctx.StringSlice(utils.InputFileSliceFlag.Name),
+		OutputFiles:   ctx.StringSlice(utils.OutputFileSliceFlag.Name),
+		Heights:       sampleHeights,
+		SaveDB:        ctx.Bool(utils.SaveDBFlag.Name),
+		DryRun:        ctx.Bool(utils.DryRunFlag.Name),
 	}
 
 	if ctx.IsSet(utils.RewardTyepFlag.Name) {
@@ -142,17 +152,4 @@ func getBuildTxArgs(ctx *cli.Context) (*distributer.BuildTxArgs, error) {
 	}
 
 	return args, nil
-}
-
-func getInputFile(ctx *cli.Context) string {
-	var inputFile string
-	switch {
-	case ctx.IsSet(utils.AccountsFileFlag.Name):
-		inputFile = ctx.String(utils.AccountsFileFlag.Name)
-	case ctx.IsSet(utils.VolumesFileFlag.Name):
-		inputFile = ctx.String(utils.VolumesFileFlag.Name)
-	case ctx.IsSet(utils.InputFileFlag.Name):
-		inputFile = ctx.String(utils.InputFileFlag.Name)
-	}
-	return inputFile
 }

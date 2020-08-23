@@ -141,25 +141,35 @@ var (
 		Name:  "exchange",
 		Usage: "exchange address",
 	}
-	// AccountsFileFlag --accounts
-	AccountsFileFlag = &cli.StringFlag{
-		Name:  "accounts",
-		Usage: "accounts file (line format: <address>), read from database if not specified",
+	// ExchangeSliceFlag --exchange
+	ExchangeSliceFlag = &cli.StringSliceFlag{
+		Name:  "exchange",
+		Usage: "exchange address slice",
 	}
-	// VolumesFileFlag --volumes
-	VolumesFileFlag = &cli.StringFlag{
-		Name:  "volumes",
-		Usage: "volumes file (line format: <address> <volume>), read from database if not specified",
+	// WeightSliceFlag --weight
+	WeightSliceFlag = &cli.Int64SliceFlag{
+		Name:  "weight",
+		Usage: "weight slice",
 	}
 	// InputFileFlag --input
 	InputFileFlag = &cli.StringFlag{
 		Name:  "input",
 		Usage: "input file",
 	}
+	// InputFileSliceFlag --input
+	InputFileSliceFlag = &cli.StringSliceFlag{
+		Name:  "input",
+		Usage: "input file slice",
+	}
 	// OutputFileFlag --output
 	OutputFileFlag = &cli.StringFlag{
 		Name:  "output",
-		Usage: "output file of result",
+		Usage: "output file",
+	}
+	// OutputFileSliceFlag --output
+	OutputFileSliceFlag = &cli.StringSliceFlag{
+		Name:  "output",
+		Usage: "output file slice",
 	}
 	// DryRunFlag --dryrun
 	DryRunFlag = &cli.BoolFlag{
@@ -174,12 +184,12 @@ var (
 	// SenderFlag --sender
 	SenderFlag = &cli.StringFlag{
 		Name:  "sender",
-		Usage: "specify transaction's sender",
+		Usage: "transaction sender",
 	}
 	// SaveDBFlag --savedb
 	SaveDBFlag = &cli.BoolFlag{
 		Name:  "savedb",
-		Usage: "save result to database",
+		Usage: "save to database",
 	}
 	// HeightsFlag --heights
 	HeightsFlag = &cli.StringFlag{

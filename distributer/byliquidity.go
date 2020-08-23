@@ -32,44 +32,54 @@ func ByLiquidity(opt *Option) error {
 		log.Error("[byliquid] get accounts error", "err", err)
 		return errGetAccountListFailed
 	}
-	if len(accounts) == 0 {
-		log.Warn("[byliquid] no accounts. " + opt.String())
-		return errNoAccountSatisfied
-	}
 	accountStats := opt.getLiquidityBalances(accounts)
-	if len(accountStats) == 0 {
-		log.Warn("[byliquid] no account satisfied. " + opt.String())
-		return errNoAccountSatisfied
+	if len(accountStats) != len(opt.Exchanges) {
+		log.Warn("[byliquid] account list is not complete. " + opt.String())
+		return errAccountsNotComplete
 	}
-	accountStats.CalcRewards(opt.TotalValue)
+	mongodb.CalcWeightedRewards(accountStats, opt.TotalValue, opt.LiquidWeights)
 	return opt.dispatchRewards(accountStats)
 }
 
-func (opt *Option) getLiquidityBalances(accounts []common.Address) (accountStats mongodb.AccountStatSlice) {
+func (opt *Option) getLiquidityBalances(accounts [][]common.Address) (accountStats []mongodb.AccountStatSlice) {
 	if len(opt.Heights) == 0 {
 		opt.calcSampleHeights()
 	}
-	_ = opt.WriteLiquiditySubject(opt.Exchange, opt.StartHeight, opt.EndHeight, len(accounts))
-	accountStats = opt.updateLiquidityBalance(accounts)
-	totalLiquids := accountStats.CalcTotalShare()
-	_ = opt.WriteLiquiditySummary(opt.Exchange, opt.StartHeight, opt.EndHeight, len(accountStats), totalLiquids, opt.TotalValue)
-	for _, stat := range accountStats {
-		_ = opt.WriteLiquidityBalance(stat.Account, stat.Share, stat.Number)
+	accountStats = opt.updateLiquidityBalances(accounts)
+	return accountStats
+}
+
+func (opt *Option) updateLiquidityBalances(accountsSlice [][]common.Address) (accountStats []mongodb.AccountStatSlice) {
+	accountStats = make([]mongodb.AccountStatSlice, len(opt.Exchanges))
+	for i, exchange := range opt.Exchanges {
+		accounts := accountsSlice[i]
+		WriteLiquiditySubject(exchange, opt.StartHeight, opt.EndHeight, len(accounts))
+		stats, complete := opt.updateLiquidityBalance(exchange, accounts)
+		if !complete {
+			log.Error("[byliquid] account list is not complete", "exchange", exchange)
+			break
+		}
+		totalLiquids := stats.CalcTotalShare()
+		WriteLiquiditySummary(exchange, opt.StartHeight, opt.EndHeight, len(stats), totalLiquids, opt.TotalValue)
+		for _, stat := range stats {
+			WriteLiquidityBalance(stat.Account, stat.Share, stat.Number)
+		}
+		accountStats[i] = stats
 	}
 	return accountStats
 }
 
-func (opt *Option) updateLiquidityBalance(accounts []common.Address) (accountStats mongodb.AccountStatSlice) {
-	exchange := opt.Exchange
+func (opt *Option) updateLiquidityBalance(exchange string, accounts []common.Address) (accountStats mongodb.AccountStatSlice, complete bool) {
 	exchangeAddr := common.HexToAddress(exchange)
 
 	finStatMap := make(map[common.Address]*mongodb.AccountStat)
 
 	// pick smpale blocks to query liquidity balance, and keep the minimumn
-	for i, height := range opt.Heights {
+	for _, height := range opt.Heights {
 		blockNumber := new(big.Int).SetUint64(height)
 		totalSupply := capi.LoopGetExchangeLiquidity(exchangeAddr, blockNumber)
 		exCoinBalance := capi.LoopGetCoinBalance(exchangeAddr, blockNumber)
+		log.Info("get exchange liquidity and coin balance", "totalSupply", totalSupply, "exCoinBalance", exCoinBalance, "blockNumber", blockNumber)
 		totalLiquid := big.NewInt(0)
 		totalCoinBalance := big.NewInt(0)
 		for _, account := range accounts {
@@ -93,7 +103,7 @@ func (opt *Option) updateLiquidityBalance(accounts []common.Address) (accountSta
 			coinBalance := new(big.Int).Mul(value, exCoinBalance)
 			coinBalance.Div(coinBalance, totalSupply)
 			totalCoinBalance.Add(totalCoinBalance, coinBalance)
-			_ = opt.WriteLiquidityBalance(account, value, height)
+			WriteLiquidityBalance(account, value, height)
 			mliq := &mongodb.MgoLiquidityBalance{
 				Key:         mongodb.GetKeyOfLiquidityBalance(exchange, accoutStr, height),
 				Exchange:    strings.ToLower(exchange),
@@ -120,7 +130,8 @@ func (opt *Option) updateLiquidityBalance(accounts []common.Address) (accountSta
 		}
 		if totalLiquid.Cmp(totalSupply) == 0 {
 			log.Info("[byliquid] account list is complete", "exchange", exchange, "height", blockNumber, "totalsupply", totalSupply)
-		} else if i == 0 {
+			complete = true
+		} else if !complete {
 			log.Warn("[byliquid] account list is not complete", "exchange", exchange, "height", blockNumber, "totalsupply", totalSupply, "totalLiquid", totalLiquid)
 			time.Sleep(time.Second)
 		}
@@ -128,7 +139,7 @@ func (opt *Option) updateLiquidityBalance(accounts []common.Address) (accountSta
 		distLeftValue(finStatMap, leftValue)
 	}
 
-	return mongodb.ConvertToSortedSlice(finStatMap)
+	return mongodb.ConvertToSortedSlice(finStatMap), complete
 }
 
 func distLeftValue(finStatMap map[common.Address]*mongodb.AccountStat, leftValue *big.Int) {

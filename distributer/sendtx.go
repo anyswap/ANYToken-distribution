@@ -180,92 +180,63 @@ func (args *BuildTxArgs) sendRewardsTransaction(account common.Address, reward *
 	return txHash, nil
 }
 
-func addTxHashFieldToTitleLine(titleLine string) string {
-	parts := blankOrCommaSepRegexp.Split(titleLine, -1)
-	if len(parts) <= 1 {
-		return titleLine + ",txhash"
-	}
-	lastPart := parts[len(parts)-1] // extra info
-	result := strings.Join(parts[0:len(parts)-1], ",")
-	result += ",txhash,"
-	result += lastPart
-	return result
-}
-
-func (opt *Option) checkTitleLine(titleLine string) (err error) {
-	if !isCommentedLine(titleLine) {
-		return fmt.Errorf("title line '%v' is not comment line", titleLine)
-	}
-	titleParts := blankOrCommaSepRegexp.Split(titleLine, -1)
-	if len(titleParts) < 5 {
-		return fmt.Errorf("title line parts is less than 5. %v", titleLine)
-	}
-	methodID := titleParts[2]
-	if opt.byWhat == "" {
-		err = opt.SetByWhat(methodID)
-		if err != nil {
-			return err
-		}
-	} else if opt.byWhat != GetStandardByWhat(methodID) {
-		return fmt.Errorf("byWhat mismatch. from arg %v, from file %v", opt.byWhat, methodID)
-	}
-	return nil
-}
-
-func (opt *Option) checkSendRewardsFromFile() (mongodb.AccountStatSlice, bool, error) {
-	if opt.InputFile == "" {
-		return nil, false, fmt.Errorf("must specify input file")
-	}
-	accountStats, titleLine, err := opt.GetAccountsAndRewardsFromFile()
+func (opt *Option) checkSendRewardsFromFile(ifile string) (mongodb.AccountStatSlice, error) {
+	accountStats, _, err := GetAccountsAndRewardsFromFile(ifile)
 	if err != nil {
-		log.Error("[sendRewards] get accounts and rewards from input file failed", "inputfile", opt.InputFile, "err", err)
-		return nil, false, err
+		log.Error("[sendRewards] get accounts and rewards from input file failed", "inputfile", ifile, "err", err)
+		return nil, err
 	}
 	if len(accountStats) == 0 {
 		log.Warn("empty account list, no need to send reward")
-		return nil, false, nil
-	}
-
-	err = opt.checkTitleLine(titleLine)
-	if err != nil {
-		log.Error("check title line failed", "titleLine", titleLine, "err", err)
-		return nil, false, err
+		return nil, nil
 	}
 
 	// assign total value before check balance
 	opt.TotalValue = accountStats.CalcTotalReward()
 	err = opt.CheckSenderRewardTokenBalance()
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
 	err = opt.CheckBasic()
 	canSaveDB := err == nil
 	if !canSaveDB && opt.SaveDB {
-		return nil, false, fmt.Errorf("can not savedb as error %v", err)
+		return nil, fmt.Errorf("can not savedb as error %v", err)
 	}
 
-	// write title
-	switch {
-	case opt.DryRun:
-		_ = opt.WriteOutput(titleLine)
-	case canSaveDB:
-		_ = opt.WriteOutput(addTxHashFieldToTitleLine(titleLine))
-	default:
-		_ = opt.WriteOutput("#account,reward,txhash")
-	}
-
-	return accountStats, canSaveDB, nil
+	return accountStats, nil
 }
 
 // SendRewardsFromFile send rewards from file
 func (opt *Option) SendRewardsFromFile() error {
-	accountStats, canSaveDB, err := opt.checkSendRewardsFromFile()
+	if len(opt.InputFiles) != len(opt.Exchanges) {
+		return fmt.Errorf("count of exchanges and input files is not equal")
+	}
+	if len(opt.OutputFiles) != len(opt.Exchanges) {
+		return fmt.Errorf("count of exchanges and output files is not equal")
+	}
+
+	for i, exchange := range opt.Exchanges {
+		err := opt.sendRewardsFromFile(exchange, opt.InputFiles[i], opt.OutputFiles[i])
+		if err != nil {
+			log.Error("send reward from file failed", "exchange", exchange, "index", i, "input", opt.InputFiles[i], "output", opt.OutputFiles[i], "err", err)
+			return err
+		}
+	}
+	return nil
+}
+
+func (opt *Option) sendRewardsFromFile(exchange, ifile, ofile string) error {
+	accountStats, err := opt.checkSendRewardsFromFile(ifile)
+	if err != nil {
+		return err
+	}
+	outputFile, err := openOutputFile(ofile)
 	if err != nil {
 		return err
 	}
 
-	log.Info("call SendRewardsFromFile", "option", opt)
+	log.Info("call send rewards from file", "input", ifile, "output", ofile)
 	defer opt.deinit()
 
 	rewardsSended := big.NewInt(0)
@@ -284,11 +255,7 @@ func (opt *Option) SendRewardsFromFile() error {
 		}
 		rewardsSended.Add(rewardsSended, reward)
 		// write body
-		if opt.DryRun || canSaveDB {
-			_ = opt.WriteSendRewardResult(stat, txHash)
-		} else {
-			_ = opt.WriteSendRewardFromFileResult(account, reward, txHash)
-		}
+		_ = opt.WriteSendRewardResult(outputFile, exchange, stat, txHash)
 	}
 
 	log.Info("[sendRewards] rewards sended", "totalRewards", opt.TotalValue, "rewardsSended", rewardsSended, "allRewardsSended", rewardsSended.Cmp(opt.TotalValue) == 0)

@@ -9,8 +9,6 @@ import (
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 )
 
-var maxDistributeStableHeight uint64
-
 // CheckConfig check config
 func CheckConfig() (err error) {
 	switch {
@@ -35,12 +33,6 @@ func CheckConfig() (err error) {
 	if err != nil {
 		return err
 	}
-	// for security reason, if has distribute job, then
-	// must sync with at least the distribute job's stable height
-	// to prevent blockchain short forks
-	if maxDistributeStableHeight > config.Sync.Stable {
-		config.Sync.Stable = maxDistributeStableHeight
-	}
 	return nil
 }
 
@@ -54,13 +46,12 @@ func checkExchangeConfig() error {
 }
 
 func checkDistributeConfig() error {
-	for _, dist := range config.Distribute {
-		if !dist.Enable {
-			continue
-		}
-		if err := dist.check(); err != nil {
-			return err
-		}
+	dist := config.Distribute
+	if !dist.Enable {
+		return nil
+	}
+	if err := dist.check(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -91,21 +82,19 @@ func (dist *DistributeConfig) check() error {
 	if err := dist.checkCycle(); err != nil {
 		return err
 	}
-	if dist.StableHeight > maxDistributeStableHeight {
-		maxDistributeStableHeight = dist.StableHeight
+	// for security reason, if has distribute job, then
+	// must sync with at least the distribute job's stable height
+	// to prevent blockchain short forks
+	if dist.StableHeight > config.Sync.Stable {
+		config.Sync.Stable = dist.StableHeight
+		dist.StableHeight = 1
 	}
 	return nil
 }
 
 func (dist *DistributeConfig) checkAddress() error {
-	if !common.IsHexAddress(dist.Exchange) {
-		return fmt.Errorf("[check distribute] wrong exchange address %v", dist.Exchange)
-	}
-	if !IsConfigedExchange(dist.Exchange) {
-		return fmt.Errorf("[check distribute] exchange %v is not configed with pairs", dist.Exchange)
-	}
 	if !common.IsHexAddress(dist.RewardToken) {
-		return fmt.Errorf("[check distribute] wrong reward token address %v (exchange %v)", dist.RewardToken, dist.Exchange)
+		return fmt.Errorf("[check distribute] wrong reward token address %v", dist.RewardToken)
 	}
 	return nil
 }
@@ -116,7 +105,7 @@ func (dist *DistributeConfig) checkBigIntStringValue(name, value string) error {
 	}
 	_, err := tools.GetBigIntFromString(value)
 	if err != nil {
-		return fmt.Errorf("[check distribute] wrong %v %v (exchange %v)", name, value, dist.Exchange)
+		return fmt.Errorf("[check distribute] wrong %v %v", name, value)
 	}
 	return nil
 }

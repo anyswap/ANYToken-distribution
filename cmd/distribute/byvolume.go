@@ -25,15 +25,15 @@ distribute rewards by volume
 			utils.StableHeightFlag,
 			utils.StepCountFlag,
 			utils.StepRewardFlag,
-			utils.ExchangeFlag,
-			utils.VolumesFileFlag,
+			utils.ExchangeSliceFlag,
+			utils.InputFileSliceFlag,
+			utils.OutputFileSliceFlag,
 			utils.SenderFlag,
 			utils.KeyStoreFileFlag,
 			utils.PasswordFileFlag,
 			utils.GasLimitFlag,
 			utils.GasPriceFlag,
 			utils.AccountNonceFlag,
-			utils.OutputFileFlag,
 			utils.SaveDBFlag,
 			utils.DryRunFlag,
 		},
@@ -49,7 +49,14 @@ func byVolume(ctx *cli.Context) (err error) {
 		log.Fatalf("get option error: %v", err)
 	}
 
-	if opt.InputFile != "" {
+	missInputFile := false
+	for _, ifile := range opt.InputFiles {
+		if ifile == "" {
+			missInputFile = true
+			break
+		}
+	}
+	if missInputFile {
 		syncer.WaitSyncToLatest()
 	}
 

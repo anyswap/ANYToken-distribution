@@ -89,25 +89,101 @@ func (s AccountStatSlice) CalcTotalReward() *big.Int {
 
 // CalcRewards calc rewards by shares
 func (s AccountStatSlice) CalcRewards(totalReward *big.Int) {
-	totalShare := s.CalcTotalShare()
-	if totalShare.Sign() <= 0 {
+	if len(s) == 0 {
 		return
 	}
+	// if has already calced reward before, use these values to
+	// redispatch rewards when total rewards is changed.
+	hasRewardValue := s[0].Reward != nil
+	totalShareSlice := make([]*big.Int, len(s))
+	for i, stat := range s {
+		if hasRewardValue {
+			totalShareSlice[i] = stat.Reward
+		} else {
+			totalShareSlice[i] = stat.Share
+		}
+	}
+	rewards := DivideRewards(totalReward, totalShareSlice)
+	for i, stat := range s {
+		stat.Reward = rewards[i]
+	}
+}
 
-	sum := big.NewInt(0)
+// SumWeightShares sum weight shares (do not change slice itself)
+func (s AccountStatSlice) SumWeightShares(weight uint64) (totalWeightShare *big.Int) {
+	totalWeightShare = big.NewInt(0)
+	biWeight := new(big.Int).SetUint64(weight)
 	for _, stat := range s {
-		reward := new(big.Int).Mul(totalReward, stat.Share)
-		reward.Div(reward, totalShare)
-		stat.Reward = reward
-		sum.Add(sum, reward)
+		weightShare := new(big.Int).Mul(stat.Share, biWeight)
+		totalWeightShare.Add(totalWeightShare, weightShare)
 	}
-	if sum.Cmp(totalReward) < 0 { // ensure zero rewards left
-		left := new(big.Int).Sub(totalReward, sum)
-		if left.Int64() >= int64(len(s)) {
-			log.Errorf("please check CalcRewards, left rewards %v is not lower than count of acounts %v", left, len(s))
+	return totalWeightShare
+}
+
+// CalcWeightedRewards calc weighted rewards
+func CalcWeightedRewards(stats []AccountStatSlice, totalReward *big.Int, weights []uint64) {
+	if weights != nil && len(weights) != len(stats) {
+		log.Error("calc weighted rewards with not equal number of stats and weights")
+		return
+	}
+	if len(stats) <= 1 {
+		if len(stats) == 1 {
+			stats[0].CalcRewards(totalReward)
 		}
-		for i := int64(0); i < left.Int64(); i++ {
-			s[i].Reward.Add(s[i].Reward, big.NewInt(1))
+		return
+	}
+	weight := uint64(1)
+	totalShareSlice := make([]*big.Int, len(stats))
+	for i, stat := range stats {
+		if weights != nil {
+			weight = weights[i]
+		}
+		totalShareSlice[i] = stat.SumWeightShares(weight)
+	}
+	rewards := DivideRewards(totalReward, totalShareSlice)
+	for i, stat := range stats {
+		stat.CalcRewards(rewards[i])
+	}
+}
+
+// DivideRewards divide rewards
+func DivideRewards(totalReward *big.Int, totalShareSlice []*big.Int) (rewards []*big.Int) {
+	sumTotalShare := big.NewInt(0)
+	for _, share := range totalShareSlice {
+		sumTotalShare.Add(sumTotalShare, share)
+	}
+	if sumTotalShare.Sign() <= 0 {
+		return nil
+	}
+	sumReward := big.NewInt(0)
+	for _, share := range totalShareSlice {
+		reward := new(big.Int).Mul(totalReward, share)
+		reward.Div(reward, sumTotalShare)
+		sumReward.Add(sumReward, reward)
+		rewards = append(rewards, reward)
+	}
+	if sumReward.Cmp(totalReward) < 0 {
+		left := new(big.Int).Sub(totalReward, sumReward)
+		count := big.NewInt(int64(len(rewards)))
+		avg := new(big.Int).Div(left, count)
+		mod := new(big.Int).Mod(left, count).Uint64()
+		for i, reward := range rewards {
+			if avg.Sign() > 0 {
+				reward.Add(reward, avg)
+			}
+			if uint64(i) < mod {
+				reward.Add(reward, big.NewInt(1))
+			}
 		}
 	}
+
+	// verify sum
+	sumReward = big.NewInt(0)
+	for _, reward := range rewards {
+		sumReward.Add(sumReward, reward)
+	}
+	if sumReward.Cmp(totalReward) != 0 {
+		log.Error("call DivideRewards verify sum failed", "sumReward", sumReward, "totalReward", totalReward)
+	}
+	return rewards
 }

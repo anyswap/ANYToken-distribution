@@ -20,24 +20,29 @@ const sampleCount = 1
 
 // Option distribute options
 type Option struct {
-	BuildTxArgs  *BuildTxArgs
-	TotalValue   *big.Int
-	StartHeight  uint64 // start inclusive
-	EndHeight    uint64 // end exclusive
-	StableHeight uint64
-	StepCount    uint64 `json:",omitempty"`
-	StepReward   *big.Int
-	Exchange     string
-	RewardToken  string
-	InputFile    string
-	OutputFile   string
-	Heights      []uint64 `json:",omitempty"`
-	SaveDB       bool
-	DryRun       bool
+	BuildTxArgs   *BuildTxArgs
+	TotalValue    *big.Int
+	StartHeight   uint64 // start inclusive
+	EndHeight     uint64 // end exclusive
+	StableHeight  uint64
+	StepCount     uint64 `json:",omitempty"`
+	StepReward    *big.Int
+	Exchanges     []string
+	LiquidWeights []uint64
+	RewardToken   string
+	InputFiles    []string
+	OutputFiles   []string
+	Heights       []uint64 `json:",omitempty"`
+	SaveDB        bool
+	DryRun        bool
 
-	byWhat     string
-	outputFile *os.File
-	noVolumes  uint64
+	byWhat    string
+	noVolumes uint64
+
+	hasNoMissingVolumes  bool
+	noVolumeStartHeights []uint64
+
+	outputFiles []*os.File
 }
 
 // ByWhat distribute by what method
@@ -82,17 +87,22 @@ func (opt *Option) GetChainID() *big.Int {
 
 func (opt *Option) String() string {
 	return fmt.Sprintf("%v TotalValue %v StartHeight %v EndHeight %v StableHeight %v"+
-		" StepCount %v StepReward %v Heights %v Exchange %v RewardToken %v DryRun %v SaveDB %v Sender %v ChainID %v",
+		" StepCount %v StepReward %v Heights %v Exchanges %v LiquidWeights %v"+
+		" RewardToken %v DryRun %v SaveDB %v Sender %v ChainID %v",
 		opt.byWhat, opt.TotalValue, opt.StartHeight, opt.EndHeight, opt.StableHeight,
-		opt.StepCount, opt.StepReward, opt.Heights, opt.Exchange, opt.RewardToken, opt.DryRun, opt.SaveDB,
+		opt.StepCount, opt.StepReward, opt.Heights, opt.Exchanges, opt.LiquidWeights,
+		opt.RewardToken, opt.DryRun, opt.SaveDB,
 		opt.GetSender().String(), opt.GetChainID(),
 	)
 }
 
 func (opt *Option) deinit() {
-	if opt.outputFile != nil {
-		opt.outputFile.Close()
-		opt.outputFile = nil
+	opt.noVolumeStartHeights = nil
+	for _, file := range opt.outputFiles {
+		if file != nil {
+			file.Close()
+			file = nil
+		}
 	}
 }
 
@@ -101,17 +111,37 @@ func (opt *Option) CheckBasic() error {
 	if opt.StartHeight >= opt.EndHeight {
 		return fmt.Errorf("[check option] empty range, start height %v >= end height %v", opt.StartHeight, opt.EndHeight)
 	}
-	if opt.Exchange == "" {
-		return fmt.Errorf("[check option] must specify exchange")
+	if len(opt.Exchanges) == 0 {
+		return fmt.Errorf("[check option] no exchanges")
 	}
-	if (!opt.DryRun || opt.SaveDB) && !params.IsConfigedExchange(opt.Exchange) {
-		return fmt.Errorf("[check option] exchange '%v' is not configed", opt.Exchange)
+	for _, exchange := range opt.Exchanges {
+		if exchange == "" {
+			return fmt.Errorf("[check option] empty exchange")
+		}
+		if (!opt.DryRun || opt.SaveDB) && !params.IsConfigedExchange(exchange) {
+			return fmt.Errorf("[check option] exchange '%v' is not configed", exchange)
+		}
 	}
 	if opt.RewardToken == "" {
-		return fmt.Errorf("[check option] must specify reward token")
+		return fmt.Errorf("[check option] empty reward token")
 	}
 	if !common.IsHexAddress(opt.RewardToken) {
 		return fmt.Errorf("[check option] wrong reward token: '%v'", opt.RewardToken)
+	}
+	return opt.checkWeights()
+}
+
+func (opt *Option) checkWeights() error {
+	if opt.byWhat != byLiquidMethodID {
+		return nil
+	}
+	if len(opt.Exchanges) != len(opt.LiquidWeights) {
+		return fmt.Errorf("[check option] count of exchanges %v != count of weights %v", len(opt.Exchanges), len(opt.LiquidWeights))
+	}
+	for i, weight := range opt.LiquidWeights {
+		if weight == 0 {
+			return fmt.Errorf("[check option] has 0 weight exchange %v", opt.Exchanges[i])
+		}
 	}
 	return nil
 }
@@ -122,14 +152,10 @@ func (opt *Option) checkAndInit() (err error) {
 		if length%opt.StepCount != 0 {
 			return fmt.Errorf("[check option] cycle length %v is not intergral multiple of step %v", length, opt.StepCount)
 		}
-		steps := length / opt.StepCount
-		if new(big.Int).Mod(opt.TotalValue, new(big.Int).SetUint64(steps)).Sign() != 0 {
-			return fmt.Errorf("[check option] total value %v is not intergral multiple of steps %v", opt.TotalValue, steps)
-		}
 		if opt.StepReward == nil {
 			return fmt.Errorf("[check option] StepReward is not specified but with StepCount %v", opt.StepCount)
 		}
-		log.Info("[check option] check step count success", "start", opt.StartHeight, "end", opt.EndHeight, "step", opt.StepCount, "StepReward", opt.StepReward)
+		log.Info("[check option] check step count success", "start", opt.StartHeight, "end", opt.EndHeight, "step", opt.StepCount, "StepReward", opt.StepReward, "totalReward", opt.TotalValue)
 	}
 
 	err = opt.CheckSenderRewardTokenBalance()
@@ -159,21 +185,31 @@ func (opt *Option) CheckStable() error {
 	return nil
 }
 
-func (opt *Option) getDefaultOutputFile() string {
-	pairs := params.GetExchangePairs(opt.Exchange)
+func (opt *Option) getDefaultOutputFile(i int) string {
+	exchange := opt.Exchanges[i]
+	pairs := params.GetExchangePairs(exchange)
 	timestamp := time.Now().Unix()
 	return fmt.Sprintf("%s-%sReward-%d-%d-%d.csv", pairs, opt.byWhat, opt.StartHeight, opt.EndHeight, timestamp)
 }
 
-func (opt *Option) openOutputFile() (err error) {
-	if opt.outputFile != nil {
+func (opt *Option) openOutputFile(i int) (err error) {
+	if i >= len(opt.Exchanges) {
+		return fmt.Errorf("open output file index overflow, index %v >= exchanges %v", i, len(opt.Exchanges))
+	}
+	if i < len(opt.outputFiles) && opt.outputFiles[i] != nil {
 		return nil // already opened
 	}
-	fileName := opt.OutputFile
-	if fileName == "" {
-		fileName = opt.getDefaultOutputFile()
+	if opt.outputFiles == nil {
+		opt.outputFiles = make([]*os.File, len(opt.Exchanges))
 	}
-	opt.outputFile, err = os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	fileName := ""
+	if i < len(opt.OutputFiles) {
+		fileName = opt.OutputFiles[i]
+	}
+	if fileName == "" {
+		fileName = opt.getDefaultOutputFile(i)
+	}
+	opt.outputFiles[i], err = os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		log.Warn("open output file error", "file", fileName, "err", err)
 	} else {
@@ -182,15 +218,13 @@ func (opt *Option) openOutputFile() (err error) {
 	return err
 }
 
+func openOutputFile(fileName string) (io.Writer, error) {
+	return os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+}
+
 // WriteOutputLine write output line, will append '\n' automatically
-func (opt *Option) WriteOutputLine(msg string) error {
-	if opt.outputFile == nil {
-		err := opt.openOutputFile()
-		if err != nil {
-			return err
-		}
-	}
-	_, err := opt.outputFile.Write([]byte(msg + "\n"))
+func WriteOutputLine(ofile io.Writer, msg string) error {
+	_, err := ofile.Write([]byte(msg + "\n"))
 	if err != nil {
 		log.Warn("[write output] error", "msg", msg, "err", err)
 	} else {
@@ -200,47 +234,31 @@ func (opt *Option) WriteOutputLine(msg string) error {
 }
 
 // WriteOutput write output
-func (opt *Option) WriteOutput(contents ...string) error {
+func WriteOutput(ofile io.Writer, contents ...string) error {
 	msg := strings.Join(contents, ",")
-	return opt.WriteOutputLine(msg)
+	return WriteOutputLine(ofile, msg)
 }
 
 // WriteLiquiditySubject write liquidity subject
-func (opt *Option) WriteLiquiditySubject(exchange string, start, end uint64, numAccounts int) error {
+func WriteLiquiditySubject(exchange string, start, end uint64, numAccounts int) {
 	msg := fmt.Sprintf("getLiquidity exchange=%v start=%v end=%v accounts=%v", exchange, start, end, numAccounts)
-	// only log final result //return opt.WriteOutputLine(msg)
 	log.Println(msg)
-	return nil
 }
 
 // WriteLiquiditySummary write liquidity summary
-func (opt *Option) WriteLiquiditySummary(exchange string, start, end uint64, numAccounts int, totalShares, totalRewards *big.Int) error {
+func WriteLiquiditySummary(exchange string, start, end uint64, numAccounts int, totalShares, totalRewards *big.Int) {
 	msg := fmt.Sprintf("getLiquidity exchange=%v start=%v end=%v accounts=%v totalShares=%v totalRewards=%v", exchange, start, end, numAccounts, totalShares, totalRewards)
-	// only log final result //return opt.WriteOutputLine(msg)
 	log.Println(msg)
-	return nil
 }
 
 // WriteLiquidityBalance write liquidity balance
-func (opt *Option) WriteLiquidityBalance(account common.Address, value *big.Int, height uint64) error {
+func WriteLiquidityBalance(account common.Address, value *big.Int, height uint64) {
 	msg := fmt.Sprintf("getLiquidity %v %v height=%v", strings.ToLower(account.Hex()), value, height)
-	// only log final result //return opt.WriteOutputLine(msg)
 	log.Println(msg)
-	return nil
-}
-
-// WriteSendRewardFromFileResult write send reward result
-func (opt *Option) WriteSendRewardFromFileResult(account common.Address, reward *big.Int, txHash *common.Hash) error {
-	accoutStr := strings.ToLower(account.Hex())
-	rewardStr := reward.String()
-	if txHash == nil {
-		return opt.WriteOutput(accoutStr, rewardStr)
-	}
-	return opt.WriteOutput(accoutStr, rewardStr, txHash.Hex())
 }
 
 // WriteSendRewardResult write send reward result
-func (opt *Option) WriteSendRewardResult(stat *mongodb.AccountStat, txHash *common.Hash) (err error) {
+func (opt *Option) WriteSendRewardResult(ofile io.Writer, exchange string, stat *mongodb.AccountStat, txHash *common.Hash) (err error) {
 	account := stat.Account
 	reward := stat.Reward
 	share := stat.Share
@@ -261,27 +279,28 @@ func (opt *Option) WriteSendRewardResult(stat *mongodb.AccountStat, txHash *comm
 	// write output beofre write database
 	if txHash == nil {
 		if share != nil {
-			err = opt.WriteOutput(accoutStr, rewardStr, shareStr, numStr)
+			err = WriteOutput(ofile, accoutStr, rewardStr, shareStr, numStr)
 		} else {
-			err = opt.WriteOutput(accoutStr, rewardStr)
+			err = WriteOutput(ofile, accoutStr, rewardStr)
 		}
 	} else {
 		if share != nil {
-			err = opt.WriteOutput(accoutStr, rewardStr, shareStr, numStr, hashStr)
+			err = WriteOutput(ofile, accoutStr, rewardStr, shareStr, numStr, hashStr)
 		} else {
-			err = opt.WriteOutput(accoutStr, rewardStr, hashStr)
+			err = WriteOutput(ofile, accoutStr, rewardStr, hashStr)
 		}
 	}
 
 	if !opt.DryRun || opt.SaveDB {
-		opt.writeRewardResultToDB(accoutStr, rewardStr, shareStr, number, hashStr)
+		opt.WriteRewardResultToDB(exchange, accoutStr, rewardStr, shareStr, number, hashStr)
 	}
 
 	return err
 }
 
-func (opt *Option) writeRewardResultToDB(accoutStr, rewardStr, shareStr string, number uint64, hashStr string) {
-	exchange := strings.ToLower(opt.Exchange)
+// WriteRewardResultToDB write reward result to database
+func (opt *Option) WriteRewardResultToDB(exchange, accoutStr, rewardStr, shareStr string, number uint64, hashStr string) {
+	exchange = strings.ToLower(exchange)
 	pairs := params.GetExchangePairs(exchange)
 	switch opt.byWhat {
 	case byVolumeMethodID:
@@ -326,19 +345,15 @@ func (opt *Option) writeRewardResultToDB(accoutStr, rewardStr, shareStr string, 
 }
 
 // WriteNoVolumeOutput write output
-func (opt *Option) WriteNoVolumeOutput(exchange string, start, end uint64) error {
+func WriteNoVolumeOutput(exchange string, start, end uint64) {
 	msg := fmt.Sprintf("calcRewards exchange=%s start=%d end=%d novolume", exchange, start, end)
-	// only log final result //return opt.WriteOutputLine(msg)
 	log.Println(msg)
-	return nil
 }
 
 // WriteNoVolumeSummary write no volume summary
-func (opt *Option) WriteNoVolumeSummary() error {
-	msg := fmt.Sprintf("calcRewards exchange=%s start=%d end=%d novolumes=%v", opt.Exchange, opt.StartHeight, opt.EndHeight, opt.noVolumes)
-	// only log final result //return opt.WriteOutputLine(msg)
+func (opt *Option) WriteNoVolumeSummary() {
+	msg := fmt.Sprintf("calcRewards start=%d end=%d novolumes=%v", opt.StartHeight, opt.EndHeight, opt.noVolumes)
 	log.Println(msg)
-	return nil
 }
 
 // SendRewardsTransaction send rewards
@@ -372,15 +387,32 @@ func (opt *Option) CheckSenderRewardTokenBalance() (err error) {
 	return nil
 }
 
-func (opt *Option) getAccounts() (accounts []common.Address, err error) {
-	if opt.InputFile == "" {
-		accounts = mongodb.FindAllAccounts(opt.Exchange)
-		return accounts, nil
+func (opt *Option) getAccounts() (accounts [][]common.Address, err error) {
+	accounts = make([][]common.Address, len(opt.Exchanges))
+	var accs []common.Address
+	for i, exchange := range opt.Exchanges {
+		ifile := opt.getInputFileName(i)
+		if ifile == "" {
+			accs = getAccountsFromDB(exchange)
+		} else {
+			accs, err = getAccountsFromFile(ifile)
+			if err != nil {
+				return nil, err
+			}
+		}
+		accounts[i] = accs
 	}
+	return accounts, nil
+}
 
-	file, err := os.Open(opt.InputFile)
+func getAccountsFromDB(exchange string) []common.Address {
+	return mongodb.FindAllAccounts(exchange)
+}
+
+func getAccountsFromFile(ifile string) (accounts []common.Address, err error) {
+	file, err := os.Open(ifile)
 	if err != nil {
-		return nil, fmt.Errorf("open %v failed. %v)", opt.InputFile, err)
+		return nil, fmt.Errorf("open %v failed. %v)", ifile, err)
 	}
 	defer file.Close()
 
@@ -408,19 +440,64 @@ func (opt *Option) getAccounts() (accounts []common.Address, err error) {
 	return accounts, nil
 }
 
-// GetAccountsAndRewards get from file if input file exist, or else from database
-func (opt *Option) GetAccountsAndRewards() (accountStats mongodb.AccountStatSlice, err error) {
-	if opt.InputFile == "" {
-		accountStats = opt.GetAccountsAndRewardsFromDB()
-	} else {
-		accountStats, _, err = opt.GetAccountsAndRewardsFromFile()
+func (opt *Option) getInputFileName(i int) string {
+	if i < len(opt.InputFiles) {
+		return opt.InputFiles[i]
 	}
-	return accountStats, err
+	return ""
+}
+
+func (opt *Option) getOutputFile(i int) (io.Writer, error) {
+	err := opt.openOutputFile(i)
+	return opt.outputFiles[i], err
+}
+
+// GetAccountsAndRewards get from file if input file exist, or else from database
+func (opt *Option) GetAccountsAndRewards() (accountStats []mongodb.AccountStatSlice, err error) {
+	accountStats = make([]mongodb.AccountStatSlice, len(opt.Exchanges))
+	var stats mongodb.AccountStatSlice
+	for i, exchange := range opt.Exchanges {
+		ifile := opt.getInputFileName(i)
+		if ifile == "" {
+			stats = opt.GetAccountsAndRewardsFromDB(exchange)
+		} else {
+			stats, _, err = GetAccountsAndRewardsFromFile(ifile)
+			if err != nil {
+				return nil, err
+			}
+		}
+		accountStats[i] = stats
+	}
+	opt.noVolumes = uint64(len(opt.noVolumeStartHeights))
+	return accountStats, nil
+}
+
+// no volume is intersection set of all exchanges
+func (opt *Option) updateNoVolumes(noVolumeStarts []uint64) {
+	if opt.hasNoMissingVolumes {
+		return
+	}
+	if len(noVolumeStarts) == 0 {
+		opt.hasNoMissingVolumes = true
+		opt.noVolumeStartHeights = nil
+		return
+	}
+	var intersection []uint64
+	for _, oldH := range opt.noVolumeStartHeights {
+		for _, newH := range noVolumeStarts {
+			if oldH == newH {
+				intersection = append(intersection, oldH)
+			}
+		}
+	}
+	opt.noVolumeStartHeights = intersection
+	if len(opt.noVolumeStartHeights) == 0 {
+		opt.hasNoMissingVolumes = true
+	}
 }
 
 // GetAccountsAndRewardsFromDB get from database
-func (opt *Option) GetAccountsAndRewardsFromDB() (accountStats mongodb.AccountStatSlice) {
-	exchange := opt.Exchange
+func (opt *Option) GetAccountsAndRewardsFromDB(exchange string) (accountStats mongodb.AccountStatSlice) {
 	step := opt.StepCount
 	if step == 0 {
 		return getSingleCycleRewardsFromDB(opt.TotalValue, exchange, opt.StartHeight, opt.EndHeight)
@@ -432,11 +509,12 @@ func (opt *Option) GetAccountsAndRewardsFromDB() (accountStats mongodb.AccountSt
 	steps := (opt.EndHeight - opt.StartHeight) / step
 	stepRewards := new(big.Int).Div(opt.TotalValue, new(big.Int).SetUint64(steps))
 
+	var noVolumeStarts []uint64
 	for start := opt.StartHeight; start < opt.EndHeight; start += step {
 		cycleStats := getSingleCycleRewardsFromDB(stepRewards, exchange, start, start+step)
 		if len(cycleStats) == 0 {
-			_ = opt.WriteNoVolumeOutput(exchange, start, start+step)
-			opt.noVolumes++
+			WriteNoVolumeOutput(exchange, start, start+step)
+			noVolumeStarts = append(noVolumeStarts, start)
 			continue
 		}
 		for _, stat := range cycleStats {
@@ -455,9 +533,10 @@ func (opt *Option) GetAccountsAndRewardsFromDB() (accountStats mongodb.AccountSt
 			}
 		}
 	}
+	opt.updateNoVolumes(noVolumeStarts)
 	accountStats = mongodb.ConvertToSortedSlice(finStatMap)
 	log.Info("get account volumes from db success", "exchange", exchange, "start", opt.StartHeight, "end", opt.EndHeight, "step", opt.StepCount, "missSteps", opt.noVolumes)
-	_ = opt.WriteNoVolumeSummary()
+	opt.WriteNoVolumeSummary()
 	return accountStats
 }
 
@@ -479,20 +558,17 @@ func getSingleCycleRewardsFromDB(totalRewards *big.Int, exchange string, startHe
 }
 
 // GetAccountsAndRewardsFromFile pass line format "<address> <amount>" from input file
-func (opt *Option) GetAccountsAndRewardsFromFile() (accountStats mongodb.AccountStatSlice, titleLine string, err error) {
-	if opt.InputFile == "" {
-		return nil, "", fmt.Errorf("get account rewards from file error, no input file specified")
-	}
-	file, err := os.Open(opt.InputFile)
+func GetAccountsAndRewardsFromFile(ifile string) (accountStats mongodb.AccountStatSlice, titleLine string, err error) {
+	file, err := os.Open(ifile)
 	if err != nil {
-		return nil, "", fmt.Errorf("open %v failed. %v)", opt.InputFile, err)
+		return nil, "", fmt.Errorf("open %v failed. %v)", ifile, err)
 	}
 	defer file.Close()
 
 	accountStats = make(mongodb.AccountStatSlice, 0)
 
 	reader := bufio.NewReader(file)
-	isTitleLine := true
+	isFirstLine := true
 
 	for {
 		lineData, _, errf := reader.ReadLine()
@@ -501,12 +577,13 @@ func (opt *Option) GetAccountsAndRewardsFromFile() (accountStats mongodb.Account
 		}
 		line := strings.TrimSpace(string(lineData))
 		if isCommentedLine(line) {
-			if isTitleLine {
+			if isFirstLine {
 				titleLine = line
-				isTitleLine = false
 			}
+			isFirstLine = false
 			continue
 		}
+		isFirstLine = false
 		parts := blankOrCommaSepRegexp.Split(line, -1)
 		if len(parts) < 2 {
 			return nil, "", fmt.Errorf("less than 2 parts in line %v", line)

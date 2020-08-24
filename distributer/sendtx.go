@@ -208,7 +208,7 @@ func (opt *Option) checkSendRewardsFromFile(ifile string) (mongodb.AccountStatSl
 }
 
 // SendRewardsFromFile send rewards from file
-func (opt *Option) SendRewardsFromFile() error {
+func (opt *Option) SendRewardsFromFile() (err error) {
 	if len(opt.InputFiles) != len(opt.Exchanges) {
 		return fmt.Errorf("count of exchanges and input files is not equal")
 	}
@@ -216,30 +216,37 @@ func (opt *Option) SendRewardsFromFile() error {
 		return fmt.Errorf("count of exchanges and output files is not equal")
 	}
 
+	totalRewardsSended := big.NewInt(0)
+
+	var rewardsSended *big.Int
 	for i, exchange := range opt.Exchanges {
-		err := opt.sendRewardsFromFile(exchange, opt.InputFiles[i], opt.OutputFiles[i])
+		rewardsSended, err = opt.sendRewardsFromFile(exchange, opt.InputFiles[i], opt.OutputFiles[i])
+		if rewardsSended != nil {
+			totalRewardsSended.Add(totalRewardsSended, rewardsSended)
+		}
 		if err != nil {
 			log.Error("send reward from file failed", "exchange", exchange, "index", i, "input", opt.InputFiles[i], "output", opt.OutputFiles[i], "err", err)
-			return err
+			break
 		}
 	}
-	return nil
+	log.Infof("total sended reward is %v, exchange count is %v\n", totalRewardsSended, len(opt.Exchanges))
+	return err
 }
 
-func (opt *Option) sendRewardsFromFile(exchange, ifile, ofile string) error {
+func (opt *Option) sendRewardsFromFile(exchange, ifile, ofile string) (rewardsSended *big.Int, err error) {
 	accountStats, err := opt.checkSendRewardsFromFile(ifile)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	outputFile, err := openOutputFile(ofile)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	log.Info("call send rewards from file", "input", ifile, "output", ofile)
 	defer opt.deinit()
 
-	rewardsSended := big.NewInt(0)
+	rewardsSended = big.NewInt(0)
 	for _, stat := range accountStats {
 		account := stat.Account
 		reward := stat.Reward
@@ -251,7 +258,7 @@ func (opt *Option) sendRewardsFromFile(exchange, ifile, ofile string) error {
 		if err != nil {
 			log.Info("[sendRewards] rewards sended", "totalRewards", opt.TotalValue, "rewardsSended", rewardsSended, "allRewardsSended", rewardsSended.Cmp(opt.TotalValue) == 0)
 			log.Error("[sendRewards] send tx failed", "account", account.String(), "reward", reward, "dryrun", opt.DryRun, "err", err)
-			return fmt.Errorf("[sendRewards] send tx failed")
+			return rewardsSended, fmt.Errorf("[sendRewards] send tx failed")
 		}
 		rewardsSended.Add(rewardsSended, reward)
 		// write body
@@ -259,5 +266,5 @@ func (opt *Option) sendRewardsFromFile(exchange, ifile, ofile string) error {
 	}
 
 	log.Info("[sendRewards] rewards sended", "totalRewards", opt.TotalValue, "rewardsSended", rewardsSended, "allRewardsSended", rewardsSended.Cmp(opt.TotalValue) == 0)
-	return nil
+	return rewardsSended, nil
 }

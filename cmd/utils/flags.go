@@ -9,7 +9,7 @@ var (
 	// DataDirFlag --datadir
 	DataDirFlag = &cli.StringFlag{
 		Name:  "datadir",
-		Usage: "Data directory (default in the execute directory)",
+		Usage: "data directory",
 		Value: "",
 	}
 	// ConfigFileFlag -c|--config
@@ -199,7 +199,7 @@ var (
 	// RewardTyepFlag --rewardType
 	RewardTyepFlag = &cli.StringFlag{
 		Name:  "rewardType",
-		Usage: "reward type (ie. liquidity/liquid,volume/trade). parse from title line if missing.",
+		Usage: "reward type (ie. liquidity/liquid,volume/trade)",
 	}
 )
 

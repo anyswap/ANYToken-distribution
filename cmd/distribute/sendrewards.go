@@ -44,6 +44,10 @@ func sendRewards(ctx *cli.Context) error {
 	if serverURL == "" {
 		return fmt.Errorf("must specify gateway URL")
 	}
+	rewardType := ctx.String(utils.RewardTyepFlag.Name)
+	if rewardType == "" {
+		return fmt.Errorf("must specify rewardType")
+	}
 
 	capi := utils.InitAppWithURL(ctx, true, serverURL)
 	distributer.SetAPICaller(capi)

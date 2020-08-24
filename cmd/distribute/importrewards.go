@@ -27,8 +27,8 @@ var (
 	isLiquidReward bool
 	isVolumeReward bool
 
-	exchange    = strings.ToLower("0x049ddc3cd20ac7a2f6c867680f7e21de70aca9c3")
-	rewardToken = strings.ToLower("0x0c74199d22f732039e843366a236ff4f61986b32")
+	exchange    string
+	rewardToken string
 
 	cycleLen               uint64 = 6600
 	startHeight, endHeight uint64
@@ -42,7 +42,7 @@ var (
 		ArgsUsage: " ",
 		Description: `
 import rewards result to database.
-input file line format is: <account>,<reward>.<share>,<number>[,<txhash>]
+input file line format is: <account>,<reward>,[<share>,<number>],[<txhash>]
 `,
 		Flags: []cli.Flag{
 			utils.RewardTyepFlag,
@@ -61,6 +61,12 @@ func importRewards(ctx *cli.Context) error {
 	if inputFileName == "" {
 		log.Fatal("must specify --input option to specify input file")
 	}
+
+	rewardType = ctx.String(utils.RewardTyepFlag.Name)
+	if rewardType == "" {
+		return fmt.Errorf("must specify rewardType")
+	}
+	checkRewardType(rewardType)
 
 	isStartHeightSet := ctx.IsSet(utils.StartHeightFlag.Name)
 	isEndHeightSet := ctx.IsSet(utils.EndHeightFlag.Name)
@@ -86,17 +92,14 @@ func importRewards(ctx *cli.Context) error {
 		log.Fatalf("cycle length %v = end %v - start %v is not equal to %v", endHeight-startHeight, endHeight, startHeight, cycleLen)
 	}
 
-	if ctx.IsSet(utils.ExchangeFlag.Name) {
-		exchange = ctx.String(utils.ExchangeFlag.Name)
+	exchange = ctx.String(utils.ExchangeFlag.Name)
+	if exchange == "" {
+		return fmt.Errorf("must specify exchange")
 	}
 
-	if ctx.IsSet(utils.RewardTokenFlag.Name) {
-		rewardToken = ctx.String(utils.RewardTokenFlag.Name)
-	}
-
-	if ctx.IsSet(utils.RewardTyepFlag.Name) {
-		rewardTypeStr := ctx.String(utils.RewardTyepFlag.Name)
-		checkRewardType(rewardTypeStr)
+	rewardToken = ctx.String(utils.RewardTokenFlag.Name)
+	if rewardToken == "" {
+		return fmt.Errorf("must specify rewardToken")
 	}
 
 	dryRun = ctx.Bool(utils.DryRunFlag.Name)
@@ -119,10 +122,6 @@ func openFile() {
 	}
 	log.Info("open input file success", "file", inputFileName)
 	inputReader = bufio.NewReader(inputFile)
-
-	titleLineData, _, _ := inputReader.ReadLine()
-	titleLine := strings.TrimSpace(string(titleLineData))
-	chekcTitleLine(titleLine)
 }
 
 func closeFile() {
@@ -130,40 +129,14 @@ func closeFile() {
 }
 
 func checkRewardType(rewardTypeStr string) {
-	var mismatch bool
 	switch rewardTypeStr {
 	case "liquid", "liquidity":
 		isLiquidReward = true
-		if isVolumeReward {
-			mismatch = true
-		}
 	case "volume", "trade":
 		isVolumeReward = true
-		if isLiquidReward {
-			mismatch = true
-		}
 	default:
 		log.Fatalf("unknown reward type '%v'", rewardTypeStr)
 	}
-	if rewardType == "" {
-		rewardType = rewardTypeStr
-	}
-	if mismatch {
-		log.Fatalf("reward type mismatch. from arg %v, from file %v", rewardType, rewardTypeStr)
-	}
-}
-
-func chekcTitleLine(titleLine string) {
-	if !isCommentedLine(titleLine) {
-		log.Fatalf("no title line in input file %v", inputFileName)
-	}
-	titleParts := blankOrCommaSepRegexp.Split(titleLine, -1)
-	if len(titleParts) < 5 {
-		log.Fatalf("input file title line parts is less than 5. line: %v", titleLine)
-	}
-	rewardTypeStr := titleParts[2]
-	checkRewardType(rewardTypeStr)
-	log.Info("check reward type in title line success", "rewardType", rewardTypeStr)
 }
 
 func isCommentedLine(line string) bool {
@@ -218,15 +191,27 @@ func verifyFile() {
 	}
 }
 
+// line format is: <account>,<reward>
+// or: <account>,<reward>,<txhash>
+// or: <account>,<reward>,<share>,<number>
+// or: <account>,<reward>,<share>,<number>,<txhash>
 func processLine(line string, addToDB bool) {
 	parts := blankOrCommaSepRegexp.Split(line, -1)
-	if len(parts) < 4 {
+	if len(parts) < 2 {
 		log.Fatalf("wrong parts of input line: %v", line)
 	}
-	accountStr := parts[0]
-	rewardStr := parts[1]
-	shareStr := parts[2]
-	numberStr := parts[3]
+	var accountStr, rewardStr, shareStr, numberStr, txHashStr string
+	accountStr = parts[0]
+	rewardStr = parts[1]
+	if len(parts) > 3 {
+		shareStr = parts[2]
+		numberStr = parts[3]
+		if len(parts) > 4 {
+			txHashStr = parts[4]
+		}
+	} else if len(parts) == 3 {
+		txHashStr = parts[2]
+	}
 	if !common.IsHexAddress(accountStr) {
 		log.Fatalf("wrong address in input line: %v", line)
 	}
@@ -235,17 +220,22 @@ func processLine(line string, addToDB bool) {
 	if !ok {
 		log.Fatalf("wrong reward in input line: %v", line)
 	}
-	share, ok := new(big.Int).SetString(shareStr, 10)
-	if !ok {
-		log.Fatalf("wrong share in input line: %v", line)
+	var share *big.Int
+	if shareStr != "" {
+		share, ok = new(big.Int).SetString(shareStr, 10)
+		if !ok {
+			log.Fatalf("wrong share in input line: %v", line)
+		}
 	}
-	number, ok := new(big.Int).SetString(numberStr, 10)
-	if !ok {
-		log.Fatalf("wrong number in input line: %v", line)
+	var number *big.Int
+	if numberStr != "" {
+		number, ok = new(big.Int).SetString(numberStr, 10)
+		if !ok {
+			log.Fatalf("wrong number in input line: %v", line)
+		}
 	}
 	var txhash *common.Hash
-	if len(parts) >= 4 {
-		txHashStr := parts[4]
+	if txHashStr != "" {
 		hash := common.HexToHash(txHashStr)
 		if hash.String() != txHashStr {
 			log.Fatalf("wrong txhash in input line: %v", line)
@@ -255,10 +245,6 @@ func processLine(line string, addToDB bool) {
 
 	if addToDB {
 		accountStr := strings.ToLower(account.String())
-		txHashStr := ""
-		if txhash != nil {
-			txHashStr = txhash.String()
-		}
 		log.Trace("read input line success", "account", accountStr, "reward", reward, "share", share, "number", number, "txhash", txHashStr)
 		addRewardResultToDB(account, reward, share, number, txhash)
 	}
@@ -268,8 +254,16 @@ func addRewardResultToDB(account common.Address, reward, share, number *big.Int,
 	accoutStr := strings.ToLower(account.String())
 	rewardStr := reward.String()
 	pairs := params.GetExchangePairs(exchange)
-	shareStr := share.String()
-	numVal := number.Uint64()
+
+	var shareStr string
+	if share != nil {
+		shareStr = share.String()
+	}
+
+	var numVal uint64
+	if number != nil {
+		numVal = number.Uint64()
+	}
 
 	var hashStr string
 	if txhash != nil {

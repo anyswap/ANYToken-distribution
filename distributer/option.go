@@ -128,7 +128,7 @@ func (opt *Option) CheckBasic() error {
 	if !common.IsHexAddress(opt.RewardToken) {
 		return fmt.Errorf("[check option] wrong reward token: '%v'", opt.RewardToken)
 	}
-	return opt.checkWeights()
+	return nil
 }
 
 func (opt *Option) checkWeights() error {
@@ -146,18 +146,30 @@ func (opt *Option) checkWeights() error {
 	return nil
 }
 
-func (opt *Option) checkAndInit() (err error) {
-	if opt.StepCount != 0 && opt.byWhat == byVolumeMethodID {
-		length := opt.EndHeight - opt.StartHeight
-		if length%opt.StepCount != 0 {
-			return fmt.Errorf("[check option] cycle length %v is not intergral multiple of step %v", length, opt.StepCount)
-		}
-		if opt.StepReward == nil {
-			return fmt.Errorf("[check option] StepReward is not specified but with StepCount %v", opt.StepCount)
-		}
-		log.Info("[check option] check step count success", "start", opt.StartHeight, "end", opt.EndHeight, "step", opt.StepCount, "StepReward", opt.StepReward, "totalReward", opt.TotalValue)
+func (opt *Option) checkSteps() (err error) {
+	if opt.StepCount == 0 || opt.byWhat != byVolumeMethodID {
+		return nil
 	}
+	length := opt.EndHeight - opt.StartHeight
+	if length%opt.StepCount != 0 {
+		return fmt.Errorf("[check option] cycle length %v is not intergral multiple of step %v", length, opt.StepCount)
+	}
+	if opt.StepReward == nil {
+		return fmt.Errorf("[check option] StepReward is not specified but with StepCount %v", opt.StepCount)
+	}
+	log.Info("[check option] check step count success", "start", opt.StartHeight, "end", opt.EndHeight, "step", opt.StepCount, "StepReward", opt.StepReward, "totalReward", opt.TotalValue)
+	return nil
+}
 
+func (opt *Option) checkAndInit() (err error) {
+	err = opt.checkSteps()
+	if err != nil {
+		return err
+	}
+	err = opt.checkWeights()
+	if err != nil {
+		return err
+	}
 	err = opt.CheckSenderRewardTokenBalance()
 	if err != nil {
 		return err

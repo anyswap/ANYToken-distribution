@@ -28,42 +28,48 @@ func updateLiquidityDaily() {
 	if !params.GetConfig().Sync.UpdateLiquidity {
 		return
 	}
+	for {
+		now := uint64(time.Now().Unix())
+		todayBegin := getDayBegin(now)
 
-	now := uint64(time.Now().Unix())
-	todayBegin := getDayBegin(now)
+		updateLiquidityDailyOnce(todayBegin)
 
+		now = uint64(time.Now().Unix())
+		if now < todayBegin+secondsPerDay {
+			time.Sleep(time.Duration(todayBegin+secondsPerDay-now) * time.Second)
+		}
+	}
+}
+
+func updateLiquidityDailyOnce(todayBegin uint64) {
 	for _, ex := range params.GetConfig().Exchanges {
-		fromTime := todayBegin
+		var fromTime uint64
 		latest, _ := mongodb.FindLatestLiquidity(ex.Exchange)
 		if latest != nil {
 			lasttime := getDayBegin(latest.Timestamp)
-			if lasttime+secondsPerDay < todayBegin {
-				fromTime = lasttime + secondsPerDay
-			}
+			fromTime = lasttime + secondsPerDay
 		} else {
 			header := capi.LoopGetBlockHeader(new(big.Int).SetUint64(ex.CreationHeight))
 			fromTime = getDayBegin(header.Time.Uint64())
 		}
+		if fromTime > todayBegin {
+			continue
+		}
 
 		timestamp := fromTime
-		log.Info("[worker] start updateLiquidityDaily", "fromTime", fromTime)
+		log.Info("[worker] start updateLiquidityDaily", "exchange", ex, "fromTime", fromTime)
 
-		for {
+		for timestamp <= todayBegin {
 			err := updateDateLiquidity(ex, timestamp)
-			if err != nil {
-				if strings.HasPrefix(err.Error(), "missing trie node") {
-					timestamp = todayBegin
-					log.Error("[worker] updateLiquidityDaily must query 'archive' node", "err", err)
-				} else {
-					time.Sleep(time.Second)
-					continue
-				}
+			if err == nil {
+				timestamp += secondsPerDay
+				continue
 			}
-			timestamp += secondsPerDay
-			now = uint64(time.Now().Unix())
-			if timestamp > now {
-				time.Sleep(time.Duration(timestamp-now) * time.Second)
+			if strings.HasPrefix(err.Error(), "missing trie node") {
+				log.Error("[worker] updateLiquidityDaily must query 'archive' node", "err", err)
+				break
 			}
+			time.Sleep(time.Second)
 		}
 	}
 }

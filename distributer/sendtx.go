@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/anyswap/ANYToken-distribution/log"
 	"github.com/anyswap/ANYToken-distribution/mongodb"
@@ -247,6 +248,7 @@ func (opt *Option) sendRewardsFromFile(exchange, ifile, ofile string) (rewardsSe
 	defer opt.deinit()
 
 	rewardsSended = big.NewInt(0)
+	i := uint64(0)
 	for _, stat := range accountStats {
 		account := stat.Account
 		reward := stat.Reward
@@ -263,6 +265,10 @@ func (opt *Option) sendRewardsFromFile(exchange, ifile, ofile string) (rewardsSe
 		rewardsSended.Add(rewardsSended, reward)
 		// write body
 		_ = opt.WriteSendRewardResult(outputFile, exchange, stat, txHash)
+		i++
+		if !opt.DryRun && opt.BatchCount > 0 && i%opt.BatchCount == 0 {
+			time.Sleep(time.Duration(opt.BatchInterval) * time.Millisecond)
+		}
 	}
 
 	log.Info("[sendRewards] rewards sended", "totalRewards", opt.TotalValue, "rewardsSended", rewardsSended, "allRewardsSended", rewardsSended.Cmp(opt.TotalValue) == 0)

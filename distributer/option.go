@@ -36,6 +36,9 @@ type Option struct {
 	SaveDB        bool
 	DryRun        bool
 
+	BatchCount    uint64
+	BatchInterval uint64
+
 	byWhat    string
 	noVolumes uint64
 

@@ -161,6 +161,7 @@ func distLeftValue(finStatMap map[common.Address]*mongodb.AccountStat, leftValue
 	}
 }
 
+// nolint:gosec // use of weak random number generator math/rand intentionally
 func getRandNumbers(seedBlock, max, count uint64) (numbers []uint64) {
 	log.Info("start get random numbers", "seedBlock", seedBlock, "max", max, "count", count)
 	header := capi.LoopGetBlockHeader(new(big.Int).SetUint64(seedBlock))

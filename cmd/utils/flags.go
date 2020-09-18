@@ -201,6 +201,18 @@ var (
 		Name:  "rewardType",
 		Usage: "reward type (ie. liquidity/liquid,volume/trade)",
 	}
+	// BatchCountFlag --batchCount
+	BatchCountFlag = &cli.Uint64Flag{
+		Name:  "batchCount",
+		Usage: "batch count",
+		Value: 100,
+	}
+	// BatchIntervalFlag --batchInterval
+	BatchIntervalFlag = &cli.Uint64Flag{
+		Name:  "batchInterval",
+		Usage: "batch interval of milli seconds",
+		Value: 13000,
+	}
 )
 
 // SyncArguments command line arguments

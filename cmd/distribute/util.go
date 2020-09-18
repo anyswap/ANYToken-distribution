@@ -69,6 +69,8 @@ func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, error) {
 		Heights:       sampleHeights,
 		SaveDB:        ctx.Bool(utils.SaveDBFlag.Name),
 		DryRun:        ctx.Bool(utils.DryRunFlag.Name),
+		BatchCount:    ctx.Uint64(utils.BatchCountFlag.Name),
+		BatchInterval: ctx.Uint64(utils.BatchIntervalFlag.Name),
 	}
 
 	if ctx.IsSet(utils.RewardTyepFlag.Name) {

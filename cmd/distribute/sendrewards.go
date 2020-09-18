@@ -35,6 +35,8 @@ send rewards batchly according to verified input file with line format: <address
 			utils.AccountNonceFlag,
 			utils.SaveDBFlag,
 			utils.DryRunFlag,
+			utils.BatchCountFlag,
+			utils.BatchIntervalFlag,
 		},
 	}
 )

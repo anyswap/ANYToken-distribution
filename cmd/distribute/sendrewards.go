@@ -51,7 +51,8 @@ func sendRewards(ctx *cli.Context) error {
 		return fmt.Errorf("must specify rewardType")
 	}
 
-	capi := utils.InitAppWithURL(ctx, true, serverURL)
+	withConfigFile := !distributer.IsCustomMethod(rewardType)
+	capi := utils.InitAppWithURL(ctx, serverURL, withConfigFile)
 	distributer.SetAPICaller(capi)
 
 	opt, err := getOptionAndTxArgs(ctx)

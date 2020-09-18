@@ -13,25 +13,28 @@ import (
 )
 
 // InitApp init app (remember close client in the caller)
-func InitApp(ctx *cli.Context, withMongodb bool) *callapi.APICaller {
-	return initApp(ctx, withMongodb, "")
+func InitApp(ctx *cli.Context, withConfigFile bool) *callapi.APICaller {
+	return initApp(ctx, withConfigFile, "")
 }
 
 // InitAppWithURL init app for library use (remember close client in the caller)
-func InitAppWithURL(ctx *cli.Context, withMongodb bool, serverURL string) *callapi.APICaller {
-	return initApp(ctx, withMongodb, serverURL)
+func InitAppWithURL(ctx *cli.Context, serverURL string, withConfigFile bool) *callapi.APICaller {
+	return initApp(ctx, withConfigFile, serverURL)
 }
 
-func initApp(ctx *cli.Context, withMongodb bool, serverURL string) *callapi.APICaller {
+func initApp(ctx *cli.Context, withConfigFile bool, serverURL string) *callapi.APICaller {
 	SetLogger(ctx)
+
+	if !withConfigFile {
+		return DialServer(serverURL)
+	}
+
 	InitSyncArguments(ctx)
 
 	configFile := GetConfigFilePath(ctx)
 	params.LoadConfig(configFile)
 
-	if withMongodb {
-		InitMongodb()
-	}
+	InitMongodb()
 
 	if serverURL == "" {
 		serverURL = params.GetConfig().Gateway.APIAddress

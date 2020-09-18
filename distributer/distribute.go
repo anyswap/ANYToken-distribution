@@ -21,6 +21,7 @@ const (
 	byLiquidMethodAliasID = "liquid"
 	byVolumeMethodID      = "volume"
 	byVolumeMethodAliasID = "trade"
+	customMethodID        = "custom"
 )
 
 var (
@@ -31,6 +32,11 @@ var (
 	errAccountsNotComplete      = errors.New("account list is not complete")
 	errSendTransactionFailed    = errors.New("send transaction failed")
 )
+
+// IsCustomMethod is custom method
+func IsCustomMethod(method string) bool {
+	return method == customMethodID
+}
 
 // SetAPICaller set API caller
 func SetAPICaller(apiCaller *callapi.APICaller) {

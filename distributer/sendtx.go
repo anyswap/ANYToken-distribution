@@ -142,36 +142,35 @@ func (args *BuildTxArgs) setDefaults() {
 func (args *BuildTxArgs) sendRewardsTransaction(account common.Address, reward *big.Int, rewardToken common.Address, dryRun bool) (txHash *common.Hash, err error) {
 	if dryRun {
 		log.Info("sendRewards dry run", "account", account.String(), "reward", reward)
-		return txHash, nil
+		return nil, nil
 	}
-
-	data := make([]byte, 68)
-	copy(data[:4], transferFuncHash)
-	copy(data[4:36], account.Hash().Bytes())
-	copy(data[36:68], common.LeftPadBytes(reward.Bytes(), 32))
 
 	nonce, err := capi.GetAccountNonce(args.fromAddr)
-	if err == nil {
-		if nonce > *args.Nonce {
-			*args.Nonce = nonce
-		}
+	if err == nil && nonce > *args.Nonce {
+		*args.Nonce = nonce
 	}
 
-	rawTx := types.NewTransaction(*args.Nonce, rewardToken, big.NewInt(0), *args.GasLimit, args.GasPrice, data)
+	var rawTx *types.Transaction
 
-	if args.keyWrapper == nil && dryRun {
-		log.Info("sendRewards dry run", "account", account.String(), "reward", reward)
-		return txHash, nil
+	if rewardToken != (common.Address{}) {
+		data := make([]byte, 68)
+		copy(data[:4], transferFuncHash)
+		copy(data[4:36], account.Hash().Bytes())
+		copy(data[36:68], common.LeftPadBytes(reward.Bytes(), 32))
+
+		rawTx = types.NewTransaction(*args.Nonce, rewardToken, big.NewInt(0), *args.GasLimit, args.GasPrice, data)
+	} else {
+		rawTx = types.NewTransaction(*args.Nonce, account, reward, *args.GasLimit, args.GasPrice, nil)
 	}
 
 	signedTx, err := types.SignTx(rawTx, args.chainSigner, args.keyWrapper.PrivateKey)
-	if err != nil && !dryRun {
-		return txHash, fmt.Errorf("sign tx failed, %v", err)
+	if err != nil {
+		return nil, fmt.Errorf("sign tx failed, %v", err)
 	}
 
 	err = capi.SendTransaction(signedTx)
 	if err != nil {
-		return txHash, fmt.Errorf("send tx failed, %v", err)
+		return nil, fmt.Errorf("send tx failed, %v", err)
 	}
 	*args.Nonce++
 
@@ -194,7 +193,11 @@ func (opt *Option) checkSendRewardsFromFile(ifile string) (mongodb.AccountStatSl
 
 	// assign total value before check balance
 	opt.TotalValue = accountStats.CalcTotalReward()
-	err = opt.CheckSenderRewardTokenBalance()
+	if opt.RewardToken != "" {
+		err = opt.CheckSenderRewardTokenBalance()
+	} else {
+		err = opt.CheckSenderCoinBalance()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -210,27 +213,36 @@ func (opt *Option) checkSendRewardsFromFile(ifile string) (mongodb.AccountStatSl
 
 // SendRewardsFromFile send rewards from file
 func (opt *Option) SendRewardsFromFile() (err error) {
-	if len(opt.InputFiles) != len(opt.Exchanges) {
-		return fmt.Errorf("count of exchanges and input files is not equal")
-	}
-	if len(opt.OutputFiles) != len(opt.Exchanges) {
-		return fmt.Errorf("count of exchanges and output files is not equal")
+	if len(opt.Exchanges) != 0 {
+		if len(opt.InputFiles) != len(opt.Exchanges) {
+			return fmt.Errorf("count of exchanges and input files is not equal")
+		}
+		if len(opt.OutputFiles) != len(opt.Exchanges) {
+			return fmt.Errorf("count of exchanges and output files is not equal")
+		}
+	} else if len(opt.InputFiles) != len(opt.OutputFiles) {
+		return fmt.Errorf("count of input and output files is not equal")
 	}
 
 	totalRewardsSended := big.NewInt(0)
 
 	var rewardsSended *big.Int
-	for i, exchange := range opt.Exchanges {
-		rewardsSended, err = opt.sendRewardsFromFile(exchange, opt.InputFiles[i], opt.OutputFiles[i])
+	var exchange string
+	for i, inputFile := range opt.InputFiles {
+		if len(opt.Exchanges) != 0 {
+			exchange = opt.Exchanges[i]
+		}
+		outputFile := opt.OutputFiles[i]
+		rewardsSended, err = opt.sendRewardsFromFile(exchange, inputFile, outputFile)
 		if rewardsSended != nil {
 			totalRewardsSended.Add(totalRewardsSended, rewardsSended)
 		}
 		if err != nil {
-			log.Error("send reward from file failed", "exchange", exchange, "index", i, "input", opt.InputFiles[i], "output", opt.OutputFiles[i], "err", err)
+			log.Error("send reward from file failed", "exchange", exchange, "index", i, "input", inputFile, "output", outputFile, "err", err)
 			break
 		}
 	}
-	log.Infof("total sended reward is %v, exchange count is %v\n", totalRewardsSended, len(opt.Exchanges))
+	log.Infof("total sended reward is %v, input file count is %v\n", totalRewardsSended, len(opt.InputFiles))
 	return err
 }
 

@@ -60,6 +60,8 @@ func GetStandardByWhat(byWhat string) string {
 		return byLiquidMethodID
 	case byVolumeMethodID, byVolumeMethodAliasID:
 		return byVolumeMethodID
+	case customMethodID:
+		return customMethodID
 	default:
 		return ""
 	}
@@ -72,6 +74,8 @@ func (opt *Option) SetByWhat(byWhat string) error {
 		opt.byWhat = byLiquidMethodID
 	case byVolumeMethodID, byVolumeMethodAliasID:
 		opt.byWhat = byVolumeMethodID
+	case customMethodID:
+		opt.byWhat = customMethodID
 	default:
 		return fmt.Errorf("unknown byWhat '%v'", byWhat)
 	}
@@ -111,6 +115,12 @@ func (opt *Option) deinit() {
 
 // CheckBasic check option basic
 func (opt *Option) CheckBasic() error {
+	if opt.byWhat == customMethodID {
+		if opt.RewardToken != "" && !common.IsHexAddress(opt.RewardToken) {
+			return fmt.Errorf("[check option] wrong reward token: '%v'", opt.RewardToken)
+		}
+		return nil
+	}
 	if opt.StartHeight >= opt.EndHeight {
 		return fmt.Errorf("[check option] empty range, start height %v >= end height %v", opt.StartHeight, opt.EndHeight)
 	}
@@ -186,6 +196,9 @@ func (opt *Option) checkAndInit() (err error) {
 
 // CheckStable check latest block is stable to end height
 func (opt *Option) CheckStable() error {
+	if opt.byWhat == customMethodID {
+		return nil
+	}
 	latestBlock := capi.LoopGetLatestBlockHeader()
 	if latestBlock.Number.Uint64() >= opt.EndHeight+opt.StableHeight {
 		return nil
@@ -306,7 +319,7 @@ func (opt *Option) WriteSendRewardResult(ofile io.Writer, exchange string, stat 
 		}
 	}
 
-	if !opt.DryRun || opt.SaveDB {
+	if (!opt.DryRun || opt.SaveDB) && opt.byWhat != customMethodID {
 		opt.WriteRewardResultToDB(exchange, accoutStr, rewardStr, shareStr, number, hashStr)
 	}
 
@@ -354,6 +367,7 @@ func (opt *Option) WriteRewardResultToDB(exchange, accoutStr, rewardStr, shareSt
 		_ = mongodb.TryDoTimes("AddLiquidRewardResult "+mr.Key, func() error {
 			return mongodb.AddLiquidRewardResult(mr)
 		})
+	case customMethodID:
 	default:
 		log.Warn("unknown byWhat in option", "byWhat", opt.byWhat)
 	}
@@ -377,8 +391,11 @@ func (opt *Option) SendRewardsTransaction(account common.Address, reward *big.In
 	return opt.BuildTxArgs.sendRewardsTransaction(account, reward, rewardToken, opt.DryRun)
 }
 
-// CheckSenderRewardTokenBalance check balance
+// CheckSenderRewardTokenBalance check token balance
 func (opt *Option) CheckSenderRewardTokenBalance() (err error) {
+	if opt.RewardToken == "" {
+		return fmt.Errorf("[check option] check token balance with empty reward token")
+	}
 	sender := opt.BuildTxArgs.fromAddr
 	rewardTokenAddr := common.HexToAddress(opt.RewardToken)
 	var senderTokenBalance *big.Int
@@ -399,6 +416,33 @@ func (opt *Option) CheckSenderRewardTokenBalance() (err error) {
 		break
 	}
 	log.Info("sender reward token balance is enough", "sender", sender.String(), "token", rewardTokenAddr.String(), "balance", senderTokenBalance, "needed", opt.TotalValue)
+	return nil
+}
+
+// CheckSenderCoinBalance check coin balance
+func (opt *Option) CheckSenderCoinBalance() (err error) {
+	if opt.RewardToken != "" {
+		return fmt.Errorf("[check option] check coin balance with nonempty reward token %v", opt.RewardToken)
+	}
+	sender := opt.BuildTxArgs.fromAddr
+	var senderBalance *big.Int
+	for {
+		senderBalance, err = capi.GetCoinBalance(sender, nil)
+		if err != nil {
+			time.Sleep(time.Second)
+			continue
+		}
+		if senderBalance.Cmp(opt.TotalValue) < 0 {
+			err = fmt.Errorf("[check option] not enough coin balance, %v < %v, sender: %v", senderBalance, opt.TotalValue, sender.String())
+			if opt.DryRun {
+				log.Warn("[check option] check sender coin balance failed, but ignore in dry run", "err", err)
+				return nil // only warn not enough balance in dry run
+			}
+			return err
+		}
+		break
+	}
+	log.Info("sender coin balance is enough", "sender", sender.String(), "balance", senderBalance, "needed", opt.TotalValue)
 	return nil
 }
 

@@ -53,6 +53,7 @@ type SyncConfig struct {
 	Stable          uint64
 	UpdateLiquidity bool
 	UpdateVolume    bool
+	ScanAllExchange bool
 }
 
 // ExchangeConfig exchange config
@@ -87,6 +88,11 @@ type DistributeConfig struct {
 	ByVolumeRewards      string // unit Wei
 	ByVolumeKeystoreFile string
 	ByVolumePasswordFile string
+}
+
+// IsScanAllExchange is scan all exchange
+func IsScanAllExchange() bool {
+	return config.Sync.ScanAllExchange
 }
 
 // IsConfigedExchange return true if exchange is configed

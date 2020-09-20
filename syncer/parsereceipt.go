@@ -68,7 +68,7 @@ func parseReceipt(mt *mongodb.MgoTransaction, receipt *types.Receipt) (savedb bo
 
 func addExchangeReceipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, logType string) bool {
 	exchange := strings.ToLower(rlog.Address.String())
-	if !params.IsConfigedExchange(exchange) {
+	if !params.IsScanAllExchange() && !params.IsConfigedExchange(exchange) {
 		return false
 	}
 	topics := rlog.Topics

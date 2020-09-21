@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/anyswap/ANYToken-distribution/tools"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
@@ -37,10 +38,28 @@ func CheckConfig() (err error) {
 }
 
 func checkExchangeConfig() error {
+	pairsMap := make(map[string]struct{})
+	exchangeMap := make(map[string]struct{})
+	tokenMap := make(map[string]struct{})
 	for _, ex := range config.Exchanges {
 		if err := ex.check(); err != nil {
 			return err
 		}
+		pairs := strings.ToLower(ex.Pairs)
+		exchange := strings.ToLower(ex.Exchange)
+		token := strings.ToLower(ex.Token)
+		if _, exist := pairsMap[pairs]; exist {
+			return fmt.Errorf("duplicate pairs %v", ex.Pairs)
+		}
+		if _, exist := exchangeMap[exchange]; exist {
+			return fmt.Errorf("duplicate exchange %v", ex.Exchange)
+		}
+		if _, exist := tokenMap[token]; exist {
+			return fmt.Errorf("duplicate token %v", ex.Token)
+		}
+		pairsMap[pairs] = struct{}{}
+		exchangeMap[exchange] = struct{}{}
+		tokenMap[token] = struct{}{}
 	}
 	return nil
 }

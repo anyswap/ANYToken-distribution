@@ -48,12 +48,13 @@ func GetAverageBlockTime() uint64 {
 
 // SyncConfig sync config
 type SyncConfig struct {
-	JobCount        uint64
-	WaitInterval    uint64
-	Stable          uint64
-	UpdateLiquidity bool
-	UpdateVolume    bool
-	ScanAllExchange bool
+	JobCount           uint64
+	WaitInterval       uint64
+	Stable             uint64
+	UpdateLiquidity    bool
+	UpdateVolume       bool
+	ScanAllExchange    bool
+	RecordTokenAccount bool
 }
 
 // ExchangeConfig exchange config
@@ -93,6 +94,11 @@ type DistributeConfig struct {
 // IsScanAllExchange is scan all exchange
 func IsScanAllExchange() bool {
 	return config.Sync.ScanAllExchange
+}
+
+// IsRecordTokenAccount is record token account
+func IsRecordTokenAccount() bool {
+	return config.Sync.RecordTokenAccount
 }
 
 // IsConfigedExchange return true if exchange is configed

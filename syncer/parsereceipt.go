@@ -144,6 +144,9 @@ func recordAccounts(exchange, pairs, account string) {
 }
 
 func recordTokenAccounts(token, account string) {
+	if !params.IsRecordTokenAccount() {
+		return
+	}
 	ma := &mongodb.MgoTokenAccount{
 		Key:     mongodb.GetKeyOfTokenAndAccount(token, account),
 		Token:   strings.ToLower(token),

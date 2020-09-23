@@ -416,6 +416,13 @@ func (opt *Option) CheckSenderRewardTokenBalance() (err error) {
 		break
 	}
 	log.Info("sender reward token balance is enough", "sender", sender.String(), "token", rewardTokenAddr.String(), "balance", senderTokenBalance, "needed", opt.TotalValue)
+
+	senderBalance, err := capi.GetCoinBalance(sender, nil)
+	if err != nil {
+		log.Warn("get sender coin balance failed", "err", err)
+	} else {
+		log.Info("get sender coin balance success, please ensure it's enough for gas fee", "balance", senderBalance)
+	}
 	return nil
 }
 

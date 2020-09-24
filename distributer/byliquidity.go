@@ -101,7 +101,9 @@ func (opt *Option) updateLiquidityBalance(exchange string, accounts []common.Add
 			totalLiquid.Add(totalLiquid, value)
 			// convert liquid balance to coin balance
 			coinBalance := new(big.Int).Mul(value, exCoinBalance)
-			coinBalance.Div(coinBalance, totalSupply)
+			if totalSupply.Sign() > 0 {
+				coinBalance.Div(coinBalance, totalSupply)
+			}
 			totalCoinBalance.Add(totalCoinBalance, coinBalance)
 			WriteLiquidityBalance(account, value, height)
 			mliq := &mongodb.MgoLiquidityBalance{
@@ -147,6 +149,9 @@ func distLeftValue(finStatMap map[common.Address]*mongodb.AccountStat, leftValue
 		return
 	}
 	stats := mongodb.ConvertToSortedSlice(finStatMap)
+	if len(stats) == 0 {
+		return
+	}
 	numAccounts := big.NewInt(int64(len(stats)))
 	avg := new(big.Int).Div(leftValue, numAccounts)
 	mod := new(big.Int).Mod(leftValue, numAccounts).Uint64()

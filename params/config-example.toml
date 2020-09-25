@@ -37,6 +37,7 @@ ByVolumeCycle = 100
 ByVolumeRewards = "250000000000000000000"
 ByVolumeKeystoreFile = "keystore file path"
 ByVolumePasswordFile = "password file path"
+QuickSettleVolumeRewards = true
 
 [[Exchanges]]
 Pairs = "ANY"
@@ -44,6 +45,7 @@ Exchange = "0x049ddc3cd20ac7a2f6c867680f7e21de70aca9c3"
 Token = "0x0c74199D22f732039e843366a236Ff4F61986B32"
 CreationHeight = 2545600
 LiquidWeight = 2
+TradeWeight = 1
 
 [[Exchanges]]
 Pairs = "aUSDT"
@@ -51,3 +53,4 @@ Exchange = "0x78917333bec47cee1022b31a136d31feff90d6fb"
 Token = "0xc7c64ac6d46be3d6ea318ec6276bb55291f8e496"
 CreationHeight = 2730000
 LiquidWeight = 1
+TradeWeight = 1

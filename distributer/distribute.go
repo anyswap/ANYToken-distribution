@@ -2,6 +2,7 @@ package distributer
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -74,8 +75,11 @@ func startDistributeJob(distCfg *params.DistributeConfig) {
 }
 
 type distributeRunner struct {
-	exchanges     []string
-	liquidWeights []uint64
+	liquidExchanges []string
+	liquidWeights   []uint64
+
+	tradeExchanges []string
+	tradeWeights   []uint64
 
 	rewardToken string
 	start       uint64
@@ -93,6 +97,8 @@ type distributeRunner struct {
 	byVolumeCycleRewards *big.Int
 	totalVolumeCycles    uint64
 	totalVolumeRewards   *big.Int
+
+	quickSettleVolumeRewards bool
 
 	byLiquidArgs *BuildTxArgs
 	byVolumeArgs *BuildTxArgs
@@ -121,6 +127,9 @@ func initDistributer(distCfg *params.DistributeConfig) (*distributeRunner, error
 
 	runner.byLiquidCycleLen = distCfg.ByLiquidCycle
 	runner.byLiquidCycleRewards = distCfg.GetByLiquidCycleRewards()
+	if runner.byLiquidCycleLen == 0 {
+		log.Fatal("liquidity cycle length is zero")
+	}
 
 	runner.addedNodeRewards = distCfg.GetAddNodeRewards()
 	runner.byLiquidCycleRewards.Add(runner.byLiquidCycleRewards, runner.addedNodeRewards)
@@ -129,18 +138,36 @@ func initDistributer(distCfg *params.DistributeConfig) (*distributeRunner, error
 
 	runner.byVolumeCycleLen = distCfg.ByVolumeCycle
 	runner.byVolumeCycleRewards = distCfg.GetByVolumeCycleRewards()
+	if runner.byVolumeCycleLen == 0 {
+		log.Fatal("volume cycle length is zero")
+	}
 	if runner.byLiquidCycleLen%runner.byVolumeCycleLen != 0 {
 		log.Fatal("liquid cycle %v is not multiple intergral of volume cycle %v", runner.byLiquidCycleLen, runner.byVolumeCycleLen)
 	}
+	runner.quickSettleVolumeRewards = distCfg.QuickSettleVolumeRewards
 	runner.totalVolumeCycles = runner.byLiquidCycleLen / runner.byVolumeCycleLen
 	runner.totalVolumeRewards = new(big.Int).Mul(runner.byVolumeCycleRewards, new(big.Int).SetUint64(runner.totalVolumeCycles))
 
 	for _, exchange := range params.GetConfig().Exchanges {
 		if exchange.LiquidWeight > 0 {
-			runner.exchanges = append(runner.exchanges, exchange.Exchange)
+			runner.liquidExchanges = append(runner.liquidExchanges, exchange.Exchange)
 			runner.liquidWeights = append(runner.liquidWeights, exchange.LiquidWeight)
 		}
+		if exchange.TradeWeight > 0 {
+			runner.tradeExchanges = append(runner.tradeExchanges, exchange.Exchange)
+			runner.tradeWeights = append(runner.tradeWeights, exchange.TradeWeight)
+		}
 	}
+
+	log.Info("init distributer runner finish",
+		"byVolumeCycleLen", runner.byVolumeCycleLen,
+		"byVolumeCycleRewards", runner.byVolumeCycleRewards,
+		"byLiquidCycleLen", runner.byLiquidCycleLen,
+		"byLiquidCycleRewards", runner.byLiquidCycleRewards,
+		"liquidExchanges", len(runner.liquidExchanges),
+		"tradeExchanges", len(runner.tradeExchanges),
+		"quickSettleVolumeRewards", runner.quickSettleVolumeRewards,
+	)
 
 	return runner, nil
 }
@@ -163,13 +190,19 @@ func (runner *distributeRunner) run() {
 	curCycleStart := calcCurCycleStart(runner.start, runner.stable, runner.byLiquidCycleLen)
 	for {
 		curCycleEnd := curCycleStart + runner.byLiquidCycleLen
-		waitCycleEnd(curCycleStart, curCycleEnd, runner.stable)
-
-		missVolumeCycles, err := runner.sendVolumeRewards(curCycleStart, curCycleEnd)
+		missVolumeCycles, err := runner.settleVolumeRewards(curCycleStart, curCycleEnd)
 		if err == nil {
-			err = runner.sendMissingVolumeRewards(curCycleStart, curCycleEnd, missVolumeCycles)
+			mssingVolumeRewards := big.NewInt(0)
+			if missVolumeCycles > 0 && runner.addedNoVolumeRewardsPerStep.Sign() > 0 {
+				mssingVolumeRewards = new(big.Int).Mul(runner.addedNoVolumeRewardsPerStep, new(big.Int).SetUint64(missVolumeCycles))
+			}
+			err = runner.sendMissingVolumeRewards(mssingVolumeRewards, curCycleStart, curCycleEnd)
 			if err == nil {
-				_ = runner.sendLiquidRewards(curCycleStart, curCycleEnd)
+				liquidRewards := runner.byLiquidCycleRewards
+				if mssingVolumeRewards != nil && mssingVolumeRewards.Sign() > 0 {
+					liquidRewards = new(big.Int).Add(liquidRewards, mssingVolumeRewards)
+				}
+				_ = runner.sendLiquidRewards(liquidRewards, curCycleStart, curCycleEnd)
 			}
 		}
 
@@ -179,16 +212,36 @@ func (runner *distributeRunner) run() {
 	}
 }
 
-func (runner *distributeRunner) sendVolumeRewards(start, end uint64) (missVolumeCycles uint64, err error) {
+func (runner *distributeRunner) settleVolumeRewards(cycleStart, cycleEnd uint64) (uint64, error) {
+	if !runner.quickSettleVolumeRewards {
+		waitCycleEnd("liquid", cycleStart, cycleEnd, runner.stable, 60*time.Second)
+		return runner.sendVolumeRewards(runner.totalVolumeRewards, cycleStart, cycleEnd)
+	}
+	var missVolumeCycles uint64
+	step := runner.byVolumeCycleLen
+	for start := cycleStart; start < cycleEnd; start += step {
+		waitCycleEnd("trade", start, start+step, runner.stable, 20*time.Second)
+		missing, err := runner.sendVolumeRewards(runner.byVolumeCycleRewards, start, start+step)
+		if err != nil {
+			continue
+		}
+		missVolumeCycles += missing
+	}
+	log.Info("settleVolumeRewards finish", "start", cycleStart, "end", cycleEnd, "novolumes", missVolumeCycles)
+	return missVolumeCycles, nil
+}
+
+func (runner *distributeRunner) sendVolumeRewards(rewards *big.Int, start, end uint64) (missVolumeCycles uint64, err error) {
 	opt := &Option{
 		BuildTxArgs:  runner.byVolumeArgs,
-		TotalValue:   runner.totalVolumeRewards,
+		TotalValue:   rewards,
 		StartHeight:  start,
 		EndHeight:    end,
 		StableHeight: runner.stable,
 		StepCount:    runner.byVolumeCycleLen,
 		StepReward:   runner.byVolumeCycleRewards,
-		Exchanges:    runner.exchanges,
+		Exchanges:    runner.tradeExchanges,
+		Weights:      runner.tradeWeights,
 		RewardToken:  runner.rewardToken,
 		SaveDB:       runner.saveDB,
 		DryRun:       runner.dryRun,
@@ -199,18 +252,17 @@ func (runner *distributeRunner) sendVolumeRewards(start, end uint64) (missVolume
 		log.Error("send volume reward failed", "err", err)
 		return 0, err
 	}
-	log.Info("send volume reward success")
+	log.Info("send volume reward success", "start", start, "end", end, "rewards", rewards)
 	return opt.noVolumes, err
 }
 
-func (runner *distributeRunner) sendMissingVolumeRewards(start, end, missVolumeCycles uint64) error {
-	if missVolumeCycles == 0 || runner.addedNoVolumeRewardsPerStep.Sign() <= 0 {
+func (runner *distributeRunner) sendMissingVolumeRewards(missingRewards *big.Int, start, end uint64) error {
+	if missingRewards == nil || missingRewards.Sign() <= 0 {
 		return nil
 	}
-	addedNoVolumeRewards := new(big.Int).Mul(runner.addedNoVolumeRewardsPerStep, new(big.Int).SetUint64(missVolumeCycles))
 	opt := &Option{
 		BuildTxArgs:  runner.byVolumeArgs,
-		TotalValue:   addedNoVolumeRewards,
+		TotalValue:   missingRewards,
 		StartHeight:  start,
 		EndHeight:    end,
 		StableHeight: runner.stable,
@@ -218,31 +270,33 @@ func (runner *distributeRunner) sendMissingVolumeRewards(start, end, missVolumeC
 		SaveDB:       runner.saveDB,
 		DryRun:       runner.dryRun,
 	}
+	sender := opt.GetSender()
 	receiver := runner.byLiquidArgs.GetSender()
-	log.Info("start send missing volume rewards", "to", receiver.String(), "value", addedNoVolumeRewards, "start", opt.StartHeight, "end", opt.EndHeight, "missVolumeCycles", missVolumeCycles)
+	if sender == receiver {
+		return nil
+	}
+	log.Info("start send missing volume rewards", "to", receiver.String(), "value", missingRewards, "start", opt.StartHeight, "end", opt.EndHeight)
 	err := sendMissingVolumeRewards(opt, receiver)
 	if err != nil {
 		log.Error("send missing volume rewards failed", "err", err)
 		return err
 	}
-	log.Info("send missing volume rewards success")
-
-	runner.byLiquidCycleRewards.Add(runner.byLiquidCycleRewards, addedNoVolumeRewards)
+	log.Info("send missing volume rewards success", "start", start, "end", end, "rewards", missingRewards)
 	return nil
 }
 
-func (runner *distributeRunner) sendLiquidRewards(start, end uint64) error {
+func (runner *distributeRunner) sendLiquidRewards(rewards *big.Int, start, end uint64) error {
 	opt := &Option{
-		BuildTxArgs:   runner.byLiquidArgs,
-		TotalValue:    runner.byLiquidCycleRewards,
-		StartHeight:   start,
-		EndHeight:     end,
-		StableHeight:  runner.stable,
-		Exchanges:     runner.exchanges,
-		LiquidWeights: runner.liquidWeights,
-		RewardToken:   runner.rewardToken,
-		SaveDB:        runner.saveDB,
-		DryRun:        runner.dryRun,
+		BuildTxArgs:  runner.byLiquidArgs,
+		TotalValue:   rewards,
+		StartHeight:  start,
+		EndHeight:    end,
+		StableHeight: runner.stable,
+		Exchanges:    runner.liquidExchanges,
+		Weights:      runner.liquidWeights,
+		RewardToken:  runner.rewardToken,
+		SaveDB:       runner.saveDB,
+		DryRun:       runner.dryRun,
 	}
 	log.Info("start send liquid reward", "option", opt.String())
 	err := ByLiquidity(opt)
@@ -250,7 +304,7 @@ func (runner *distributeRunner) sendLiquidRewards(start, end uint64) error {
 		log.Error("send liquid reward failed", "err", err)
 		return err
 	}
-	log.Info("send liquid reward success")
+	log.Info("send liquid reward success", "start", start, "end", end, "rewards", rewards)
 	return nil
 }
 
@@ -270,9 +324,8 @@ func sendMissingVolumeRewards(opt *Option, to common.Address) error {
 	return nil
 }
 
-func waitCycleEnd(cycleStart, cycleEnd, stable uint64) {
+func waitCycleEnd(cycleName string, cycleStart, cycleEnd, stable uint64, waitInterval time.Duration) {
 	latest := uint64(0)
-	waitInterval := 60 * time.Second
 	for {
 		time.Sleep(waitInterval)
 		syncInfo, err := mongodb.FindLatestSyncInfo()
@@ -285,9 +338,9 @@ func waitCycleEnd(cycleStart, cycleEnd, stable uint64) {
 		if latest >= cycleEnd+stable {
 			break
 		}
-		log.Info("wait to cycle end", "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable, "latest", latest)
+		log.Info(fmt.Sprintf("wait to %v cycle end", cycleName), "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable, "latest", latest)
 	}
-	log.Info("cycle end is achieved", "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable, "latest", latest)
+	log.Info(fmt.Sprintf("%v cycle end is achieved", cycleName), "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable, "latest", latest)
 }
 
 func calcCurCycleStart(start, stable, cycleLen uint64) uint64 {

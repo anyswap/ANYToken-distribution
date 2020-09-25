@@ -37,7 +37,7 @@ func ByLiquidity(opt *Option) error {
 		log.Warn("[byliquid] account list is not complete. " + opt.String())
 		return errAccountsNotComplete
 	}
-	mongodb.CalcWeightedRewards(accountStats, opt.TotalValue, opt.LiquidWeights)
+	mongodb.CalcWeightedRewards(accountStats, opt.TotalValue, opt.Weights)
 	return opt.dispatchRewards(accountStats)
 }
 

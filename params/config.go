@@ -64,6 +64,7 @@ type ExchangeConfig struct {
 	Token          string
 	CreationHeight uint64
 	LiquidWeight   uint64
+	TradeWeight    uint64
 }
 
 // DistributeConfig distribute config
@@ -89,6 +90,8 @@ type DistributeConfig struct {
 	ByVolumeRewards      string // unit Wei
 	ByVolumeKeystoreFile string
 	ByVolumePasswordFile string
+
+	QuickSettleVolumeRewards bool
 }
 
 // IsScanAllExchange is scan all exchange

@@ -33,8 +33,12 @@ func ByVolume(opt *Option) error {
 	totalReward := opt.TotalValue
 	if opt.noVolumes > 0 && opt.StepReward.Sign() > 0 {
 		subReward := new(big.Int).Mul(opt.StepReward, new(big.Int).SetUint64(opt.noVolumes))
-		totalReward.Sub(totalReward, subReward)
+		log.Info("[byvolume] has novolums", "novolumes", opt.noVolumes, "subReward", subReward)
+		totalReward = new(big.Int).Sub(totalReward, subReward)
 	}
-	mongodb.CalcWeightedRewards(accountStats, totalReward, nil)
+	if totalReward.Sign() <= 0 {
+		return nil
+	}
+	mongodb.CalcWeightedRewards(accountStats, totalReward, opt.Weights)
 	return opt.dispatchRewards(accountStats)
 }

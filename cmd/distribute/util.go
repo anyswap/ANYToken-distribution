@@ -44,13 +44,13 @@ func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, error) {
 		}
 	}
 
-	weights := ctx.Int64Slice(utils.WeightSliceFlag.Name)
-	liquidWeights := make([]uint64, len(weights))
-	for i, w := range weights {
+	weightSlice := ctx.Int64Slice(utils.WeightSliceFlag.Name)
+	weights := make([]uint64, len(weightSlice))
+	for i, w := range weightSlice {
 		if w < 0 {
 			return nil, fmt.Errorf("non positive weight %v", w)
 		}
-		liquidWeights[i] = uint64(w)
+		weights[i] = uint64(w)
 	}
 
 	opt := &distributer.Option{
@@ -63,7 +63,7 @@ func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, error) {
 		StepCount:     stepCount,
 		StepReward:    stepReward,
 		Exchanges:     ctx.StringSlice(utils.ExchangeSliceFlag.Name),
-		LiquidWeights: liquidWeights,
+		Weights:       weights,
 		InputFiles:    ctx.StringSlice(utils.InputFileSliceFlag.Name),
 		OutputFiles:   ctx.StringSlice(utils.OutputFileSliceFlag.Name),
 		Heights:       sampleHeights,

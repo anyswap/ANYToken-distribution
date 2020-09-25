@@ -26,6 +26,7 @@ distribute rewards by volume
 			utils.StepCountFlag,
 			utils.StepRewardFlag,
 			utils.ExchangeSliceFlag,
+			utils.WeightSliceFlag,
 			utils.InputFileSliceFlag,
 			utils.OutputFileSliceFlag,
 			utils.SenderFlag,

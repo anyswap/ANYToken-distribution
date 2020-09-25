@@ -20,21 +20,21 @@ const sampleCount = 1
 
 // Option distribute options
 type Option struct {
-	BuildTxArgs   *BuildTxArgs
-	TotalValue    *big.Int
-	StartHeight   uint64 // start inclusive
-	EndHeight     uint64 // end exclusive
-	StableHeight  uint64
-	StepCount     uint64 `json:",omitempty"`
-	StepReward    *big.Int
-	Exchanges     []string
-	LiquidWeights []uint64
-	RewardToken   string
-	InputFiles    []string
-	OutputFiles   []string
-	Heights       []uint64 `json:",omitempty"`
-	SaveDB        bool
-	DryRun        bool
+	BuildTxArgs  *BuildTxArgs
+	TotalValue   *big.Int
+	StartHeight  uint64 // start inclusive
+	EndHeight    uint64 // end exclusive
+	StableHeight uint64
+	StepCount    uint64 `json:",omitempty"`
+	StepReward   *big.Int
+	Exchanges    []string
+	Weights      []uint64
+	RewardToken  string
+	InputFiles   []string
+	OutputFiles  []string
+	Heights      []uint64 `json:",omitempty"`
+	SaveDB       bool
+	DryRun       bool
 
 	BatchCount    uint64
 	BatchInterval uint64
@@ -94,10 +94,10 @@ func (opt *Option) GetChainID() *big.Int {
 
 func (opt *Option) String() string {
 	return fmt.Sprintf("%v TotalValue %v StartHeight %v EndHeight %v StableHeight %v"+
-		" StepCount %v StepReward %v Heights %v Exchanges %v LiquidWeights %v"+
+		" StepCount %v StepReward %v Heights %v Exchanges %v Weights %v"+
 		" RewardToken %v DryRun %v SaveDB %v Sender %v ChainID %v",
 		opt.byWhat, opt.TotalValue, opt.StartHeight, opt.EndHeight, opt.StableHeight,
-		opt.StepCount, opt.StepReward, opt.Heights, opt.Exchanges, opt.LiquidWeights,
+		opt.StepCount, opt.StepReward, opt.Heights, opt.Exchanges, opt.Weights,
 		opt.RewardToken, opt.DryRun, opt.SaveDB,
 		opt.GetSender().String(), opt.GetChainID(),
 	)
@@ -145,32 +145,33 @@ func (opt *Option) CheckBasic() error {
 }
 
 func (opt *Option) checkWeights() error {
-	if opt.byWhat != byLiquidMethodID {
+	if opt.byWhat == customMethodID {
 		return nil
 	}
-	if len(opt.Exchanges) != len(opt.LiquidWeights) {
-		return fmt.Errorf("[check option] count of exchanges %v != count of weights %v", len(opt.Exchanges), len(opt.LiquidWeights))
+	if len(opt.Exchanges) != len(opt.Weights) {
+		return fmt.Errorf("[check option] count of exchanges %v != count of weights %v", len(opt.Exchanges), len(opt.Weights))
 	}
-	for i, weight := range opt.LiquidWeights {
+	for i, weight := range opt.Weights {
 		if weight == 0 {
-			return fmt.Errorf("[check option] has 0 weight exchange %v", opt.Exchanges[i])
+			return fmt.Errorf("[check option] has zero weight exchange %v", opt.Exchanges[i])
 		}
 	}
 	return nil
 }
 
 func (opt *Option) checkSteps() (err error) {
-	if opt.StepCount == 0 || opt.byWhat != byVolumeMethodID {
+	step := opt.StepCount
+	if step == 0 || opt.byWhat != byVolumeMethodID {
 		return nil
 	}
 	length := opt.EndHeight - opt.StartHeight
-	if length%opt.StepCount != 0 {
-		return fmt.Errorf("[check option] cycle length %v is not intergral multiple of step %v", length, opt.StepCount)
+	if length%step != 0 {
+		return fmt.Errorf("[check option] cycle length %v is not intergral multiple of step %v", length, step)
 	}
 	if opt.StepReward == nil {
-		return fmt.Errorf("[check option] StepReward is not specified but with StepCount %v", opt.StepCount)
+		return fmt.Errorf("[check option] StepReward is not specified but with StepCount %v", step)
 	}
-	log.Info("[check option] check step count success", "start", opt.StartHeight, "end", opt.EndHeight, "step", opt.StepCount, "StepReward", opt.StepReward, "totalReward", opt.TotalValue)
+	log.Info("[check option] check step count success", "start", opt.StartHeight, "end", opt.EndHeight, "step", step, "StepReward", opt.StepReward, "totalReward", opt.TotalValue)
 	return nil
 }
 
@@ -548,6 +549,10 @@ func (opt *Option) updateNoVolumes(noVolumeStarts []uint64) {
 		opt.noVolumeStartHeights = nil
 		return
 	}
+	if len(opt.noVolumeStartHeights) == 0 {
+		opt.noVolumeStartHeights = noVolumeStarts
+		return
+	}
 	var intersection []uint64
 	for _, oldH := range opt.noVolumeStartHeights {
 		for _, newH := range noVolumeStarts {
@@ -601,7 +606,7 @@ func (opt *Option) GetAccountsAndRewardsFromDB(exchange string) (accountStats mo
 	}
 	opt.updateNoVolumes(noVolumeStarts)
 	accountStats = mongodb.ConvertToSortedSlice(finStatMap)
-	log.Info("get account volumes from db success", "exchange", exchange, "start", opt.StartHeight, "end", opt.EndHeight, "step", opt.StepCount, "missSteps", opt.noVolumes)
+	log.Info("get account volumes from db success", "exchange", exchange, "start", opt.StartHeight, "end", opt.EndHeight, "step", step, "missSteps", opt.noVolumes)
 	opt.WriteNoVolumeSummary()
 	return accountStats
 }

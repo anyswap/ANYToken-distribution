@@ -166,10 +166,8 @@ func recordAccountVoumes(mt *mongodb.MgoTransaction, exReceipt *mongodb.Exchange
 		return
 	}
 
-	// ensure addresses are all small case
-	account := exReceipt.Address
-	if exReceipt.Address == exReceipt.Exchange { // in case of token to token swap
-		account = mt.From
+	if params.IsConfigedExchange(exReceipt.Address) { // in case of token to token swap
+		return
 	}
 
 	var coinAmount, tokenAmount string
@@ -185,7 +183,7 @@ func recordAccountVoumes(mt *mongodb.MgoTransaction, exReceipt *mongodb.Exchange
 		Key:         mongodb.GetKeyOfVolumeHistory(mt.Hash, exReceipt.LogIndex),
 		Exchange:    exReceipt.Exchange,
 		Pairs:       exReceipt.Pairs,
-		Account:     account,
+		Account:     exReceipt.Address,
 		CoinAmount:  coinAmount,
 		TokenAmount: tokenAmount,
 		BlockNumber: mt.BlockNumber,

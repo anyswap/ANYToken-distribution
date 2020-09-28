@@ -136,6 +136,16 @@ var (
 		Usage: "step reward",
 		Value: "250000000000000000000",
 	}
+	// PairsFlag --pairs
+	PairsFlag = &cli.StringFlag{
+		Name:  "pairs",
+		Usage: "pairs name",
+	}
+	// TokenFlag --token
+	TokenFlag = &cli.StringFlag{
+		Name:  "token",
+		Usage: "token address",
+	}
 	// ExchangeFlag --exchange
 	ExchangeFlag = &cli.StringFlag{
 		Name:  "exchange",

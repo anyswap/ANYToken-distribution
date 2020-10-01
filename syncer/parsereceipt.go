@@ -72,6 +72,9 @@ func addExchangeReceipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int,
 		return false
 	}
 	topics := rlog.Topics
+	if len(topics) < 4 {
+		return false
+	}
 	address := common.BytesToAddress(topics[1].Bytes())
 	fromAmount := new(big.Int).SetBytes(topics[2].Bytes())
 	toAmount := new(big.Int).SetBytes(topics[3].Bytes())
@@ -86,7 +89,7 @@ func addExchangeReceipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int,
 		TokenToAmount:   toAmount.String(),
 	}
 
-	switch rlog.Topics[0] {
+	switch topics[0] {
 	case topicAddLiquidity:
 		log.Info("[parse] add liquidity", "exchange", exReceipt.Exchange, "pairs", exReceipt.Pairs, "address", exReceipt.Address, "fromAmount", exReceipt.TokenFromAmount, "toAmount", exReceipt.TokenToAmount)
 	case topicRemoveLiquidity:

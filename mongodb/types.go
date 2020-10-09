@@ -141,6 +141,9 @@ func CalcWeightedRewards(stats []AccountStatSlice, totalReward *big.Int, weights
 		totalShareSlice[i] = stat.SumWeightShares(weight)
 	}
 	rewards := DivideRewards(totalReward, totalShareSlice)
+	if len(rewards) != len(stats) {
+		return
+	}
 	for i, stat := range stats {
 		stat.CalcRewards(rewards[i])
 	}

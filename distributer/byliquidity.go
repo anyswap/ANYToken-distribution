@@ -54,11 +54,7 @@ func (opt *Option) updateLiquidityBalances(accountsSlice [][]common.Address) (ac
 	for i, exchange := range opt.Exchanges {
 		accounts := accountsSlice[i]
 		WriteLiquiditySubject(exchange, opt.StartHeight, opt.EndHeight, len(accounts))
-		stats, complete := opt.updateLiquidityBalance(exchange, accounts)
-		if !complete {
-			log.Error("[byliquid] account list is not complete", "exchange", exchange)
-			break
-		}
+		stats, _ := opt.updateLiquidityBalance(exchange, accounts)
 		totalLiquids := stats.CalcTotalShare()
 		WriteLiquiditySummary(exchange, opt.StartHeight, opt.EndHeight, len(stats), totalLiquids, opt.TotalValue)
 		for _, stat := range stats {

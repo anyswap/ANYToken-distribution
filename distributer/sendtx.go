@@ -283,6 +283,6 @@ func (opt *Option) sendRewardsFromFile(exchange, ifile, ofile string) (rewardsSe
 		}
 	}
 
-	log.Info("[sendRewards] rewards sended", "totalRewards", opt.TotalValue, "rewardsSended", rewardsSended, "allRewardsSended", rewardsSended.Cmp(opt.TotalValue) == 0)
+	log.Info("[sendRewards] rewards sended", "totalRewards", opt.TotalValue, "rewardsSended", rewardsSended, "allRewardsSended", opt.TotalValue == nil || rewardsSended.Cmp(opt.TotalValue) == 0)
 	return rewardsSended, nil
 }

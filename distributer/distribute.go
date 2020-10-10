@@ -45,6 +45,12 @@ func SetAPICaller(apiCaller *callapi.APICaller) {
 }
 
 // Start start distribute
+// every 6600 blocks distribute:
+// 	1. by liquidity rewards
+// 	2. by volume rewards
+// give configed node rewards to liquidity rewards
+// check volumes every 100 block,
+// if no volume then give configed some of this rewards to liquidity rewards
 func Start(apiCaller *callapi.APICaller) {
 	SetAPICaller(apiCaller)
 	config := params.GetConfig()
@@ -53,16 +59,7 @@ func Start(apiCaller *callapi.APICaller) {
 		log.Warn("[distribute] stop distribute as it's disabled")
 		return
 	}
-	go startDistributeJob(distCfg)
-}
 
-// every 6600 blocks distribute:
-// 	1. by liquidity rewards
-// 	2. by volume rewards
-// give configed node rewards to liquidity rewards
-// check volumes every 100 block,
-// if no volume then give configed some of this rewards to liquidity rewards
-func startDistributeJob(distCfg *params.DistributeConfig) {
 	log.Info("[distribute] start job", "config", distCfg)
 
 	runner, err := initDistributer(distCfg)
@@ -71,7 +68,7 @@ func startDistributeJob(distCfg *params.DistributeConfig) {
 		return
 	}
 
-	runner.run()
+	go runner.run()
 }
 
 type distributeRunner struct {
@@ -128,7 +125,7 @@ func initDistributer(distCfg *params.DistributeConfig) (*distributeRunner, error
 	runner.byLiquidCycleLen = distCfg.ByLiquidCycle
 	runner.byLiquidCycleRewards = distCfg.GetByLiquidCycleRewards()
 	if runner.byLiquidCycleLen == 0 {
-		log.Fatal("liquidity cycle length is zero")
+		return nil, fmt.Errorf("liquidity cycle length is zero")
 	}
 
 	runner.addedNodeRewards = distCfg.GetAddNodeRewards()
@@ -139,10 +136,10 @@ func initDistributer(distCfg *params.DistributeConfig) (*distributeRunner, error
 	runner.byVolumeCycleLen = distCfg.ByVolumeCycle
 	runner.byVolumeCycleRewards = distCfg.GetByVolumeCycleRewards()
 	if runner.byVolumeCycleLen == 0 {
-		log.Fatal("volume cycle length is zero")
+		return nil, fmt.Errorf("volume cycle length is zero")
 	}
 	if runner.byLiquidCycleLen%runner.byVolumeCycleLen != 0 {
-		log.Fatal("liquid cycle %v is not multiple intergral of volume cycle %v", runner.byLiquidCycleLen, runner.byVolumeCycleLen)
+		return nil, fmt.Errorf("liquid cycle %v is not multiple intergral of volume cycle %v", runner.byLiquidCycleLen, runner.byVolumeCycleLen)
 	}
 	runner.quickSettleVolumeRewards = distCfg.QuickSettleVolumeRewards
 	runner.totalVolumeCycles = runner.byLiquidCycleLen / runner.byVolumeCycleLen

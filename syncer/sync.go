@@ -124,7 +124,7 @@ func Start() {
 		start:  startHeight,
 		end:    endHeight,
 	}
-	newSyncer.sync()
+	go newSyncer.sync()
 }
 
 func dialServer() (err error) {

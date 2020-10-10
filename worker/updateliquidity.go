@@ -32,6 +32,10 @@ func updateLiquidityDaily() {
 	if !syncer.IsEndlessLoop() {
 		return
 	}
+	go updateLiquidityDailyLoop()
+}
+
+func updateLiquidityDailyLoop() {
 	for {
 		now := uint64(time.Now().Unix())
 		todayBegin := getDayBegin(now)

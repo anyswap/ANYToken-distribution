@@ -12,11 +12,11 @@ var capi *callapi.APICaller
 func StartWork(apiCaller *callapi.APICaller) {
 	capi = apiCaller
 
-	go syncer.Start()
+	syncer.Start()
 
-	go updateLiquidityDaily()
+	updateLiquidityDaily()
 
-	go distributer.Start(capi)
+	distributer.Start(capi)
 
 	exitCh := make(chan struct{})
 	<-exitCh

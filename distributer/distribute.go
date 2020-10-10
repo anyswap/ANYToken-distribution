@@ -218,8 +218,12 @@ func (runner *distributeRunner) settleVolumeRewards(cycleStart, cycleEnd uint64)
 		return runner.sendVolumeRewards(runner.totalVolumeRewards, cycleStart, cycleEnd)
 	}
 	var missVolumeCycles uint64
+	latest := capi.LoopGetLatestBlockHeader().Number.Uint64()
 	step := runner.byVolumeCycleLen
 	for start := cycleStart; start < cycleEnd; start += step {
+		if start+step < latest {
+			continue
+		}
 		waitCycleEnd("trade", start, start+step, runner.stable, 20*time.Second)
 		missing, err := runner.sendVolumeRewards(runner.byVolumeCycleRewards, start, start+step)
 		if err != nil {

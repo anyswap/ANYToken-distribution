@@ -497,11 +497,15 @@ func getAccountsFromFile(ifile string) (accounts []common.Address, err error) {
 			return nil, fmt.Errorf("found wrong address line %v", line)
 		}
 		account := common.HexToAddress(line)
-		if !IsAccountExist(account, accounts) {
-			accounts = append(accounts, account)
-		} else {
-			log.Warn("ignore duplicate account %v", account.String())
+		if params.IsExcludedRewardAccount(account) {
+			log.Warn("ignore excluded account", "account", line)
+			continue
 		}
+		if IsAccountExist(account, accounts) {
+			log.Warn("ignore duplicate account", "account", line)
+			continue
+		}
+		accounts = append(accounts, account)
 	}
 
 	return accounts, nil
@@ -665,8 +669,12 @@ func GetAccountsAndRewardsFromFile(ifile string) (accountStats mongodb.AccountSt
 			return nil, "", fmt.Errorf("wrong address in line %v", line)
 		}
 		account := common.HexToAddress(accountStr)
+		if params.IsExcludedRewardAccount(account) {
+			log.Warn("ignore excluded account", "account", accountStr)
+			continue
+		}
 		if accountStats.IsAccountExist(account) {
-			return nil, "", fmt.Errorf("has duplicate account %v", accountStr)
+			log.Info("found duplicate account", "account", accountStr)
 		}
 		reward, err := tools.GetBigIntFromString(rewardStr)
 		if err != nil {

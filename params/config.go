@@ -12,7 +12,7 @@ import (
 
 const defaultBlockTime uint64 = 13
 
-var config *Config
+var config = &Config{}
 
 // Config config
 type Config struct {
@@ -195,4 +195,13 @@ func LoadConfig(configFile string) *Config {
 		log.Fatalf("Check config failed. %v", err)
 	}
 	return config
+}
+
+// IsExcludedRewardAccount is excluded
+func IsExcludedRewardAccount(account common.Address) bool {
+	accountStr := strings.ToLower(account.String())
+	if IsConfigedExchange(accountStr) {
+		return true
+	}
+	return account == (common.Address{})
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/anyswap/ANYToken-distribution/log"
+	"github.com/anyswap/ANYToken-distribution/params"
 	"github.com/anyswap/ANYToken-distribution/tools"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 	"gopkg.in/mgo.v2"
@@ -376,7 +377,11 @@ func FindAllAccounts(exchange string) (accounts []common.Address) {
 	iter := collectionAccount.Find(bson.M{"exchange": strings.ToLower(exchange)}).Iter()
 	var result MgoAccount
 	for iter.Next(&result) {
-		accounts = append(accounts, common.HexToAddress(result.Account))
+		account := common.HexToAddress(result.Account)
+		if params.IsExcludedRewardAccount(account) {
+			continue
+		}
+		accounts = append(accounts, account)
 	}
 	return accounts
 }
@@ -420,6 +425,9 @@ func FindAccountVolumes(exchange string, startHeight, endHeight uint64) AccountS
 			continue
 		}
 		account := common.HexToAddress(mh.Account)
+		if params.IsExcludedRewardAccount(account) {
+			continue
+		}
 		stat, exist := statMap[account]
 		if exist {
 			stat.Share.Add(stat.Share, volume)

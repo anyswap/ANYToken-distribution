@@ -104,6 +104,9 @@ func (s AccountStatSlice) CalcRewards(totalReward *big.Int) {
 		}
 	}
 	rewards := DivideRewards(totalReward, totalShareSlice)
+	if len(rewards) != len(s) {
+		return
+	}
 	for i, stat := range s {
 		stat.Reward = rewards[i]
 	}

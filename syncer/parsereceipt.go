@@ -114,6 +114,9 @@ func addErc20Receipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, lo
 		return false
 	}
 	topics := rlog.Topics
+	if len(topics) < 3 {
+		return false
+	}
 	from := common.BytesToAddress(topics[1].Bytes())
 	to := common.BytesToAddress(topics[2].Bytes())
 	value := new(big.Int).SetBytes(rlog.Data)
@@ -130,7 +133,9 @@ func addErc20Receipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, lo
 	mt.Erc20Receipts = append(mt.Erc20Receipts, erc20Receipt)
 	log.Debug("addErc20Receipt", "receipt", erc20Receipt)
 
-	recordTokenAccounts(erc20Address, erc20Receipt.To)
+	if topics[0] == topicTransfer {
+		recordTokenAccounts(erc20Address, erc20Receipt.To)
+	}
 	return true
 }
 
@@ -147,6 +152,11 @@ func recordAccounts(exchange, pairs, account string) {
 }
 
 func recordTokenAccounts(token, account string) {
+	if params.IsConfigedExchange(token) {
+		exchange := token
+		pairs := params.GetExchangePairs(exchange)
+		recordAccounts(exchange, pairs, account)
+	}
 	if !params.IsRecordTokenAccount() {
 		return
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/anyswap/ANYToken-distribution/log"
 	"github.com/anyswap/ANYToken-distribution/mongodb"
 	"github.com/anyswap/ANYToken-distribution/params"
+	"github.com/anyswap/ANYToken-distribution/syncer"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/core/types"
 )
@@ -26,6 +27,9 @@ func timestampToDate(timestamp uint64) string {
 
 func updateLiquidityDaily() {
 	if !params.GetConfig().Sync.UpdateLiquidity {
+		return
+	}
+	if !syncer.IsEndlessLoop() {
 		return
 	}
 	for {

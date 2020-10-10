@@ -152,6 +152,11 @@ func WaitSyncToLatest() {
 	log.Info("has sync to latest block")
 }
 
+// IsEndlessLoop is endless loop
+func IsEndlessLoop() bool {
+	return endHeight == 0
+}
+
 func (s *syncer) sync() {
 	for {
 		err := dialServer()

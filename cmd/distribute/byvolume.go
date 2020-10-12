@@ -37,6 +37,8 @@ distribute rewards by volume
 			utils.AccountNonceFlag,
 			utils.SaveDBFlag,
 			utils.DryRunFlag,
+			utils.BatchCountFlag,
+			utils.BatchIntervalFlag,
 		},
 	}
 )

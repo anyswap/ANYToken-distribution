@@ -2,6 +2,7 @@ package params
 
 import (
 	"math"
+	"math/big"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -92,6 +93,7 @@ type DistributeConfig struct {
 	ByVolumePasswordFile string
 
 	QuickSettleVolumeRewards bool
+	DustRewardThreshold      string
 }
 
 // IsScanAllExchange is scan all exchange
@@ -182,19 +184,19 @@ func LoadConfig(configFile string) *Config {
 		log.Fatalf("LoadConfig error: config file '%v' not exist", configFile)
 	}
 
-	config := &Config{}
-	if _, err := toml.DecodeFile(configFile, &config); err != nil {
+	tmpConfig := &Config{}
+	if _, err := toml.DecodeFile(configFile, &tmpConfig); err != nil {
 		log.Fatalf("LoadConfig error (toml DecodeFile): %v", err)
 	}
 
-	SetConfig(config)
+	SetConfig(tmpConfig)
 
-	log.Println("LoadConfig finished.", tools.ToJSONString(config, !log.JSONFormat))
+	log.Println("LoadConfig finished.", tools.ToJSONString(tmpConfig, !log.JSONFormat))
 
 	if err := CheckConfig(); err != nil {
 		log.Fatalf("Check config failed. %v", err)
 	}
-	return config
+	return tmpConfig
 }
 
 // IsExcludedRewardAccount is excluded
@@ -204,4 +206,20 @@ func IsExcludedRewardAccount(account common.Address) bool {
 		return true
 	}
 	return account == (common.Address{})
+}
+
+// GetDustRewardThreshold get dust reward threshold
+func GetDustRewardThreshold() *big.Int {
+	if config.Distribute != nil {
+		return config.Distribute.GetDustRewardThreshold()
+	}
+	return big.NewInt(0)
+}
+
+// SetDustRewardThreshold set dust reward threshold
+func SetDustRewardThreshold(dustThreshold string) {
+	if config.Distribute == nil {
+		config.Distribute = &DistributeConfig{}
+	}
+	config.Distribute.DustRewardThreshold = dustThreshold
 }

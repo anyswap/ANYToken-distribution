@@ -145,6 +145,9 @@ func (dist *DistributeConfig) checkStringValue() error {
 	if err := dist.checkBigIntStringValue("gas price", dist.GasPrice); err != nil {
 		return err
 	}
+	if err := dist.checkBigIntStringValue("dust reward threshold", dist.DustRewardThreshold); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -195,4 +198,13 @@ func (dist *DistributeConfig) GetAddNoVolumeRewards() *big.Int {
 		addNoVolumeRewards = big.NewInt(0)
 	}
 	return addNoVolumeRewards
+}
+
+// GetDustRewardThreshold get dust reward threshold
+func (dist *DistributeConfig) GetDustRewardThreshold() *big.Int {
+	dustThreshold, _ := tools.GetBigIntFromString(dist.DustRewardThreshold)
+	if dustThreshold == nil {
+		dustThreshold = big.NewInt(0)
+	}
+	return dustThreshold
 }

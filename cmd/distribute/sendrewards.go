@@ -21,6 +21,7 @@ send rewards batchly according to verified input file with line format: <address
 		Flags: []cli.Flag{
 			utils.GatewayFlag,
 			utils.RewardTyepFlag,
+			utils.DustRewardFlag,
 			utils.ExchangeSliceFlag,
 			utils.RewardTokenFlag,
 			utils.StartHeightFlag,

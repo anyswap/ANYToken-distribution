@@ -8,6 +8,7 @@ import (
 	"github.com/anyswap/ANYToken-distribution/cmd/utils"
 	"github.com/anyswap/ANYToken-distribution/distributer"
 	"github.com/anyswap/ANYToken-distribution/log"
+	"github.com/anyswap/ANYToken-distribution/params"
 	"github.com/anyswap/ANYToken-distribution/tools"
 	cmath "github.com/fsn-dev/fsn-go-sdk/efsn/common/math"
 	"github.com/urfave/cli/v2"
@@ -26,6 +27,11 @@ func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, error) {
 	}
 
 	args, err := getBuildTxArgs(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	err = setConfigParams(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -154,4 +160,15 @@ func getBuildTxArgs(ctx *cli.Context) (*distributer.BuildTxArgs, error) {
 	}
 
 	return args, nil
+}
+
+func setConfigParams(ctx *cli.Context) error {
+	if ctx.IsSet(utils.DustRewardFlag.Name) {
+		dustReward, errf := tools.GetBigIntFromString(ctx.String(utils.DustRewardFlag.Name))
+		if errf != nil {
+			return errf
+		}
+		params.SetDustRewardThreshold(dustReward.String())
+	}
+	return nil
 }

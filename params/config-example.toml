@@ -39,6 +39,8 @@ ByVolumeKeystoreFile = "keystore file path"
 ByVolumePasswordFile = "password file path"
 QuickSettleVolumeRewards = true
 
+DustRewardThreshold = "100000000000000"
+
 [[Exchanges]]
 Pairs = "ANY"
 Exchange = "0x049ddc3cd20ac7a2f6c867680f7e21de70aca9c3"

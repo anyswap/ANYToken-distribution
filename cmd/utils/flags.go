@@ -211,6 +211,11 @@ var (
 		Name:  "rewardType",
 		Usage: "reward type (ie. liquidity/liquid,volume/trade)",
 	}
+	// DustRewardFlag --dustReward
+	DustRewardFlag = &cli.StringFlag{
+		Name:  "dustReward",
+		Usage: "dust reward threshold",
+	}
 	// BatchCountFlag --batchCount
 	BatchCountFlag = &cli.Uint64Flag{
 		Name:  "batchCount",

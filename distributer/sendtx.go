@@ -1,6 +1,7 @@
 package distributer
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/anyswap/ANYToken-distribution/log"
 	"github.com/anyswap/ANYToken-distribution/mongodb"
+	"github.com/anyswap/ANYToken-distribution/params"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/accounts/keystore"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/core/types"
@@ -16,6 +18,8 @@ import (
 
 var (
 	transferFuncHash = common.FromHex("0xa9059cbb")
+
+	errDustReward = errors.New("dust reward")
 )
 
 // BuildTxArgs build tx args
@@ -140,6 +144,11 @@ func (args *BuildTxArgs) setDefaults() {
 }
 
 func (args *BuildTxArgs) sendRewardsTransaction(account common.Address, reward *big.Int, rewardToken common.Address, dryRun bool) (txHash *common.Hash, err error) {
+	dustRewardThreshold := params.GetDustRewardThreshold()
+	if reward.Cmp(dustRewardThreshold) < 0 {
+		log.Info("sendRewards ignore dust reward", "account", account.String(), "reward", reward, "dustRewardThreshold", dustRewardThreshold)
+		return nil, errDustReward
+	}
 	if dryRun {
 		log.Info("sendRewards dry run", "account", account.String(), "reward", reward)
 		return nil, nil
@@ -260,6 +269,8 @@ func (opt *Option) sendRewardsFromFile(exchange, ifile, ofile string) (rewardsSe
 	defer opt.deinit()
 
 	rewardsSended = big.NewInt(0)
+	totalDustReward := big.NewInt(0)
+	totalDustRewardCount := 0
 	i := uint64(0)
 	for _, stat := range accountStats {
 		account := stat.Account
@@ -269,20 +280,33 @@ func (opt *Option) sendRewardsFromFile(exchange, ifile, ofile string) (rewardsSe
 			continue
 		}
 		txHash, err := opt.SendRewardsTransaction(account, reward)
-		if err != nil {
-			log.Info("[sendRewards] rewards sended", "totalRewards", opt.TotalValue, "rewardsSended", rewardsSended, "allRewardsSended", rewardsSended.Cmp(opt.TotalValue) == 0)
-			log.Error("[sendRewards] send tx failed", "account", account.String(), "reward", reward, "dryrun", opt.DryRun, "err", err)
-			return rewardsSended, fmt.Errorf("[sendRewards] send tx failed")
+		switch err {
+		case nil:
+		case errDustReward:
+			totalDustReward.Add(totalDustReward, reward)
+			totalDustRewardCount++
+		default:
+			log.Error("[sendRewardsFromFile] send tx failed", "account", account.String(), "reward", reward, "dryrun", opt.DryRun, "err", err)
+			return rewardsSended, errSendTransactionFailed
 		}
 		rewardsSended.Add(rewardsSended, reward)
-		// write body
-		_ = opt.WriteSendRewardResult(outputFile, exchange, stat, txHash)
-		i++
+		if opt.DryRun || txHash != nil {
+			// write body
+			_ = opt.WriteSendRewardResult(outputFile, exchange, stat, txHash)
+			i++
+		}
 		if !opt.DryRun && opt.BatchCount > 0 && i%opt.BatchCount == 0 {
 			time.Sleep(time.Duration(opt.BatchInterval) * time.Millisecond)
 		}
 	}
 
-	log.Info("[sendRewards] rewards sended", "totalRewards", opt.TotalValue, "rewardsSended", rewardsSended, "allRewardsSended", opt.TotalValue == nil || rewardsSended.Cmp(opt.TotalValue) == 0)
+	log.Info("[sendRewardsFromFile] rewards sended",
+		"exchange", exchange,
+		"totalRewards", opt.TotalValue,
+		"rewardsSended", rewardsSended,
+		"allRewardsSended", opt.TotalValue == nil || rewardsSended.Cmp(opt.TotalValue) == 0,
+		"totalDustReward", totalDustReward,
+		"totalDustRewardCount", totalDustRewardCount,
+	)
 	return rewardsSended, nil
 }

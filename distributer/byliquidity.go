@@ -179,8 +179,11 @@ func getRandNumbers(seedBlock, max, count uint64) (numbers []uint64) {
 }
 
 func (opt *Option) calcSampleHeights() {
-	start := opt.StartHeight
-	end := opt.EndHeight
+	opt.Heights = calcSampleHeightsImpl(opt.StartHeight, opt.EndHeight)
+	log.Info("calc sample height result", "start", opt.StartHeight, "end", opt.EndHeight, "heights", opt.Heights)
+}
+
+func calcSampleHeightsImpl(start, end uint64) (heights []uint64) {
 	countOfBlocks := end - start
 	step := (countOfBlocks + sampleCount - 1) / sampleCount
 	randNums := getRandNumbers(end, step, sampleCount)
@@ -190,7 +193,7 @@ func (opt *Option) calcSampleHeights() {
 		if height >= end {
 			break
 		}
-		opt.Heights = append(opt.Heights, height)
+		heights = append(heights, height)
 	}
-	log.Info("calc sample height result", "start", start, "end", end, "heights", opt.Heights)
+	return heights
 }

@@ -89,7 +89,7 @@ func (s AccountStatSlice) CalcTotalReward() *big.Int {
 
 // CalcRewards calc rewards by shares
 func (s AccountStatSlice) CalcRewards(totalReward *big.Int) {
-	if len(s) == 0 {
+	if len(s) == 0 || totalReward == nil || totalReward.Sign() <= 0 {
 		return
 	}
 	// if has already calced reward before, use these values to
@@ -123,6 +123,20 @@ func (s AccountStatSlice) SumWeightShares(weight uint64) (totalWeightShare *big.
 	return totalWeightShare
 }
 
+// CalcRewardsInBatch calc rewards in batch
+func CalcRewardsInBatch(stats []AccountStatSlice, rewards []*big.Int) {
+	if rewards == nil {
+		return
+	}
+	if len(stats) != len(rewards) {
+		log.Error("calc rewards in batch with not equal number of stats and rewards")
+		return
+	}
+	for i, stat := range stats {
+		stat.CalcRewards(rewards[i])
+	}
+}
+
 // CalcWeightedRewards calc weighted rewards
 func CalcWeightedRewards(stats []AccountStatSlice, totalReward *big.Int, weights []uint64) {
 	if weights != nil && len(weights) != len(stats) {
@@ -144,12 +158,7 @@ func CalcWeightedRewards(stats []AccountStatSlice, totalReward *big.Int, weights
 		totalShareSlice[i] = stat.SumWeightShares(weight)
 	}
 	rewards := DivideRewards(totalReward, totalShareSlice)
-	if len(rewards) != len(stats) {
-		return
-	}
-	for i, stat := range stats {
-		stat.CalcRewards(rewards[i])
-	}
+	CalcRewardsInBatch(stats, rewards)
 }
 
 // DivideRewards divide rewards

@@ -71,7 +71,9 @@ func (opt *Option) divideVolumeRewardsByExchange(accountStats []mongodb.AccountS
 	preCycleStart, preCycleEnd := calcPrevCycleSttEnd(opt.StartHeight)
 	sampleHeights := calcSampleHeightsImpl(preCycleStart, preCycleEnd)
 	blockNumber := new(big.Int).SetUint64(sampleHeights[len(sampleHeights)-1])
-	log.Info("divideVolumeRewards", "start", opt.StartHeight, "end", opt.EndHeight, "sample", blockNumber)
+	log.Info("divideVolumeRewards",
+		"start", opt.StartHeight, "end", opt.EndHeight,
+		"preCycleStart", preCycleStart, "preCycleEnd", preCycleEnd, "sampleHeight", blockNumber)
 
 	exchangeShares := make([]*big.Int, len(opt.Exchanges))
 	for i, exchange := range opt.Exchanges {
@@ -83,8 +85,14 @@ func (opt *Option) divideVolumeRewardsByExchange(accountStats []mongodb.AccountS
 
 		// use exchange's liquidity (represent by coin) as upper limit
 		exCoinBalance := capi.LoopGetCoinBalance(common.HexToAddress(exchange), blockNumber)
+		if opt.EndHeight-opt.StartHeight != preCycleEnd-preCycleStart {
+			exCoinBalance.Mul(exCoinBalance, new(big.Int).SetUint64(opt.EndHeight-opt.StartHeight))
+			exCoinBalance.Div(exCoinBalance, new(big.Int).SetUint64(preCycleEnd-preCycleStart))
+		}
+		var truncated bool
 		if sumShare.Cmp(exCoinBalance) > 0 {
 			sumShare = exCoinBalance
+			truncated = true
 		}
 
 		weight := uint64(1)
@@ -94,7 +102,10 @@ func (opt *Option) divideVolumeRewardsByExchange(accountStats []mongodb.AccountS
 		}
 
 		exchangeShares[i] = sumShare
-		log.Info("divide volume rewards by exchange", "exchange", exchange, "totalShare", sumShare, "weight", weight)
+		log.Info("divide volume rewards by exchange",
+			"start", opt.StartHeight, "end", opt.EndHeight, "sampleHeight", blockNumber,
+			"exchange", exchange, "weight", weight, "totalShare", sumShare,
+			"upperLimit", exCoinBalance, "truncated", truncated)
 	}
 	return mongodb.DivideRewards(totalReward, exchangeShares)
 }

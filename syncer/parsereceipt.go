@@ -171,6 +171,9 @@ func recordTokenAccounts(token, account string) {
 }
 
 func recordAccountVoumes(mt *mongodb.MgoTransaction, exReceipt *mongodb.ExchangeReceipt, logTopic common.Hash) {
+	if onlySyncAccount {
+		return
+	}
 	if !(logTopic == topicTokenPurchase || logTopic == topicEthPurchase) {
 		return
 	}
@@ -211,6 +214,9 @@ func recordAccountVoumes(mt *mongodb.MgoTransaction, exReceipt *mongodb.Exchange
 }
 
 func updateVolumes(mt *mongodb.MgoTransaction, exReceipt *mongodb.ExchangeReceipt, logTopic common.Hash) {
+	if onlySyncAccount {
+		return
+	}
 	if !params.GetConfig().Sync.UpdateVolume {
 		return
 	}

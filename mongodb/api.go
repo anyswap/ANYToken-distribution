@@ -378,9 +378,6 @@ func FindAllAccounts(exchange string) (accounts []common.Address) {
 	var result MgoAccount
 	for iter.Next(&result) {
 		account := common.HexToAddress(result.Account)
-		if params.IsExcludedRewardAccount(account) {
-			continue
-		}
 		accounts = append(accounts, account)
 	}
 	return accounts

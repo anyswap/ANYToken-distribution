@@ -95,13 +95,12 @@ func (opt *Option) updateLiquidityBalance(exchange string, accounts []common.Add
 				value = capi.LoopGetLiquidityBalance(exchangeAddr, account, blockNumber)
 			}
 			totalLiquid.Add(totalLiquid, value)
+			WriteLiquidityBalance(account, value, height)
 			// convert liquid balance to coin balance
 			coinBalance := new(big.Int).Mul(value, exCoinBalance)
 			if totalSupply.Sign() > 0 {
 				coinBalance.Div(coinBalance, totalSupply)
 			}
-			totalCoinBalance.Add(totalCoinBalance, coinBalance)
-			WriteLiquidityBalance(account, value, height)
 			mliq := &mongodb.MgoLiquidityBalance{
 				Key:         mongodb.GetKeyOfLiquidityBalance(exchange, accoutStr, height),
 				Exchange:    strings.ToLower(exchange),
@@ -113,6 +112,10 @@ func (opt *Option) updateLiquidityBalance(exchange string, accounts []common.Add
 			_ = mongodb.TryDoTimes("AddLiquidityBalance "+mliq.Key, func() error {
 				return mongodb.AddLiquidityBalance(mliq)
 			})
+			if params.IsExcludedRewardAccount(account) {
+				continue
+			}
+			totalCoinBalance.Add(totalCoinBalance, coinBalance)
 			if exist {
 				if finStat.Share.Cmp(value) > 0 { // get minimumn liquidity balance
 					finStat.Share = coinBalance

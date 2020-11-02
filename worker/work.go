@@ -9,10 +9,14 @@ import (
 var capi *callapi.APICaller
 
 // StartWork start all work
-func StartWork(apiCaller *callapi.APICaller) {
+func StartWork(apiCaller *callapi.APICaller, onlySyncAccount bool) {
 	capi = apiCaller
 
-	syncer.Start()
+	syncer.Start(onlySyncAccount)
+
+	if onlySyncAccount {
+		return
+	}
 
 	updateLiquidityDaily()
 

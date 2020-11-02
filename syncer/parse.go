@@ -34,9 +34,12 @@ func (w *worker) startParser(wg *sync.WaitGroup) {
 			return
 		}
 		count++
-		wg2.Add(2)
-		// parse block
-		go w.parseBlock(msg.block, wg2)
+		if !onlySyncAccount {
+			wg2.Add(1)
+			// parse block
+			go w.parseBlock(msg.block, wg2)
+		}
+		wg2.Add(1)
 		// parse transactions
 		go w.parseTransactions(msg.block, msg.receipts, wg2)
 		if count == maxParseBlocks {
@@ -87,6 +90,12 @@ func (w *worker) parseTx(i int, tx *types.Transaction, block *types.Block, recei
 	mt := new(mongodb.MgoTransaction)
 
 	receipt := receipts[i]
+
+	if onlySyncAccount {
+		parseReceipt(mt, receipt)
+		return
+	}
+
 	hash := tx.Hash().String()
 
 	mt.Key = hash

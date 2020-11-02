@@ -40,6 +40,7 @@ var (
 	workers    []*worker
 
 	hasSyncToLatest bool
+	onlySyncAccount bool
 )
 
 type message struct {
@@ -117,14 +118,19 @@ func applyArguments() {
 }
 
 // Start start syncer
-func Start() {
+func Start(onlySyncAcc bool) {
 	initConfig()
 	newSyncer := &syncer{
 		stable: stableHeight,
 		start:  startHeight,
 		end:    endHeight,
 	}
-	go newSyncer.sync()
+	if onlySyncAcc {
+		onlySyncAccount = onlySyncAcc
+		newSyncer.sync()
+	} else {
+		go newSyncer.sync()
+	}
 }
 
 func dialServer() (err error) {
@@ -278,6 +284,10 @@ func (s *syncer) doSyncWork() {
 	}
 	wg.Wait()
 	log.Info("[syncer] doSyncWork finished", "from", s.start, "to", s.last)
+
+	if onlySyncAccount {
+		return
+	}
 
 	log.Info("[syncer] checkSync start", "from", s.start, "to", s.last)
 	s.checkSync(s.start, s.last)

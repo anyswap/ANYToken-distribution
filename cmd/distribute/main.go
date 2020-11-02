@@ -35,6 +35,7 @@ func initApp() {
 		utils.SyncFromFlag,
 		utils.SyncToFlag,
 		utils.OverwriteFlag,
+		utils.OnlySyncAccountFlag,
 		utils.VerbosityFlag,
 		utils.LogFileFlag,
 		utils.LogRotationFlag,
@@ -60,6 +61,6 @@ func distribute(ctx *cli.Context) error {
 	capi := utils.InitApp(ctx, true)
 	defer capi.CloseClient()
 
-	worker.StartWork(capi)
+	worker.StartWork(capi, ctx.Bool(utils.OnlySyncAccountFlag.Name))
 	return nil
 }

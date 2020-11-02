@@ -228,6 +228,11 @@ var (
 		Usage: "batch interval of milli seconds",
 		Value: 13000,
 	}
+	// OnlySyncAccountFlag --onlySyncAccount
+	OnlySyncAccountFlag = &cli.BoolFlag{
+		Name:  "onlySyncAccount",
+		Usage: "only sync account",
+	}
 )
 
 // SyncArguments command line arguments

@@ -34,6 +34,11 @@ func CheckConfig() (err error) {
 	if err != nil {
 		return err
 	}
+	for _, factory := range config.Factories {
+		if !common.IsHexAddress(factory) {
+			return fmt.Errorf("wrong factory address %v", factory)
+		}
+	}
 	return nil
 }
 

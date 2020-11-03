@@ -19,6 +19,7 @@ var (
 	topicRemoveLiquidity = common.HexToHash("0x0fbf06c058b90cb038a618f8c2acbf6145f8b3570fd1fa56abb8f0f3f05b36e8")
 	topicTransfer        = common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
 	topicApproval        = common.HexToHash("0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925")
+	topicCreateExchange  = common.HexToHash("0x9d42cb017eb05bd8944ab536a8b35bc68085931dd5f4356489801453923953f9")
 )
 
 const secondsPerDay = 24 * 3600
@@ -58,6 +59,8 @@ func parseReceipt(mt *mongodb.MgoTransaction, receipt *types.Receipt) (savedb bo
 			save = addErc20Receipt(mt, rlog, idx, "Transfer")
 		case topicApproval:
 			save = addErc20Receipt(mt, rlog, idx, "Approval")
+		case topicCreateExchange:
+			addExchanges(rlog)
 		}
 		if save {
 			savedb = true
@@ -111,7 +114,9 @@ func addExchangeReceipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int,
 func addErc20Receipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, logType string) bool {
 	erc20Address := strings.ToLower(rlog.Address.String())
 	if !(params.IsConfigedToken(erc20Address) || params.IsConfigedExchange(erc20Address)) {
-		return false
+		if !(params.IsScanAllExchange() && isCachedTokenOrExchange(common.HexToAddress(erc20Address))) {
+			return false
+		}
 	}
 	topics := rlog.Topics
 	if len(topics) < 3 {
@@ -152,7 +157,8 @@ func recordAccounts(exchange, pairs, account string) {
 }
 
 func recordTokenAccounts(token, account string) {
-	if params.IsConfigedExchange(token) {
+	if params.IsConfigedExchange(token) ||
+		(params.IsScanAllExchange() && isCachedExchange(common.HexToAddress(token))) {
 		exchange := token
 		pairs := params.GetExchangePairs(exchange)
 		recordAccounts(exchange, pairs, account)

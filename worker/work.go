@@ -12,7 +12,7 @@ var capi *callapi.APICaller
 func StartWork(apiCaller *callapi.APICaller, onlySyncAccount bool) {
 	capi = apiCaller
 
-	syncer.Start(onlySyncAccount)
+	syncer.Start(capi, onlySyncAccount)
 
 	if onlySyncAccount {
 		return

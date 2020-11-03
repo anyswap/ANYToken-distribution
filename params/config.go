@@ -15,6 +15,8 @@ const defaultBlockTime uint64 = 13
 
 var config = &Config{}
 
+var factoryAddresses []common.Address
+
 // Config config
 type Config struct {
 	MongoDB    *MongoDBConfig
@@ -22,6 +24,7 @@ type Config struct {
 	Sync       *SyncConfig
 	Distribute *DistributeConfig
 	Exchanges  []*ExchangeConfig
+	Factories  []string
 }
 
 // MongoDBConfig mongodb config
@@ -165,6 +168,18 @@ func GetMinExchangeCreationHeight() uint64 {
 		}
 	}
 	return minHeight
+}
+
+// GetFactories get facotries
+func GetFactories() []common.Address {
+	if factoryAddresses == nil {
+		factories := make([]common.Address, len(config.Factories))
+		for i, factory := range config.Factories {
+			factories[i] = common.HexToAddress(factory)
+		}
+		factoryAddresses = factories
+	}
+	return factoryAddresses
 }
 
 // GetConfig get config items structure

@@ -1,3 +1,5 @@
+Factories = ["0xa12cba22e4c316820bf4883ebb98a3789cf194a3"]
+
 # modgodb database connection config
 [MongoDB]
 DBURL = "localhost:27017"

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/anyswap/ANYToken-distribution/callapi"
 	"github.com/anyswap/ANYToken-distribution/cmd/utils"
 	"github.com/anyswap/ANYToken-distribution/log"
 	"github.com/anyswap/ANYToken-distribution/mongodb"
@@ -41,6 +42,8 @@ var (
 
 	hasSyncToLatest bool
 	onlySyncAccount bool
+
+	capi *callapi.APICaller
 )
 
 type message struct {
@@ -118,8 +121,10 @@ func applyArguments() {
 }
 
 // Start start syncer
-func Start(onlySyncAcc bool) {
+func Start(apiCaller *callapi.APICaller, onlySyncAcc bool) {
+	capi = apiCaller
 	initConfig()
+	initAllExchanges()
 	newSyncer := &syncer{
 		stable: stableHeight,
 		start:  startHeight,

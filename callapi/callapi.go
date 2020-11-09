@@ -196,3 +196,69 @@ func (c *APICaller) IsNodeSyncing() bool {
 		time.Sleep(c.rpcRetryInterval)
 	}
 }
+
+// CallContract common call contract
+func (c *APICaller) CallContract(contract common.Address, data []byte) (res []byte, err error) {
+	msg := ethereum.CallMsg{
+		To:   &contract,
+		Data: data,
+	}
+	for i := 0; i < c.rpcRetryCount; i++ {
+		res, err = c.client.CallContract(c.context, msg, nil)
+		if err == nil {
+			break
+		}
+		log.Error("[callapi] CallContract error", "contract", contract.String(), "err", err)
+		time.Sleep(c.rpcRetryInterval)
+	}
+	return res, err
+}
+
+func getStringFromABIEncodedData(res []byte, pos uint64) string {
+	datalen := uint64(len(res))
+	offset, overflow := common.GetUint64(res, pos, 32)
+	if overflow || datalen < offset+32 {
+		return ""
+	}
+	length, overflow := common.GetUint64(res, offset, 32)
+	if overflow || datalen < offset+32+length {
+		return ""
+	}
+	return string(res[offset+32 : offset+32+length])
+}
+
+// GetErc20Name erc20
+func (c *APICaller) GetErc20Name(erc20 common.Address) (string, error) {
+	res, err := c.CallContract(erc20, common.FromHex("0x06fdde03"))
+	if err != nil {
+		return "", err
+	}
+	return getStringFromABIEncodedData(res, 0), nil
+}
+
+// GetErc20Symbol erc20
+func (c *APICaller) GetErc20Symbol(erc20 common.Address) (string, error) {
+	res, err := c.CallContract(erc20, common.FromHex("0x95d89b41"))
+	if err != nil {
+		return "", err
+	}
+	return getStringFromABIEncodedData(res, 0), nil
+}
+
+// GetErc20Decimals erc20
+func (c *APICaller) GetErc20Decimals(erc20 common.Address) (uint8, error) {
+	res, err := c.CallContract(erc20, common.FromHex("0x313ce567"))
+	if err != nil {
+		return 0, err
+	}
+	return uint8(common.GetBigInt(res, 0, 32).Uint64()), nil
+}
+
+// GetErc20TotalSupply erc20
+func (c *APICaller) GetErc20TotalSupply(erc20 common.Address) (*big.Int, error) {
+	res, err := c.CallContract(erc20, common.FromHex("0x18160ddd"))
+	if err != nil {
+		return nil, err
+	}
+	return common.GetBigInt(res, 0, 32), nil
+}

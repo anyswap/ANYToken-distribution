@@ -115,7 +115,7 @@ func applyArguments() {
 
 	if startHeight != 0 && endHeight == 0 {
 		_ = mongodb.TryDoTimes("UpdateSyncInfo "+fmt.Sprintf("%d", startHeight), func() error {
-			return mongodb.UpdateSyncInfo(startHeight, "", uint64(time.Now().Unix()))
+			return mongodb.UpdateSyncInfo(startHeight, "", 0)
 		})
 	}
 }

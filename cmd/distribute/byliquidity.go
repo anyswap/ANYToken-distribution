@@ -37,6 +37,7 @@ distribute rewards by liquidity
 			utils.DryRunFlag,
 			utils.BatchCountFlag,
 			utils.BatchIntervalFlag,
+			utils.UseTimeMeasurementFlag,
 		},
 	}
 )

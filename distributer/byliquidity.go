@@ -182,11 +182,17 @@ func getRandNumbers(seedBlock, max, count uint64) (numbers []uint64) {
 }
 
 func (opt *Option) calcSampleHeights() {
-	opt.Heights = calcSampleHeightsImpl(opt.StartHeight, opt.EndHeight)
-	log.Info("calc sample height result", "start", opt.StartHeight, "end", opt.EndHeight, "heights", opt.Heights)
+	start := opt.StartHeight
+	end := opt.EndHeight
+	opt.Heights = calcSampleHeightsImpl(start, end, opt.UseTimeMeasurement)
+	log.Info("calc sample height result", "start", start, "end", end, "heights", opt.Heights, "useTimeMeasurement", opt.UseTimeMeasurement)
 }
 
-func calcSampleHeightsImpl(start, end uint64) (heights []uint64) {
+func calcSampleHeightsImpl(start, end uint64, useTimeMeasurement bool) (heights []uint64) {
+	if useTimeMeasurement {
+		start = getBlockHeightByTime(start)
+		end = getBlockHeightByTime(end)
+	}
 	countOfBlocks := end - start
 	step := (countOfBlocks + sampleCount - 1) / sampleCount
 	randNums := getRandNumbers(end, step, sampleCount)
@@ -199,4 +205,9 @@ func calcSampleHeightsImpl(start, end uint64) (heights []uint64) {
 		heights = append(heights, height)
 	}
 	return heights
+}
+
+func getBlockHeightByTime(timestamp uint64) uint64 {
+	block := FindBlockByTimestamp(timestamp)
+	return block.Number.Uint64()
 }

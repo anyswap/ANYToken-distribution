@@ -96,6 +96,7 @@ type distributeRunner struct {
 	totalVolumeRewards   *big.Int
 
 	quickSettleVolumeRewards bool
+	useTimeMeasurement       bool
 
 	byLiquidArgs *BuildTxArgs
 	byVolumeArgs *BuildTxArgs
@@ -115,32 +116,42 @@ func initDistributer(distCfg *params.DistributeConfig) (*distributeRunner, error
 		return nil, err
 	}
 
-	runner.dryRun = distCfg.DryRun
-	runner.saveDB = distCfg.SaveDB
+	if distCfg.UseTimeMeasurement {
+		runner.useTimeMeasurement = true
+		runner.start = distCfg.StartTimestamp
+		runner.stable = distCfg.StableDuration
+		runner.byLiquidCycleLen = distCfg.ByLiquidCycleDuration
+		runner.byVolumeCycleLen = distCfg.ByVolumeCycleDuration
+	} else {
+		runner.start = distCfg.StartHeight
+		runner.stable = distCfg.StableHeight
+		runner.byLiquidCycleLen = distCfg.ByLiquidCycle
+		runner.byVolumeCycleLen = distCfg.ByVolumeCycle
+	}
 
-	runner.rewardToken = distCfg.RewardToken
-	runner.start = distCfg.StartHeight
-	runner.stable = distCfg.StableHeight
-
-	runner.byLiquidCycleLen = distCfg.ByLiquidCycle
-	runner.byLiquidCycleRewards = distCfg.GetByLiquidCycleRewards()
 	if runner.byLiquidCycleLen == 0 {
 		return nil, fmt.Errorf("liquidity cycle length is zero")
 	}
-
-	runner.addedNodeRewards = distCfg.GetAddNodeRewards()
-	runner.byLiquidCycleRewards.Add(runner.byLiquidCycleRewards, runner.addedNodeRewards)
-
-	runner.addedNoVolumeRewardsPerStep = distCfg.GetAddNoVolumeRewards()
-
-	runner.byVolumeCycleLen = distCfg.ByVolumeCycle
-	runner.byVolumeCycleRewards = distCfg.GetByVolumeCycleRewards()
 	if runner.byVolumeCycleLen == 0 {
 		return nil, fmt.Errorf("volume cycle length is zero")
 	}
 	if runner.byLiquidCycleLen%runner.byVolumeCycleLen != 0 {
 		return nil, fmt.Errorf("liquid cycle %v is not multiple intergral of volume cycle %v", runner.byLiquidCycleLen, runner.byVolumeCycleLen)
 	}
+
+	runner.dryRun = distCfg.DryRun
+	runner.saveDB = distCfg.SaveDB
+
+	runner.rewardToken = distCfg.RewardToken
+
+	runner.byLiquidCycleRewards = distCfg.GetByLiquidCycleRewards()
+
+	runner.addedNodeRewards = distCfg.GetAddNodeRewards()
+	runner.byLiquidCycleRewards.Add(runner.byLiquidCycleRewards, runner.addedNodeRewards)
+
+	runner.addedNoVolumeRewardsPerStep = distCfg.GetAddNoVolumeRewards()
+
+	runner.byVolumeCycleRewards = distCfg.GetByVolumeCycleRewards()
 	runner.quickSettleVolumeRewards = distCfg.QuickSettleVolumeRewards
 	runner.totalVolumeCycles = runner.byLiquidCycleLen / runner.byVolumeCycleLen
 	runner.totalVolumeRewards = new(big.Int).Mul(runner.byVolumeCycleRewards, new(big.Int).SetUint64(runner.totalVolumeCycles))
@@ -164,6 +175,7 @@ func initDistributer(distCfg *params.DistributeConfig) (*distributeRunner, error
 		"liquidExchanges", len(runner.liquidExchanges),
 		"tradeExchanges", len(runner.tradeExchanges),
 		"quickSettleVolumeRewards", runner.quickSettleVolumeRewards,
+		"useTimeMeasurement", runner.useTimeMeasurement,
 	)
 
 	return runner, nil
@@ -184,7 +196,7 @@ func waitNodeSyncFinish() {
 func (runner *distributeRunner) run() {
 	waitNodeSyncFinish()
 	syncer.WaitSyncToLatest()
-	curCycleStart := calcCurCycleStart(runner.start, runner.stable, runner.byLiquidCycleLen)
+	curCycleStart := calcCurCycleStart(runner.start, runner.stable, runner.byLiquidCycleLen, runner.useTimeMeasurement)
 	for {
 		curCycleEnd := curCycleStart + runner.byLiquidCycleLen
 		missVolumeCycles, err := runner.settleVolumeRewards(curCycleStart, curCycleEnd)
@@ -211,17 +223,17 @@ func (runner *distributeRunner) run() {
 
 func (runner *distributeRunner) settleVolumeRewards(cycleStart, cycleEnd uint64) (uint64, error) {
 	if !runner.quickSettleVolumeRewards {
-		waitCycleEnd("liquid", cycleStart, cycleEnd, runner.stable, 60*time.Second)
+		waitCycleEnd("liquid", cycleStart, cycleEnd, runner.stable, 60*time.Second, runner.useTimeMeasurement)
 		return runner.sendVolumeRewards(runner.totalVolumeRewards, cycleStart, cycleEnd)
 	}
+	latest := calcLatestBlockNumberOrTimestamp(runner.useTimeMeasurement)
 	var missVolumeCycles uint64
-	latest := capi.LoopGetLatestBlockHeader().Number.Uint64()
 	step := runner.byVolumeCycleLen
 	for start := cycleStart; start < cycleEnd; start += step {
 		if start+step < latest {
 			continue
 		}
-		waitCycleEnd("trade", start, start+step, runner.stable, 20*time.Second)
+		waitCycleEnd("trade", start, start+step, runner.stable, 20*time.Second, runner.useTimeMeasurement)
 		missing, err := runner.sendVolumeRewards(runner.byVolumeCycleRewards, start, start+step)
 		if err != nil {
 			continue
@@ -233,19 +245,23 @@ func (runner *distributeRunner) settleVolumeRewards(cycleStart, cycleEnd uint64)
 }
 
 func (runner *distributeRunner) sendVolumeRewards(rewards *big.Int, start, end uint64) (missVolumeCycles uint64, err error) {
+	if len(runner.tradeExchanges) == 0 {
+		return 0, nil
+	}
 	opt := &Option{
-		BuildTxArgs:  runner.byVolumeArgs,
-		TotalValue:   rewards,
-		StartHeight:  start,
-		EndHeight:    end,
-		StableHeight: runner.stable,
-		StepCount:    runner.byVolumeCycleLen,
-		StepReward:   runner.byVolumeCycleRewards,
-		Exchanges:    runner.tradeExchanges,
-		Weights:      runner.tradeWeights,
-		RewardToken:  runner.rewardToken,
-		SaveDB:       runner.saveDB,
-		DryRun:       runner.dryRun,
+		BuildTxArgs:        runner.byVolumeArgs,
+		TotalValue:         rewards,
+		StartHeight:        start,
+		EndHeight:          end,
+		StableHeight:       runner.stable,
+		StepCount:          runner.byVolumeCycleLen,
+		StepReward:         runner.byVolumeCycleRewards,
+		Exchanges:          runner.tradeExchanges,
+		Weights:            runner.tradeWeights,
+		RewardToken:        runner.rewardToken,
+		SaveDB:             runner.saveDB,
+		DryRun:             runner.dryRun,
+		UseTimeMeasurement: runner.useTimeMeasurement,
 	}
 	log.Info("start send volume reward", "option", opt.String())
 	err = ByVolume(opt)
@@ -287,17 +303,21 @@ func (runner *distributeRunner) sendMissingVolumeRewards(missingRewards *big.Int
 }
 
 func (runner *distributeRunner) sendLiquidRewards(rewards *big.Int, start, end uint64) error {
+	if len(runner.liquidExchanges) == 0 {
+		return nil
+	}
 	opt := &Option{
-		BuildTxArgs:  runner.byLiquidArgs,
-		TotalValue:   rewards,
-		StartHeight:  start,
-		EndHeight:    end,
-		StableHeight: runner.stable,
-		Exchanges:    runner.liquidExchanges,
-		Weights:      runner.liquidWeights,
-		RewardToken:  runner.rewardToken,
-		SaveDB:       runner.saveDB,
-		DryRun:       runner.dryRun,
+		BuildTxArgs:        runner.byLiquidArgs,
+		TotalValue:         rewards,
+		StartHeight:        start,
+		EndHeight:          end,
+		StableHeight:       runner.stable,
+		Exchanges:          runner.liquidExchanges,
+		Weights:            runner.liquidWeights,
+		RewardToken:        runner.rewardToken,
+		SaveDB:             runner.saveDB,
+		DryRun:             runner.dryRun,
+		UseTimeMeasurement: runner.useTimeMeasurement,
 	}
 	log.Info("start send liquid reward", "option", opt.String())
 	err := ByLiquidity(opt)
@@ -325,7 +345,7 @@ func sendMissingVolumeRewards(opt *Option, to common.Address) error {
 	return nil
 }
 
-func waitCycleEnd(cycleName string, cycleStart, cycleEnd, stable uint64, waitInterval time.Duration) {
+func waitCycleEnd(cycleName string, cycleStart, cycleEnd, stable uint64, waitInterval time.Duration, useTimeMeasurement bool) {
 	latest := uint64(0)
 	for {
 		time.Sleep(waitInterval)
@@ -334,7 +354,11 @@ func waitCycleEnd(cycleName string, cycleStart, cycleEnd, stable uint64, waitInt
 			log.Warn("find latest sync info failed", "err", err)
 			continue
 		}
-		latest = syncInfo.Number
+		if useTimeMeasurement {
+			latest = syncInfo.Timestamp
+		} else {
+			latest = syncInfo.Number
+		}
 
 		if latest >= cycleEnd+stable {
 			break
@@ -344,9 +368,19 @@ func waitCycleEnd(cycleName string, cycleStart, cycleEnd, stable uint64, waitInt
 	log.Info(fmt.Sprintf("%v cycle end is achieved", cycleName), "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable, "latest", latest)
 }
 
-func calcCurCycleStart(start, stable, cycleLen uint64) uint64 {
+func calcLatestBlockNumberOrTimestamp(useTimeMeasurement bool) uint64 {
 	latestBlock := capi.LoopGetLatestBlockHeader()
-	latest := latestBlock.Number.Uint64()
+	var latest uint64
+	if useTimeMeasurement {
+		latest = latestBlock.Time.Uint64()
+	} else {
+		latest = latestBlock.Number.Uint64()
+	}
+	return latest
+}
+
+func calcCurCycleStart(start, stable, cycleLen uint64, useTimeMeasurement bool) uint64 {
+	latest := calcLatestBlockNumberOrTimestamp(useTimeMeasurement)
 	cycles := (latest - start - stable) / cycleLen
 	curCycleStart := start + cycles*cycleLen
 	return curCycleStart

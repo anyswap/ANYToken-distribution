@@ -405,11 +405,20 @@ func FindLiquidityBalance(exchange, account string, blockNumber uint64) (string,
 }
 
 // FindAccountVolumes find account volumes
-func FindAccountVolumes(exchange string, startHeight, endHeight uint64) AccountStatSlice {
+func FindAccountVolumes(exchange string, startHeight, endHeight uint64, useTimestamp bool) AccountStatSlice {
+	var queries []bson.M
 	qexchange := bson.M{"exchange": strings.ToLower(exchange)}
-	qsheight := bson.M{"blockNumber": bson.M{"$gte": startHeight}}
-	qeheight := bson.M{"blockNumber": bson.M{"$lt": endHeight}}
-	queries := []bson.M{qexchange, qsheight, qeheight}
+	queries = append(queries, qexchange)
+	if useTimestamp {
+		qstime := bson.M{"timestamp": bson.M{"$gte": startHeight}}
+		qetime := bson.M{"timestamp": bson.M{"$lt": endHeight}}
+		queries = append(queries, qstime, qetime)
+	} else {
+		qsheight := bson.M{"blockNumber": bson.M{"$gte": startHeight}}
+		qeheight := bson.M{"blockNumber": bson.M{"$lt": endHeight}}
+		queries = append(queries, qsheight, qeheight)
+	}
+
 	iter := collectionVolumeHistory.Find(bson.M{"$and": queries}).Iter()
 
 	statMap := make(map[common.Address]*AccountStat)

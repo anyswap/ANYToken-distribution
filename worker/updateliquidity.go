@@ -5,12 +5,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/anyswap/ANYToken-distribution/distributer"
 	"github.com/anyswap/ANYToken-distribution/log"
 	"github.com/anyswap/ANYToken-distribution/mongodb"
 	"github.com/anyswap/ANYToken-distribution/params"
 	"github.com/anyswap/ANYToken-distribution/syncer"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
-	"github.com/fsn-dev/fsn-go-sdk/efsn/core/types"
 )
 
 const (
@@ -86,7 +86,7 @@ func updateDateLiquidity(ex *params.ExchangeConfig, timestamp uint64) error {
 	exchangeAddr := common.HexToAddress(ex.Exchange)
 	tokenAddr := common.HexToAddress(ex.Token)
 
-	blockHeader := findBlockWithTimestamp(timestamp)
+	blockHeader := distributer.FindBlockByTimestamp(timestamp)
 	blockNumber := blockHeader.Number
 	blockHash := blockHeader.Hash()
 
@@ -130,46 +130,4 @@ func updateDateLiquidity(ex *params.ExchangeConfig, timestamp uint64) error {
 
 	log.Info("[worker] updateDateLiquidity success", "liquidity", mliq, "timestamp", timestampToDate(timestamp))
 	return nil
-}
-
-func findBlockWithTimestamp(timestamp uint64) *types.Header {
-	const acceptRange = 1800
-	timeNear := func(blockTimestamp uint64) bool {
-		return blockTimestamp > timestamp && blockTimestamp < timestamp+acceptRange
-	}
-
-	var (
-		blockNumber        *big.Int
-		avgBlockTime       = params.GetAverageBlockTime()
-		hasFoundLowerBlock bool
-	)
-
-	for {
-		header := capi.LoopGetBlockHeader(blockNumber)
-		headerTime := header.Time.Uint64()
-		if timeNear(headerTime) {
-			return header
-		}
-		if blockNumber == nil {
-			if headerTime < timestamp {
-				time.Sleep(60 * time.Second)
-				continue
-			}
-			blockNumber = header.Number
-		}
-		if headerTime > timestamp {
-			if hasFoundLowerBlock {
-				return header
-			}
-			countOfBlocks := (headerTime - timestamp) / avgBlockTime
-			blockNumber.Sub(blockNumber, new(big.Int).SetUint64(countOfBlocks))
-			if blockNumber.Sign() <= 0 {
-				blockNumber = big.NewInt(1)
-			}
-		} else {
-			countOfBlocks := (timestamp-headerTime)/avgBlockTime + 1
-			blockNumber.Add(blockNumber, new(big.Int).SetUint64(countOfBlocks))
-			hasFoundLowerBlock = true
-		}
-	}
 }

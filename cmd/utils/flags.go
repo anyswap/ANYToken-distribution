@@ -233,6 +233,11 @@ var (
 		Name:  "onlySyncAccount",
 		Usage: "only sync account",
 	}
+	// UseTimeMeasurementFlag --usetime
+	UseTimeMeasurementFlag = &cli.BoolFlag{
+		Name:  "usetime",
+		Usage: "use timestamp instead of block height",
+	}
 )
 
 // SyncArguments command line arguments

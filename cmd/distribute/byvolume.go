@@ -39,6 +39,7 @@ distribute rewards by volume
 			utils.DryRunFlag,
 			utils.BatchCountFlag,
 			utils.BatchIntervalFlag,
+			utils.UseTimeMeasurementFlag,
 		},
 	}
 )

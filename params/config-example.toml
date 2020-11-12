@@ -39,9 +39,16 @@ ByVolumeCycle = 100
 ByVolumeRewards = "250000000000000000000"
 ByVolumeKeystoreFile = "keystore file path"
 ByVolumePasswordFile = "password file path"
-QuickSettleVolumeRewards = true
+QuickSettleVolumeRewards = false
 
 DustRewardThreshold = "100000000000000"
+
+# use time measurement instead of block height
+UseTimeMeasurement = false
+StartTimestamp = 1605088800   # unix timestamp
+StableDuration = 300          # unit of seconds
+ByLiquidCycleDuration = 86400 # unit of seconds
+ByVolumeCycleDuration = 1800  # unit of seconds
 
 [[Exchanges]]
 Pairs = "ANY"

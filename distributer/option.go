@@ -39,6 +39,11 @@ type Option struct {
 	BatchCount    uint64
 	BatchInterval uint64
 
+	// if use time measurement,
+	// then StartHeight/EndHeight are unix timestamp,
+	// and StableHeight/StepCount are time duration of seconds.
+	UseTimeMeasurement bool
+
 	byWhat    string
 	noVolumes uint64
 
@@ -200,17 +205,17 @@ func (opt *Option) CheckStable() error {
 	if opt.byWhat == customMethodID {
 		return nil
 	}
-	latestBlock := capi.LoopGetLatestBlockHeader()
-	if latestBlock.Number.Uint64() >= opt.EndHeight+opt.StableHeight {
+	latest := calcLatestBlockNumberOrTimestamp(opt.UseTimeMeasurement)
+	if latest >= opt.EndHeight+opt.StableHeight {
 		return nil
 	}
 	if !opt.DryRun {
-		return fmt.Errorf("[check option] latest height %v is lower than end height %v plus stable height %v", latestBlock.Number, opt.EndHeight, opt.StableHeight)
+		return fmt.Errorf("[check option] latest %v is lower than end %v plus stable %v", latest, opt.EndHeight, opt.StableHeight)
 	}
 	if opt.byWhat == byLiquidMethodID && len(opt.Heights) == 0 {
-		return fmt.Errorf("[check option] latest height %v is lower than end height %v plus sable height %v, please specify '--heights' option in dry run", latestBlock.Number, opt.EndHeight, opt.StableHeight)
+		return fmt.Errorf("[check option] latest %v is lower than end %v plus sable %v, please specify '--heights' option in dry run", latest, opt.EndHeight, opt.StableHeight)
 	}
-	log.Warn("[check option] block height not satisfied, but ignore in dry run", "latest", latestBlock.Number, "end", opt.EndHeight, "stable", opt.StableHeight)
+	log.Warn("[check option] block not satisfied, but ignore in dry run", "latest", latest, "end", opt.EndHeight, "stable", opt.StableHeight)
 	return nil
 }
 
@@ -575,7 +580,7 @@ func (opt *Option) updateNoVolumes(noVolumeStarts []uint64) {
 func (opt *Option) GetAccountsAndRewardsFromDB(exchange string) (accountStats mongodb.AccountStatSlice) {
 	step := opt.StepCount
 	if step == 0 {
-		return getSingleCycleRewardsFromDB(opt.TotalValue, exchange, opt.StartHeight, opt.EndHeight)
+		return getSingleCycleRewardsFromDB(opt.TotalValue, exchange, opt.StartHeight, opt.EndHeight, opt.UseTimeMeasurement)
 	}
 
 	// use map to statistic
@@ -586,7 +591,7 @@ func (opt *Option) GetAccountsAndRewardsFromDB(exchange string) (accountStats mo
 
 	var noVolumeStarts []uint64
 	for start := opt.StartHeight; start < opt.EndHeight; start += step {
-		cycleStats := getSingleCycleRewardsFromDB(stepRewards, exchange, start, start+step)
+		cycleStats := getSingleCycleRewardsFromDB(stepRewards, exchange, start, start+step, opt.UseTimeMeasurement)
 		if len(cycleStats) == 0 {
 			WriteNoVolumeOutput(exchange, start, start+step)
 			noVolumeStarts = append(noVolumeStarts, start)
@@ -615,8 +620,8 @@ func (opt *Option) GetAccountsAndRewardsFromDB(exchange string) (accountStats mo
 	return accountStats
 }
 
-func getSingleCycleRewardsFromDB(totalRewards *big.Int, exchange string, startHeight, endHeight uint64) mongodb.AccountStatSlice {
-	accountStats := mongodb.FindAccountVolumes(exchange, startHeight, endHeight)
+func getSingleCycleRewardsFromDB(totalRewards *big.Int, exchange string, startHeight, endHeight uint64, useTimestamp bool) mongodb.AccountStatSlice {
+	accountStats := mongodb.FindAccountVolumes(exchange, startHeight, endHeight, useTimestamp)
 	if len(accountStats) == 0 {
 		return nil
 	}

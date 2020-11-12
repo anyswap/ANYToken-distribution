@@ -50,13 +50,24 @@ func ByVolume(opt *Option) error {
 	return opt.dispatchRewards(accountStats)
 }
 
-func calcPrevCycleSttEnd(height uint64) (preCycleStart, preCycleEnd uint64) {
+func calcPrevCycleSttEnd(height uint64, useTimeMeasurement bool) (preCycleStart, preCycleEnd uint64) {
 	distCfg := params.GetConfig().Distribute
+
+	if useTimeMeasurement {
+		startHeight := distCfg.StartTimestamp
+		cycleLen := distCfg.ByLiquidCycleDuration
+
+		preCycleEnd = height - (height-startHeight)%cycleLen
+		preCycleStart = preCycleEnd - cycleLen
+		return preCycleStart, preCycleEnd
+	}
+
 	startHeight := distCfg.StartHeight
 	cycleLen := distCfg.ByLiquidCycle
+
 	preCycleEnd = height - (height-startHeight)%cycleLen
 	preCycleStart = preCycleEnd - cycleLen
-	return
+	return preCycleStart, preCycleEnd
 }
 
 func (opt *Option) divideVolumeRewardsByExchange(accountStats []mongodb.AccountStatSlice, totalReward *big.Int) []*big.Int {
@@ -68,8 +79,8 @@ func (opt *Option) divideVolumeRewardsByExchange(accountStats []mongodb.AccountS
 		return nil
 	}
 
-	preCycleStart, preCycleEnd := calcPrevCycleSttEnd(opt.StartHeight)
-	sampleHeights := calcSampleHeightsImpl(preCycleStart, preCycleEnd)
+	preCycleStart, preCycleEnd := calcPrevCycleSttEnd(opt.StartHeight, opt.UseTimeMeasurement)
+	sampleHeights := calcSampleHeightsImpl(preCycleStart, preCycleEnd, opt.UseTimeMeasurement)
 	blockNumber := new(big.Int).SetUint64(sampleHeights[len(sampleHeights)-1])
 	log.Info("divideVolumeRewards",
 		"start", opt.StartHeight, "end", opt.EndHeight,

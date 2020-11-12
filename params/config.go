@@ -97,6 +97,13 @@ type DistributeConfig struct {
 
 	QuickSettleVolumeRewards bool
 	DustRewardThreshold      string
+
+	// use time measurement instead of block height
+	UseTimeMeasurement    bool
+	StartTimestamp        uint64 // unix timestamp
+	StableDuration        uint64 // unit of seconds
+	ByLiquidCycleDuration uint64 // unit of seconds
+	ByVolumeCycleDuration uint64 // unit of seconds
 }
 
 // IsScanAllExchange is scan all exchange

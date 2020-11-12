@@ -157,14 +157,24 @@ func (dist *DistributeConfig) checkStringValue() error {
 }
 
 func (dist *DistributeConfig) checkCycle() error {
-	if dist.ByVolumeCycle == 0 {
+	var byVolumeCycle, byLiquidCycle uint64
+
+	if dist.UseTimeMeasurement {
+		byVolumeCycle = dist.ByVolumeCycleDuration
+		byLiquidCycle = dist.ByLiquidCycleDuration
+	} else {
+		byVolumeCycle = dist.ByVolumeCycle
+		byLiquidCycle = dist.ByLiquidCycle
+	}
+
+	if byVolumeCycle == 0 {
 		return fmt.Errorf("[check distribute] error: zero by volume cycle length")
 	}
-	if dist.ByLiquidCycle < dist.ByVolumeCycle {
-		return fmt.Errorf("[check distribute] error: by liquidity cycle %v < by volume cycle %v", dist.ByLiquidCycle, dist.ByVolumeCycle)
+	if byLiquidCycle < byVolumeCycle {
+		return fmt.Errorf("[check distribute] error: by liquidity cycle %v < by volume cycle %v", byLiquidCycle, byVolumeCycle)
 	}
-	if dist.ByLiquidCycle%dist.ByVolumeCycle != 0 {
-		return fmt.Errorf("[check distribute] error: by liquidity cycle %v is not an integral multiple of by volume cycle %v", dist.ByLiquidCycle, dist.ByVolumeCycle)
+	if byLiquidCycle%byVolumeCycle != 0 {
+		return fmt.Errorf("[check distribute] error: by liquidity cycle %v is not an integral multiple of by volume cycle %v", byLiquidCycle, byVolumeCycle)
 	}
 	return nil
 }

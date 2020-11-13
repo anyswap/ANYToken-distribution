@@ -135,12 +135,6 @@ func (dist *DistributeConfig) checkBigIntStringValue(name, value string) error {
 }
 
 func (dist *DistributeConfig) checkStringValue() error {
-	if err := dist.checkBigIntStringValue("add node rewards", dist.AddNodeRewards); err != nil {
-		return err
-	}
-	if err := dist.checkBigIntStringValue("add no volume rewards", dist.AddNoVolumeRewards); err != nil {
-		return err
-	}
 	if err := dist.checkBigIntStringValue("by liquid rewards", dist.ByLiquidRewards); err != nil {
 		return err
 	}
@@ -195,24 +189,6 @@ func (dist *DistributeConfig) GetByLiquidCycleRewards() *big.Int {
 		byLiquidRewards = big.NewInt(0)
 	}
 	return byLiquidRewards
-}
-
-// GetAddNodeRewards get non nil big int from string
-func (dist *DistributeConfig) GetAddNodeRewards() *big.Int {
-	addNodeRewards, _ := tools.GetBigIntFromString(dist.AddNodeRewards)
-	if addNodeRewards == nil {
-		addNodeRewards = big.NewInt(0)
-	}
-	return addNodeRewards
-}
-
-// GetAddNoVolumeRewards get non nil big int from string
-func (dist *DistributeConfig) GetAddNoVolumeRewards() *big.Int {
-	addNoVolumeRewards, _ := tools.GetBigIntFromString(dist.AddNoVolumeRewards)
-	if addNoVolumeRewards == nil {
-		addNoVolumeRewards = big.NewInt(0)
-	}
-	return addNoVolumeRewards
 }
 
 // GetDustRewardThreshold get dust reward threshold

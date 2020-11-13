@@ -54,20 +54,20 @@ func (args *BuildTxArgs) Check(dryRun bool) error {
 	if args.Sender != "" && !common.IsHexAddress(args.Sender) {
 		return fmt.Errorf("wrong sender address '%v'", args.Sender)
 	}
-	err := args.loadKeyStore()
-	if err != nil {
-		if !dryRun {
+	if !dryRun {
+		err := args.loadKeyStore()
+		if err != nil {
 			return err
 		}
+		if !strings.EqualFold(args.Sender, args.fromAddr.String()) {
+			return fmt.Errorf("sender mismatch. sender from args = '%v', sender from keystore = '%v'", args.Sender, args.fromAddr.String())
+		}
+	} else {
 		if args.Sender != "" {
 			args.fromAddr = common.HexToAddress(args.Sender)
 		} else {
 			args.Sender = args.fromAddr.String()
 		}
-		log.Warn("check build tx args failed, but ignore in dry run", "err", err)
-	}
-	if !strings.EqualFold(args.Sender, args.fromAddr.String()) {
-		return fmt.Errorf("sender mismatch. sender from args = '%v', sender from keystore = '%v'", args.Sender, args.fromAddr.String())
 	}
 	log.Info("get build transaction's sender", "sender", args.Sender)
 	args.setDefaults()

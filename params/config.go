@@ -73,27 +73,19 @@ type ExchangeConfig struct {
 
 // DistributeConfig distribute config
 type DistributeConfig struct {
-	Enable       bool
-	DryRun       bool
-	SaveDB       bool
+	Enable bool
+
 	RewardToken  string
 	StartHeight  uint64
 	StableHeight uint64
 	GasLimit     uint64
 	GasPrice     string
 
-	AddNodeRewards     string
-	AddNoVolumeRewards string
+	ByLiquidCycle   uint64
+	ByLiquidRewards string // unit Wei
 
-	ByLiquidCycle        uint64
-	ByLiquidRewards      string // unit Wei
-	ByLiquidKeystoreFile string
-	ByLiquidPasswordFile string
-
-	ByVolumeCycle        uint64
-	ByVolumeRewards      string // unit Wei
-	ByVolumeKeystoreFile string
-	ByVolumePasswordFile string
+	ByVolumeCycle   uint64
+	ByVolumeRewards string // unit Wei
 
 	QuickSettleVolumeRewards bool
 	DustRewardThreshold      string

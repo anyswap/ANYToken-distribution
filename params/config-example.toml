@@ -20,27 +20,18 @@ UpdateVolume = true # switch to update volume per day
 
 [Distribute]
 Enable = false
-DryRun = true # dry run won't send tx
-SaveDB = true # save reward result to database
 
 RewardToken = "0xC20b5E92E1ce63Af6FE537491f75C19016ea5fb4"
 StartHeight = 2510000
 StableHeight = 30
 
-AddNodeRewards = "6600000000000000000000"
-AddNoVolumeRewards = "250000000000000000000"
-
 ByLiquidCycle = 6600
-ByLiquidRewards = "9900000000000000000000"
-ByLiquidKeystoreFile = "keystore file path"
-ByLiquidPasswordFile = "password file path"
+ByLiquidRewards = "16500000000000000000000"
 
 ByVolumeCycle = 100
 ByVolumeRewards = "250000000000000000000"
-ByVolumeKeystoreFile = "keystore file path"
-ByVolumePasswordFile = "password file path"
-QuickSettleVolumeRewards = false
 
+QuickSettleVolumeRewards = false
 DustRewardThreshold = "100000000000000"
 
 # use time measurement instead of block height

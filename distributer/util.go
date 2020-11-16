@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/anyswap/ANYToken-distribution/log"
 	"github.com/anyswap/ANYToken-distribution/params"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/core/types"
@@ -42,6 +43,7 @@ func FindBlockByTimestamp(timestamp uint64) *types.Header {
 		header := capi.LoopGetBlockHeader(blockNumber)
 		headerTime := header.Time.Uint64()
 		if headerTime < timestamp {
+			log.Info("FindBlockByTimestamp waiting", "bytime", timestamp, "blockNumber", header.Number, "headerTime", headerTime)
 			time.Sleep(60 * time.Second)
 			continue
 		}

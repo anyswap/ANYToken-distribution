@@ -24,6 +24,13 @@ const (
 	customMethodID        = "custom"
 )
 
+// Calc rewards type
+const (
+	CalcBothRewards   = "both"
+	CalcVolumeRewards = "volume"
+	CalcLiquidRewards = "liquid"
+)
+
 var (
 	errTotalRewardsIsZero       = errors.New("total rewards is zero")
 	errCheckOptionFailed        = errors.New("check option failed")
@@ -76,6 +83,7 @@ type distributeRunner struct {
 
 	tradeExchanges []string
 	tradeWeights   []uint64
+	sampleHeights  []uint64
 
 	rewardToken string
 	start       uint64
@@ -184,7 +192,10 @@ func (runner *distributeRunner) run() {
 	curCycleStart := calcCurCycleStart(runner.start, runner.stable, runner.byLiquidCycleLen, runner.useTimeMeasurement)
 	for {
 		curCycleEnd := curCycleStart + runner.byLiquidCycleLen
-		_, err := runner.settleVolumeRewards(curCycleStart, curCycleEnd)
+		missVolumeCycles, err := runner.settleVolumeRewards(curCycleStart, curCycleEnd)
+		if missVolumeCycles != 0 {
+			log.Warn("found missing volume cycles", "start", curCycleStart, "end", curCycleEnd, "missing", missVolumeCycles)
+		}
 		if err == nil {
 			_ = runner.sendLiquidRewards(runner.byLiquidCycleRewards, curCycleStart, curCycleEnd)
 		}
@@ -258,6 +269,7 @@ func (runner *distributeRunner) sendLiquidRewards(rewards *big.Int, start, end u
 		StableHeight:       runner.stable,
 		Exchanges:          runner.liquidExchanges,
 		Weights:            runner.liquidWeights,
+		Heights:            runner.sampleHeights,
 		RewardToken:        runner.rewardToken,
 		DryRun:             true,
 		UseTimeMeasurement: runner.useTimeMeasurement,
@@ -275,7 +287,6 @@ func (runner *distributeRunner) sendLiquidRewards(rewards *big.Int, start, end u
 func waitCycleEnd(cycleName string, cycleStart, cycleEnd, stable uint64, waitInterval time.Duration, useTimeMeasurement bool) {
 	latest := uint64(0)
 	for {
-		time.Sleep(waitInterval)
 		syncInfo, err := mongodb.FindLatestSyncInfo()
 		if err != nil {
 			log.Warn("find latest sync info failed", "err", err)
@@ -291,6 +302,7 @@ func waitCycleEnd(cycleName string, cycleStart, cycleEnd, stable uint64, waitInt
 			break
 		}
 		log.Info(fmt.Sprintf("wait to %v cycle end", cycleName), "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable, "latest", latest)
+		time.Sleep(waitInterval)
 	}
 	log.Info(fmt.Sprintf("%v cycle end is achieved", cycleName), "cycleStart", cycleStart, "cycleEnd", cycleEnd, "stable", stable, "latest", latest)
 }
@@ -335,4 +347,122 @@ func getBuildTxArgs(distCfg *params.DistributeConfig) (*BuildTxArgs, error) {
 		return nil, err
 	}
 	return args, nil
+}
+
+// CalcRewards calc rewards
+func CalcRewards(startHeight, endHeight uint64, sampleHeights []uint64, calcType string) error {
+	log.Info("[CalcRewards] call", "startHeight", startHeight, "endHeight", endHeight, "sampleHeights", sampleHeights, "calcType", calcType)
+	distCfg := params.GetConfig().Distribute
+
+	log.Info("[CalcRewards] start job", "config", distCfg)
+
+	runner, err := initDistributer(distCfg)
+	if err != nil {
+		log.Error("[CalcRewards] start failed", "err", err)
+		return err
+	}
+
+	err = runner.checkStartEndHeight(startHeight, endHeight, calcType)
+	if err != nil {
+		return err
+	}
+
+	err = runner.checkSampleHeights(sampleHeights, startHeight, endHeight)
+	if err != nil {
+		return err
+	}
+
+	calcVolumeRewards := calcType == CalcVolumeRewards || calcType == CalcBothRewards
+	calcLiquidRewards := calcType == CalcLiquidRewards || calcType == CalcBothRewards
+
+	if calcVolumeRewards {
+		missingCycles := uint64(0)
+		if !runner.quickSettleVolumeRewards {
+			waitCycleEnd("tradeWhole", startHeight, endHeight, runner.stable, 60*time.Second, runner.useTimeMeasurement)
+			missingCycles, err = runner.sendVolumeRewards(runner.totalVolumeRewards, startHeight, endHeight)
+			if err != nil {
+				return err
+			}
+		} else {
+			step := runner.byVolumeCycleLen
+			var missing uint64
+			for start := startHeight; start < endHeight; start += step {
+				waitCycleEnd("trade", start, start+step, runner.stable, 20*time.Second, runner.useTimeMeasurement)
+				missing, err = runner.sendVolumeRewards(runner.byVolumeCycleRewards, start, start+step)
+				if err != nil {
+					return err
+				}
+				missingCycles += missing
+			}
+		}
+		if missingCycles != 0 {
+			log.Warn("found missing volume cycles", "start", startHeight, "end", endHeight, "missing", missingCycles)
+		}
+		log.Info("calc volume rewards success", "start", startHeight, "end", endHeight)
+	}
+
+	if calcLiquidRewards {
+		waitCycleEnd("liquid", startHeight, endHeight, runner.stable, 60*time.Second, runner.useTimeMeasurement)
+		runner.sampleHeights = sampleHeights
+		err = runner.sendLiquidRewards(runner.byLiquidCycleRewards, startHeight, endHeight)
+		if err != nil {
+			return err
+		}
+		log.Info("calc liquid rewards success", "start", startHeight, "end", endHeight)
+	}
+
+	return nil
+}
+
+func (runner *distributeRunner) checkStartEndHeight(startHeight, endHeight uint64, calcType string) error {
+	if startHeight >= endHeight {
+		return fmt.Errorf("start height %v is not lower than than end height %v", startHeight, endHeight)
+	}
+
+	if startHeight < runner.start {
+		return fmt.Errorf("height %v is lower than distribute start height %v", startHeight, runner.start)
+	}
+
+	calcVolumeRewards := calcType == CalcVolumeRewards || calcType == CalcBothRewards
+	calcLiquidRewards := calcType == CalcLiquidRewards || calcType == CalcBothRewards
+
+	if calcLiquidRewards || (calcVolumeRewards && !runner.quickSettleVolumeRewards) {
+		cycleLen := runner.byLiquidCycleLen
+		if startHeight+cycleLen != endHeight {
+			return fmt.Errorf("wrong start or end height, start=%v end=%v byLiquidCycleLen=%v", startHeight, endHeight, cycleLen)
+		}
+	}
+
+	if calcVolumeRewards && runner.quickSettleVolumeRewards {
+		step := runner.byVolumeCycleLen
+		if (endHeight-startHeight)%step != 0 {
+			return fmt.Errorf("wrong start or end height, start=%v end=%v byVolumeCycleLen=%v", startHeight, endHeight, step)
+		}
+	}
+
+	log.Info("check start and end height success", "startHeight", startHeight, "endHeight", "calcType", calcType)
+	return nil
+}
+
+func (runner *distributeRunner) checkSampleHeights(sampleHeights []uint64, startHeight, endHeight uint64) error {
+	startH := startHeight
+	endH := endHeight
+	if runner.useTimeMeasurement {
+		blockHeader := FindBlockByTimestamp(startHeight)
+		startH = blockHeader.Number.Uint64()
+
+		blockHeader = FindBlockByTimestamp(endHeight)
+		endH = blockHeader.Number.Uint64()
+
+		log.Info("get block height by timestamp success", "startTime", startHeight, "startHeight", startH, "endTime", endHeight, "endHeight", endH)
+	}
+
+	for _, sampleH := range sampleHeights {
+		if sampleH < startH || sampleH >= endH {
+			return fmt.Errorf("sample height %v not in the range of start %v to end %v", sampleH, startH, endH)
+		}
+	}
+
+	log.Info("check sample height success", "sampleHeights", sampleHeights, "startHeight", startH, "endHeight", endH)
+	return nil
 }

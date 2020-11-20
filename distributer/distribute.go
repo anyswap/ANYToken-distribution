@@ -36,6 +36,7 @@ var (
 	errCheckOptionFailed        = errors.New("check option failed")
 	errGetAccountListFailed     = errors.New("get account list failed")
 	errGetAccountsRewardsFailed = errors.New("get accounts rewards failed")
+	errGetAccountsSharesFailed  = errors.New("get accounts shares failed")
 	errAccountsNotComplete      = errors.New("account list is not complete")
 	errSendTransactionFailed    = errors.New("send transaction failed")
 )
@@ -440,7 +441,7 @@ func (runner *distributeRunner) checkStartEndHeight(startHeight, endHeight uint6
 		}
 	}
 
-	log.Info("check start and end height success", "startHeight", startHeight, "endHeight", "calcType", calcType)
+	log.Info("check start and end height success", "startHeight", startHeight, "endHeight", endHeight, "calcType", calcType)
 	return nil
 }
 

@@ -712,6 +712,86 @@ func GetAccountsAndRewardsFromFile(ifile string) (accountStats mongodb.AccountSt
 	return accountStats, titleLine, nil
 }
 
+// GetAccountsAndShares get accounts and shares
+func (opt *Option) GetAccountsAndShares() (accountStats []mongodb.AccountStatSlice, err error) {
+	if len(opt.InputFiles) == 0 {
+		return nil, nil
+	}
+	if len(opt.InputFiles) != len(opt.Exchanges) {
+		return nil, fmt.Errorf("count of input files %v and exchanges %v are not equal", len(opt.InputFiles), len(opt.Exchanges))
+	}
+	accountStats = make([]mongodb.AccountStatSlice, len(opt.Exchanges))
+	var stats mongodb.AccountStatSlice
+	var sampleHeight uint64
+	if len(opt.Heights) > 0 {
+		sampleHeight = opt.Heights[0]
+	}
+	for i, inputFile := range opt.InputFiles {
+		stats, err = GetAccountsAndSharesFromFile(inputFile, sampleHeight)
+		if err != nil {
+			return nil, err
+		}
+		accountStats[i] = stats
+	}
+	return accountStats, nil
+}
+
+// GetAccountsAndSharesFromFile get accounts and shares from file
+func GetAccountsAndSharesFromFile(ifile string, sampleHeight uint64) (accountStats mongodb.AccountStatSlice, err error) {
+	file, err := os.Open(ifile)
+	if err != nil {
+		return nil, fmt.Errorf("open %v failed. %v)", ifile, err)
+	}
+	defer file.Close()
+
+	accountStats = make(mongodb.AccountStatSlice, 0)
+
+	reader := bufio.NewReader(file)
+
+	for {
+		lineData, _, errf := reader.ReadLine()
+		if errf == io.EOF {
+			break
+		}
+		line := strings.TrimSpace(string(lineData))
+		if isCommentedLine(line) {
+			continue
+		}
+		parts := blankOrCommaSepRegexp.Split(line, -1)
+		if len(parts) < 2 {
+			return nil, fmt.Errorf("less than 2 parts in line %v", line)
+		}
+		accountStr := parts[0]
+		shareStr := parts[1]
+		if !common.IsHexAddress(accountStr) {
+			return nil, fmt.Errorf("wrong address in line %v", line)
+		}
+		account := common.HexToAddress(accountStr)
+		if params.IsExcludedRewardAccount(account) {
+			log.Warn("ignore excluded account", "account", accountStr)
+			continue
+		}
+		if accountStats.IsAccountExist(account) {
+			log.Info("found duplicate account", "account", accountStr)
+		}
+		share, err := tools.GetBigIntFromString(shareStr)
+		if err != nil {
+			return nil, fmt.Errorf("wrong share in line %v, err=%v", line, err)
+		}
+		if share.Sign() <= 0 {
+			continue
+		}
+		stat := &mongodb.AccountStat{
+			Account: account,
+			Share:   share,
+			Number:  sampleHeight,
+		}
+		accountStats = append(accountStats, stat)
+	}
+
+	return accountStats, nil
+}
+
 func isCommentedLine(line string) bool {
 	return strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//")
 }

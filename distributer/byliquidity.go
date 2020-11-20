@@ -27,12 +27,19 @@ func ByLiquidity(opt *Option) error {
 		log.Error("[byliquid] check option error", "option", opt.String(), "err", err)
 		return errCheckOptionFailed
 	}
-	accounts, err := opt.getAccounts()
+	accountStats, err := opt.GetAccountsAndShares()
 	if err != nil {
-		log.Error("[byliquid] get accounts error", "err", err)
-		return errGetAccountListFailed
+		log.Error("[byliquid] GetAccountsAndShares error", "err", err)
+		return errGetAccountsSharesFailed
 	}
-	accountStats := opt.getLiquidityBalances(accounts)
+	if len(accountStats) == 0 {
+		accounts, err := opt.getAccounts()
+		if err != nil {
+			log.Error("[byliquid] get accounts error", "err", err)
+			return errGetAccountListFailed
+		}
+		accountStats = opt.getLiquidityBalances(accounts)
+	}
 	if len(accountStats) != len(opt.Exchanges) {
 		log.Warn("[byliquid] account list is not complete. " + opt.String())
 		return errAccountsNotComplete

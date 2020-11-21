@@ -211,12 +211,6 @@ func (opt *Option) checkSendRewardsFromFile(ifile string) (mongodb.AccountStatSl
 		return nil, err
 	}
 
-	err = opt.CheckBasic()
-	canSaveDB := err == nil
-	if !canSaveDB && opt.SaveDB {
-		return nil, fmt.Errorf("can not savedb as error %v", err)
-	}
-
 	return accountStats, nil
 }
 

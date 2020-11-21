@@ -164,7 +164,7 @@ type MgoDistributeInfo struct {
 	End          uint64        `bson:"end"`
 	RewardToken  string        `bson:"rewardToken"`
 	Rewards      string        `bson:"rewards"`
-	SampleHeigts []uint64      `bson:"sampleHeights,omitempty"`
+	SampleHeight uint64        `bson:"sampleHeight,omitempty"`
 	Timestamp    uint64        `bson:"timestamp"`
 }
 

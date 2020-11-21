@@ -21,7 +21,7 @@ func (opt *Option) dispatchRewards(accountStats []mongodb.AccountStatSlice) erro
 
 		hasSendedReward := rewardsSended.Sign() > 0
 
-		if !opt.DryRun && hasSendedReward {
+		if opt.SaveDB && hasSendedReward {
 			mdist := &mongodb.MgoDistributeInfo{
 				Exchange:     strings.ToLower(exchange),
 				Pairs:        params.GetExchangePairs(exchange),
@@ -30,7 +30,7 @@ func (opt *Option) dispatchRewards(accountStats []mongodb.AccountStatSlice) erro
 				End:          opt.EndHeight,
 				RewardToken:  opt.RewardToken,
 				Rewards:      rewardsSended.String(),
-				SampleHeigts: opt.Heights,
+				SampleHeight: opt.SampleHeight,
 				Timestamp:    uint64(time.Now().Unix()),
 			}
 			_ = mongodb.TryDoTimes("AddDistributeInfo "+mdist.Pairs, func() error {
@@ -41,27 +41,13 @@ func (opt *Option) dispatchRewards(accountStats []mongodb.AccountStatSlice) erro
 	return nil
 }
 
-func (opt *Option) getSampleHeightsInfo() string {
-	if len(opt.Heights) == 0 {
-		return ""
-	}
-	info := "sampleHeights="
-	for i, height := range opt.Heights {
-		info += fmt.Sprintf("%d", height)
-		if i < len(opt.Heights)-1 {
-			info += "-"
-		}
-	}
-	return info
-}
-
 func (opt *Option) writeSendRewardTitleLine(outputFile io.Writer, exchange string) (keyShare, keyNumber string, err error) {
 	var extraInfo string
 	switch opt.byWhat {
 	case byLiquidMethodID:
 		keyShare = byLiquidMethodID
 		keyNumber = "height"
-		extraInfo = opt.getSampleHeightsInfo()
+		extraInfo = fmt.Sprintf("sampleHeight=%v", opt.SampleHeight)
 	case byVolumeMethodID:
 		keyShare = byVolumeMethodID
 		keyNumber = "txcount"

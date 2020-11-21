@@ -84,7 +84,7 @@ type distributeRunner struct {
 
 	tradeExchanges []string
 	tradeWeights   []uint64
-	sampleHeights  []uint64
+	sampleHeight   uint64
 
 	rewardToken string
 	start       uint64
@@ -270,7 +270,7 @@ func (runner *distributeRunner) sendLiquidRewards(rewards *big.Int, start, end u
 		StableHeight:       runner.stable,
 		Exchanges:          runner.liquidExchanges,
 		Weights:            runner.liquidWeights,
-		Heights:            runner.sampleHeights,
+		SampleHeight:       runner.sampleHeight,
 		RewardToken:        runner.rewardToken,
 		DryRun:             true,
 		UseTimeMeasurement: runner.useTimeMeasurement,
@@ -351,8 +351,8 @@ func getBuildTxArgs(distCfg *params.DistributeConfig) (*BuildTxArgs, error) {
 }
 
 // CalcRewards calc rewards
-func CalcRewards(startHeight, endHeight uint64, sampleHeights []uint64, calcType string) error {
-	log.Info("[CalcRewards] call", "startHeight", startHeight, "endHeight", endHeight, "sampleHeights", sampleHeights, "calcType", calcType)
+func CalcRewards(startHeight, endHeight, sampleHeight uint64, calcType string) error {
+	log.Info("[CalcRewards] call", "startHeight", startHeight, "endHeight", endHeight, "sampleHeight", sampleHeight, "calcType", calcType)
 	distCfg := params.GetConfig().Distribute
 
 	log.Info("[CalcRewards] start job", "config", distCfg)
@@ -368,7 +368,7 @@ func CalcRewards(startHeight, endHeight uint64, sampleHeights []uint64, calcType
 		return err
 	}
 
-	err = runner.checkSampleHeights(sampleHeights, startHeight, endHeight)
+	err = runner.checkSampleHeight(sampleHeight, startHeight, endHeight)
 	if err != nil {
 		return err
 	}
@@ -404,7 +404,7 @@ func CalcRewards(startHeight, endHeight uint64, sampleHeights []uint64, calcType
 
 	if calcLiquidRewards {
 		waitCycleEnd("liquid", startHeight, endHeight, runner.stable, 60*time.Second, runner.useTimeMeasurement)
-		runner.sampleHeights = sampleHeights
+		runner.sampleHeight = sampleHeight
 		err = runner.sendLiquidRewards(runner.byLiquidCycleRewards, startHeight, endHeight)
 		if err != nil {
 			return err
@@ -445,25 +445,13 @@ func (runner *distributeRunner) checkStartEndHeight(startHeight, endHeight uint6
 	return nil
 }
 
-func (runner *distributeRunner) checkSampleHeights(sampleHeights []uint64, startHeight, endHeight uint64) error {
-	startH := startHeight
-	endH := endHeight
-	if runner.useTimeMeasurement {
-		blockHeader := FindBlockByTimestamp(startHeight)
-		startH = blockHeader.Number.Uint64()
-
-		blockHeader = FindBlockByTimestamp(endHeight)
-		endH = blockHeader.Number.Uint64()
-
-		log.Info("get block height by timestamp success", "startTime", startHeight, "startHeight", startH, "endTime", endHeight, "endHeight", endH)
+func (runner *distributeRunner) checkSampleHeight(sampleHeight, startHeight, endHeight uint64) error {
+	if sampleHeight == 0 {
+		return nil
 	}
-
-	for _, sampleH := range sampleHeights {
-		if sampleH < startH || sampleH >= endH {
-			return fmt.Errorf("sample height %v not in the range of start %v to end %v", sampleH, startH, endH)
-		}
+	if sampleHeight >= startHeight && sampleHeight < endHeight {
+		log.Info("check sample height success", "sampleHeight", sampleHeight, "startHeight", startHeight, "endHeight", endHeight)
+		return nil
 	}
-
-	log.Info("check sample height success", "sampleHeights", sampleHeights, "startHeight", startH, "endHeight", endH)
-	return nil
+	return fmt.Errorf("sample height %v not in the range of start %v to end %v", sampleHeight, startHeight, endHeight)
 }

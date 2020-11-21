@@ -201,10 +201,10 @@ var (
 		Name:  "savedb",
 		Usage: "save to database",
 	}
-	// HeightsFlag --heights
-	HeightsFlag = &cli.StringFlag{
-		Name:  "heights",
-		Usage: "comma separated block heights",
+	// SampleFlag --sample
+	SampleFlag = &cli.Uint64Flag{
+		Name:  "sample",
+		Usage: "sample height or timestamp",
 	}
 	// RewardTyepFlag --rewardType
 	RewardTyepFlag = &cli.StringFlag{

@@ -19,7 +19,7 @@ calculate rewards by config file
 		Flags: []cli.Flag{
 			utils.StartHeightFlag,
 			utils.EndHeightFlag,
-			utils.HeightsFlag,
+			utils.SampleFlag,
 			calcTypeFlag,
 		},
 	}
@@ -39,13 +39,12 @@ func calcRewards(ctx *cli.Context) error {
 
 	startHeight := ctx.Uint64(utils.StartHeightFlag.Name)
 	endHeight := ctx.Uint64(utils.EndHeightFlag.Name)
+	sampleHeight := ctx.Uint64(utils.SampleFlag.Name)
 	if startHeight >= endHeight {
-		log.Fatal("calcRewards: start height should be lower than end height")
+		log.Fatal("calcRewards: start height should be lower than end height", "start", startHeight, "end", endHeight)
 	}
-
-	sampleHeights, err := getSampleHeights(ctx)
-	if err != nil {
-		log.Fatal("calcRewards: get sample heights failed", "err", err)
+	if sampleHeight != 0 && !(sampleHeight >= startHeight && sampleHeight < endHeight) {
+		log.Fatal("calcRewards: sample not in the range of start to end", "start", startHeight, "end", endHeight, "sample", sampleHeight)
 	}
 
 	calcType := ctx.String(calcTypeFlag.Name)
@@ -61,5 +60,5 @@ func calcRewards(ctx *cli.Context) error {
 	distributer.SetAPICaller(capi)
 	defer capi.CloseClient()
 
-	return distributer.CalcRewards(startHeight, endHeight, sampleHeights, calcType)
+	return distributer.CalcRewards(startHeight, endHeight, sampleHeight, calcType)
 }

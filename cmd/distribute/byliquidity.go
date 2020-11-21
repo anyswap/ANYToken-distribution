@@ -32,7 +32,7 @@ distribute rewards by liquidity
 			utils.GasLimitFlag,
 			utils.GasPriceFlag,
 			utils.AccountNonceFlag,
-			utils.HeightsFlag,
+			utils.SampleFlag,
 			utils.SaveDBFlag,
 			utils.DryRunFlag,
 			utils.BatchCountFlag,

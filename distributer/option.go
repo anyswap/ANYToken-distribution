@@ -16,8 +16,6 @@ import (
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
 )
 
-const sampleCount = 1
-
 // Option distribute options
 type Option struct {
 	BuildTxArgs  *BuildTxArgs
@@ -32,7 +30,7 @@ type Option struct {
 	RewardToken  string
 	InputFiles   []string
 	OutputFiles  []string
-	Heights      []uint64 `json:",omitempty"`
+	SampleHeight uint64 `json:",omitempty"`
 	SaveDB       bool
 	DryRun       bool
 
@@ -40,7 +38,7 @@ type Option struct {
 	BatchInterval uint64
 
 	// if use time measurement,
-	// then StartHeight/EndHeight are unix timestamp,
+	// then StartHeight/EndHeight/SampleHeight are unix timestamp,
 	// and StableHeight/StepCount are time duration of seconds.
 	UseTimeMeasurement bool
 
@@ -99,10 +97,10 @@ func (opt *Option) GetChainID() *big.Int {
 
 func (opt *Option) String() string {
 	return fmt.Sprintf("%v TotalValue %v StartHeight %v EndHeight %v StableHeight %v"+
-		" StepCount %v StepReward %v Heights %v Exchanges %v Weights %v"+
+		" StepCount %v StepReward %v SampleHeight %v Exchanges %v Weights %v"+
 		" RewardToken %v DryRun %v SaveDB %v Sender %v ChainID %v",
 		opt.byWhat, opt.TotalValue, opt.StartHeight, opt.EndHeight, opt.StableHeight,
-		opt.StepCount, opt.StepReward, opt.Heights, opt.Exchanges, opt.Weights,
+		opt.StepCount, opt.StepReward, opt.SampleHeight, opt.Exchanges, opt.Weights,
 		opt.RewardToken, opt.DryRun, opt.SaveDB,
 		opt.GetSender().String(), opt.GetChainID(),
 	)
@@ -136,7 +134,7 @@ func (opt *Option) CheckBasic() error {
 		if exchange == "" {
 			return fmt.Errorf("[check option] empty exchange")
 		}
-		if (!opt.DryRun || opt.SaveDB) && !params.IsConfigedExchange(exchange) {
+		if opt.SaveDB && !params.IsConfigedExchange(exchange) {
 			return fmt.Errorf("[check option] exchange '%v' is not configed", exchange)
 		}
 	}
@@ -181,6 +179,10 @@ func (opt *Option) checkSteps() (err error) {
 }
 
 func (opt *Option) checkAndInit() (err error) {
+	err = opt.CheckBasic()
+	if err != nil {
+		return err
+	}
 	err = opt.checkSteps()
 	if err != nil {
 		return err
@@ -212,8 +214,8 @@ func (opt *Option) CheckStable() error {
 	if !opt.DryRun {
 		return fmt.Errorf("[check option] latest %v is lower than end %v plus stable %v", latest, opt.EndHeight, opt.StableHeight)
 	}
-	if opt.byWhat == byLiquidMethodID && len(opt.Heights) == 0 {
-		return fmt.Errorf("[check option] latest %v is lower than end %v plus sable %v, please specify '--heights' option in dry run", latest, opt.EndHeight, opt.StableHeight)
+	if opt.byWhat == byLiquidMethodID && opt.SampleHeight == 0 {
+		return fmt.Errorf("[check option] latest %v is lower than end %v plus sable %v, please specify '--sample' option in dry run", latest, opt.EndHeight, opt.StableHeight)
 	}
 	log.Warn("[check option] block not satisfied, but ignore in dry run", "latest", latest, "end", opt.EndHeight, "stable", opt.StableHeight)
 	return nil
@@ -325,15 +327,16 @@ func (opt *Option) WriteSendRewardResult(ofile io.Writer, exchange string, stat 
 		}
 	}
 
-	if (!opt.DryRun || opt.SaveDB) && opt.byWhat != customMethodID {
-		opt.WriteRewardResultToDB(exchange, accoutStr, rewardStr, shareStr, number, hashStr)
-	}
+	opt.WriteRewardResultToDB(exchange, accoutStr, rewardStr, shareStr, number, hashStr)
 
 	return err
 }
 
 // WriteRewardResultToDB write reward result to database
 func (opt *Option) WriteRewardResultToDB(exchange, accoutStr, rewardStr, shareStr string, number uint64, hashStr string) {
+	if !opt.SaveDB || opt.byWhat == customMethodID {
+		return
+	}
 	exchange = strings.ToLower(exchange)
 	pairs := params.GetExchangePairs(exchange)
 	switch opt.byWhat {
@@ -722,12 +725,8 @@ func (opt *Option) GetAccountsAndShares() (accountStats []mongodb.AccountStatSli
 	}
 	accountStats = make([]mongodb.AccountStatSlice, len(opt.Exchanges))
 	var stats mongodb.AccountStatSlice
-	var sampleHeight uint64
-	if len(opt.Heights) > 0 {
-		sampleHeight = opt.Heights[0]
-	}
 	for i, inputFile := range opt.InputFiles {
-		stats, err = GetAccountsAndSharesFromFile(inputFile, sampleHeight)
+		stats, err = GetAccountsAndSharesFromFile(inputFile, opt.SampleHeight)
 		if err != nil {
 			return nil, err
 		}

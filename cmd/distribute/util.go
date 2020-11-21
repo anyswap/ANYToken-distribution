@@ -10,7 +10,6 @@ import (
 	"github.com/anyswap/ANYToken-distribution/log"
 	"github.com/anyswap/ANYToken-distribution/params"
 	"github.com/anyswap/ANYToken-distribution/tools"
-	cmath "github.com/fsn-dev/fsn-go-sdk/efsn/common/math"
 	"github.com/urfave/cli/v2"
 )
 
@@ -32,11 +31,6 @@ func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, error) {
 	}
 
 	err = setConfigParams(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	sampleHeights, err := getSampleHeights(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +66,7 @@ func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, error) {
 		Weights:            weights,
 		InputFiles:         ctx.StringSlice(utils.InputFileSliceFlag.Name),
 		OutputFiles:        ctx.StringSlice(utils.OutputFileSliceFlag.Name),
-		Heights:            sampleHeights,
+		SampleHeight:       ctx.Uint64(utils.SampleFlag.Name),
 		SaveDB:             ctx.Bool(utils.SaveDBFlag.Name),
 		DryRun:             ctx.Bool(utils.DryRunFlag.Name),
 		BatchCount:         ctx.Uint64(utils.BatchCountFlag.Name),
@@ -94,23 +88,6 @@ func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, error) {
 
 	log.Println("get option success.", tools.ToJSONString(opt, !log.JSONFormat))
 	return opt, nil
-}
-
-func getSampleHeights(ctx *cli.Context) ([]uint64, error) {
-	heightsStr := ctx.String(utils.HeightsFlag.Name)
-	parts := blankOrCommaSepRegexp.Split(heightsStr, -1)
-	heights := make([]uint64, 0, len(parts))
-	for _, part := range parts {
-		if part == "" {
-			continue
-		}
-		height, ok := cmath.ParseUint64(part)
-		if !ok {
-			return nil, fmt.Errorf("invalid height '%v' in heights '%v'", part, heightsStr)
-		}
-		heights = append(heights, height)
-	}
-	return heights, nil
 }
 
 func getBuildTxArgs(ctx *cli.Context) (*distributer.BuildTxArgs, error) {

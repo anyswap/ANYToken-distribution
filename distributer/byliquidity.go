@@ -21,6 +21,7 @@ func ByLiquidity(opt *Option) error {
 		log.Warn("no liquidity rewards", "option", opt.String())
 		return errTotalRewardsIsZero
 	}
+	opt.CalcSampleHeight()
 	err := opt.checkAndInit()
 	defer opt.deinit()
 	if err != nil {
@@ -49,9 +50,6 @@ func ByLiquidity(opt *Option) error {
 }
 
 func (opt *Option) getLiquidityBalances(accounts [][]common.Address) (accountStats []mongodb.AccountStatSlice) {
-	if len(opt.Heights) == 0 {
-		opt.calcSampleHeights()
-	}
 	accountStats = opt.updateLiquidityBalances(accounts)
 	return accountStats
 }
@@ -77,75 +75,68 @@ func (opt *Option) updateLiquidityBalance(exchange string, accounts []common.Add
 
 	finStatMap := make(map[common.Address]*mongodb.AccountStat)
 
-	// pick smpale blocks to query liquidity balance, and keep the minimumn
-	for _, height := range opt.Heights {
-		blockNumber := new(big.Int).SetUint64(height)
-		totalSupply := capi.LoopGetExchangeLiquidity(exchangeAddr, blockNumber)
-		exCoinBalance := capi.LoopGetCoinBalance(exchangeAddr, blockNumber)
-		log.Info("get exchange liquidity and coin balance", "totalSupply", totalSupply, "exCoinBalance", exCoinBalance, "blockNumber", blockNumber)
-		totalLiquid := big.NewInt(0)
-		totalCoinBalance := big.NewInt(0)
-		for _, account := range accounts {
-			finStat, exist := finStatMap[account]
-			// if jump here, verifyTotalLiquidity will warn total value not equal
-			// still jump here for saving performance
-			if exist && finStat.Share.Sign() == 0 {
-				continue // find zero liquidity then no need to query anymore
+	height := opt.SampleHeight
+	blockNumber := new(big.Int).SetUint64(height)
+	totalSupply := capi.LoopGetExchangeLiquidity(exchangeAddr, blockNumber)
+	exCoinBalance := capi.LoopGetCoinBalance(exchangeAddr, blockNumber)
+	log.Info("get exchange liquidity and coin balance", "totalSupply", totalSupply, "exCoinBalance", exCoinBalance, "blockNumber", blockNumber)
+	totalLiquid := big.NewInt(0)
+	totalCoinBalance := big.NewInt(0)
+	for _, account := range accounts {
+		var value *big.Int
+		accoutStr := strings.ToLower(account.String())
+		liquidStr, err := mongodb.FindLiquidityBalance(exchange, accoutStr, height)
+		if err == nil {
+			value, _ = tools.GetBigIntFromString(liquidStr)
+		}
+		for value == nil {
+			value = capi.LoopGetLiquidityBalance(exchangeAddr, account, blockNumber)
+		}
+		totalLiquid.Add(totalLiquid, value)
+		WriteLiquidityBalance(account, value, height)
+		// convert liquid balance to coin balance
+		coinBalance := new(big.Int).Mul(value, exCoinBalance)
+		if totalSupply.Sign() > 0 {
+			coinBalance.Div(coinBalance, totalSupply)
+		}
+		mliq := &mongodb.MgoLiquidityBalance{
+			Key:         mongodb.GetKeyOfLiquidityBalance(exchange, accoutStr, height),
+			Exchange:    strings.ToLower(exchange),
+			Pairs:       params.GetExchangePairs(exchange),
+			Account:     accoutStr,
+			BlockNumber: height,
+			Liquidity:   value.String(),
+		}
+		_ = mongodb.TryDoTimes("AddLiquidityBalance "+mliq.Key, func() error {
+			return mongodb.AddLiquidityBalance(mliq)
+		})
+		if params.IsExcludedRewardAccount(account) {
+			continue
+		}
+		totalCoinBalance.Add(totalCoinBalance, coinBalance)
+		finStat, exist := finStatMap[account]
+		if exist {
+			if finStat.Share.Cmp(value) > 0 { // get minimumn liquidity balance
+				finStat.Share = coinBalance
+				finStat.Number = height
 			}
-			var value *big.Int
-			accoutStr := strings.ToLower(account.String())
-			liquidStr, err := mongodb.FindLiquidityBalance(exchange, accoutStr, height)
-			if err == nil {
-				value, _ = tools.GetBigIntFromString(liquidStr)
-			}
-			for value == nil {
-				value = capi.LoopGetLiquidityBalance(exchangeAddr, account, blockNumber)
-			}
-			totalLiquid.Add(totalLiquid, value)
-			WriteLiquidityBalance(account, value, height)
-			// convert liquid balance to coin balance
-			coinBalance := new(big.Int).Mul(value, exCoinBalance)
-			if totalSupply.Sign() > 0 {
-				coinBalance.Div(coinBalance, totalSupply)
-			}
-			mliq := &mongodb.MgoLiquidityBalance{
-				Key:         mongodb.GetKeyOfLiquidityBalance(exchange, accoutStr, height),
-				Exchange:    strings.ToLower(exchange),
-				Pairs:       params.GetExchangePairs(exchange),
-				Account:     accoutStr,
-				BlockNumber: height,
-				Liquidity:   value.String(),
-			}
-			_ = mongodb.TryDoTimes("AddLiquidityBalance "+mliq.Key, func() error {
-				return mongodb.AddLiquidityBalance(mliq)
-			})
-			if params.IsExcludedRewardAccount(account) {
-				continue
-			}
-			totalCoinBalance.Add(totalCoinBalance, coinBalance)
-			if exist {
-				if finStat.Share.Cmp(value) > 0 { // get minimumn liquidity balance
-					finStat.Share = coinBalance
-					finStat.Number = height
-				}
-			} else {
-				finStatMap[account] = &mongodb.AccountStat{
-					Account: account,
-					Share:   coinBalance,
-					Number:  height,
-				}
+		} else {
+			finStatMap[account] = &mongodb.AccountStat{
+				Account: account,
+				Share:   coinBalance,
+				Number:  height,
 			}
 		}
-		if totalLiquid.Cmp(totalSupply) == 0 {
-			log.Info("[byliquid] account list is complete", "exchange", exchange, "height", blockNumber, "totalsupply", totalSupply)
-			complete = true
-		} else if !complete {
-			log.Warn("[byliquid] account list is not complete", "exchange", exchange, "height", blockNumber, "totalsupply", totalSupply, "totalLiquid", totalLiquid)
-			time.Sleep(time.Second)
-		}
-		leftValue := new(big.Int).Sub(exCoinBalance, totalCoinBalance)
-		distLeftValue(finStatMap, leftValue)
 	}
+	if totalLiquid.Cmp(totalSupply) == 0 {
+		log.Info("[byliquid] account list is complete", "exchange", exchange, "height", blockNumber, "totalsupply", totalSupply)
+		complete = true
+	} else if !complete {
+		log.Warn("[byliquid] account list is not complete", "exchange", exchange, "height", blockNumber, "totalsupply", totalSupply, "totalLiquid", totalLiquid)
+		time.Sleep(time.Second)
+	}
+	leftValue := new(big.Int).Sub(exCoinBalance, totalCoinBalance)
+	distLeftValue(finStatMap, leftValue)
 
 	return mongodb.ConvertToSortedSlice(finStatMap), complete
 }
@@ -172,46 +163,38 @@ func distLeftValue(finStatMap map[common.Address]*mongodb.AccountStat, leftValue
 	}
 }
 
-// nolint:gosec // use of weak random number generator math/rand intentionally
-func getRandNumbers(seedBlock, max, count uint64) (numbers []uint64) {
-	log.Info("start get random numbers", "seedBlock", seedBlock, "max", max, "count", count)
-	header := capi.LoopGetBlockHeader(new(big.Int).SetUint64(seedBlock))
-	log.Info("get seed block hash success", "hash", header.Hash().String())
-	dhash := common.Keccak256Hash(header.Hash().Bytes(), header.Number.Bytes())
-	for i := uint64(1); i <= count; i++ {
-		rehash := common.Keccak256Hash(dhash.Bytes(), new(big.Int).SetUint64(i).Bytes())
-		rand.Seed(new(big.Int).SetBytes(rehash.Bytes()).Int64())
-		number := uint64(rand.Intn(int(max)))
-		numbers = append(numbers, number)
+// CalcSampleHeight calc sample height
+func (opt *Option) CalcSampleHeight() {
+	if opt.SampleHeight != 0 {
+		return
 	}
-	log.Info("get random numbers success", "seedBlock", seedBlock, "max", max, "numbers", numbers)
-	return numbers
-}
-
-func (opt *Option) calcSampleHeights() {
 	start := opt.StartHeight
 	end := opt.EndHeight
-	opt.Heights = calcSampleHeightsImpl(start, end, opt.UseTimeMeasurement)
-	log.Info("calc sample height result", "start", start, "end", end, "heights", opt.Heights, "useTimeMeasurement", opt.UseTimeMeasurement)
+	opt.SampleHeight = calcSampleHeightImpl(start, end, opt.UseTimeMeasurement)
+	log.Info("calc sample height result", "start", start, "end", end, "sample", opt.SampleHeight)
 }
 
-func calcSampleHeightsImpl(start, end uint64, useTimeMeasurement bool) (heights []uint64) {
+func calcSampleHeightImpl(start, end uint64, useTimeMeasurement bool) (height uint64) {
+	head := (end - start) / 3
+	tail := end - start - head
+	startHeight := start
 	if useTimeMeasurement {
-		start = getBlockHeightByTime(start)
-		end = getBlockHeightByTime(end)
+		startHeight = getBlockHeightByTime(start)
 	}
-	countOfBlocks := end - start
-	step := (countOfBlocks + sampleCount - 1) / sampleCount
-	randNums := getRandNumbers(end, step, sampleCount)
-	for i := uint64(0); i < sampleCount; i++ {
-		startFrom := start + i*step
-		height := startFrom + randNums[i]
-		if height >= end {
-			break
-		}
-		heights = append(heights, height)
-	}
-	return heights
+	randTail := getRandNumber(startHeight, tail)
+	return start + head + randTail
+}
+
+// nolint:gosec // use of weak random number generator math/rand intentionally
+func getRandNumber(seedBlock, max uint64) (number uint64) {
+	log.Info("start get random number", "seedBlock", seedBlock, "max", max)
+	header := capi.LoopGetBlockHeader(new(big.Int).SetUint64(seedBlock))
+	log.Info("get seed block hash success", "hash", header.Hash().String())
+	seadHash := common.Keccak256Hash(header.Hash().Bytes(), header.Number.Bytes(), []byte("anyswap"))
+	rand.Seed(new(big.Int).SetBytes(seadHash.Bytes()).Int64())
+	number = uint64(rand.Intn(int(max)))
+	log.Info("get random numbers success", "seedBlock", seedBlock, "max", max, "number", number)
+	return number
 }
 
 func getBlockHeightByTime(timestamp uint64) uint64 {

@@ -73,7 +73,8 @@ type ExchangeConfig struct {
 
 // DistributeConfig distribute config
 type DistributeConfig struct {
-	Enable bool
+	Enable      bool
+	ArchiveMode bool
 
 	RewardToken  string
 	StartHeight  uint64

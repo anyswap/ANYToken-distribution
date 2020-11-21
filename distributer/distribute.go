@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sync"
 	"time"
 
 	"github.com/anyswap/ANYToken-distribution/callapi"
@@ -55,9 +56,7 @@ func SetAPICaller(apiCaller *callapi.APICaller) {
 // every 6600 blocks distribute:
 // 	1. by liquidity rewards
 // 	2. by volume rewards
-// give configed node rewards to liquidity rewards
 // check volumes every 100 block,
-// if no volume then give configed some of this rewards to liquidity rewards
 func Start(apiCaller *callapi.APICaller) {
 	SetAPICaller(apiCaller)
 	config := params.GetConfig()
@@ -100,6 +99,7 @@ type distributeRunner struct {
 
 	quickSettleVolumeRewards bool
 	useTimeMeasurement       bool
+	isArchiveMode            bool
 
 	byLiquidArgs *BuildTxArgs
 	byVolumeArgs *BuildTxArgs
@@ -108,6 +108,8 @@ type distributeRunner struct {
 func initDistributer(distCfg *params.DistributeConfig) (*distributeRunner, error) {
 	var err error
 	runner := &distributeRunner{}
+
+	runner.isArchiveMode = distCfg.ArchiveMode
 
 	runner.byLiquidArgs, err = getBuildTxArgs(distCfg)
 	if err != nil {
@@ -160,6 +162,9 @@ func initDistributer(distCfg *params.DistributeConfig) (*distributeRunner, error
 			runner.tradeWeights = append(runner.tradeWeights, exchange.TradeWeight)
 		}
 	}
+	if len(runner.tradeExchanges) == 0 && len(runner.liquidExchanges) == 0 {
+		return nil, fmt.Errorf("[distribute] stop as no exchange exists")
+	}
 
 	log.Info("init distributer runner finish",
 		"byVolumeCycleLen", runner.byVolumeCycleLen,
@@ -170,6 +175,7 @@ func initDistributer(distCfg *params.DistributeConfig) (*distributeRunner, error
 		"tradeExchanges", len(runner.tradeExchanges),
 		"quickSettleVolumeRewards", runner.quickSettleVolumeRewards,
 		"useTimeMeasurement", runner.useTimeMeasurement,
+		"archiveMode", runner.isArchiveMode,
 	)
 
 	return runner, nil
@@ -190,26 +196,45 @@ func waitNodeSyncFinish() {
 func (runner *distributeRunner) run() {
 	waitNodeSyncFinish()
 	syncer.WaitSyncToLatest()
-	curCycleStart := calcCurCycleStart(runner.start, runner.stable, runner.byLiquidCycleLen, runner.useTimeMeasurement)
-	for {
-		curCycleEnd := curCycleStart + runner.byLiquidCycleLen
-		missVolumeCycles, err := runner.settleVolumeRewards(curCycleStart, curCycleEnd)
-		if missVolumeCycles != 0 {
-			log.Warn("found missing volume cycles", "start", curCycleStart, "end", curCycleEnd, "missing", missVolumeCycles)
-		}
-		if err == nil {
-			_ = runner.sendLiquidRewards(runner.byLiquidCycleRewards, curCycleStart, curCycleEnd)
-		}
+	liquidCycleStart := calcCurCycleStart(runner.start, runner.stable, runner.byLiquidCycleLen, runner.useTimeMeasurement)
 
-		// start next cycle
-		curCycleStart = curCycleEnd
-		log.Info("start next cycle", "start", curCycleStart)
+	var wg sync.WaitGroup
+
+	if len(runner.tradeExchanges) > 0 {
+		wg.Add(1)
+		go func() {
+			for {
+				curCycleEnd := liquidCycleStart + runner.byLiquidCycleLen
+				_, _ = runner.settleVolumeRewards(liquidCycleStart, curCycleEnd)
+				// start next cycle
+				liquidCycleStart = curCycleEnd
+				log.Info("start next volume cycle", "start", liquidCycleStart)
+			}
+		}()
 	}
+
+	if len(runner.liquidExchanges) > 0 {
+		wg.Add(1)
+		go func() {
+			for {
+				curCycleEnd := liquidCycleStart + runner.byLiquidCycleLen
+				sampleHeight := CalcRandomSample(liquidCycleStart, curCycleEnd, runner.useTimeMeasurement)
+				waitCycleEnd("liquid", liquidCycleStart, sampleHeight, runner.stable, 60*time.Second, runner.useTimeMeasurement)
+				_ = runner.sendLiquidRewards(runner.byLiquidCycleRewards, liquidCycleStart, curCycleEnd, nil)
+				waitCycleEnd("liquid", liquidCycleStart, curCycleEnd, runner.stable, 60*time.Second, runner.useTimeMeasurement)
+				// start next cycle
+				liquidCycleStart = curCycleEnd
+				log.Info("start next liquid cycle", "start", liquidCycleStart)
+			}
+		}()
+	}
+
+	wg.Wait()
 }
 
 func (runner *distributeRunner) settleVolumeRewards(cycleStart, cycleEnd uint64) (uint64, error) {
 	if !runner.quickSettleVolumeRewards {
-		waitCycleEnd("liquid", cycleStart, cycleEnd, runner.stable, 60*time.Second, runner.useTimeMeasurement)
+		waitCycleEnd("trade", cycleStart, cycleEnd, runner.stable, 60*time.Second, runner.useTimeMeasurement)
 		return runner.sendVolumeRewards(runner.totalVolumeRewards, cycleStart, cycleEnd)
 	}
 	latest := calcLatestBlockNumberOrTimestamp(runner.useTimeMeasurement)
@@ -226,7 +251,7 @@ func (runner *distributeRunner) settleVolumeRewards(cycleStart, cycleEnd uint64)
 		}
 		missVolumeCycles += missing
 	}
-	log.Info("settleVolumeRewards finish", "start", cycleStart, "end", cycleEnd, "novolumes", missVolumeCycles)
+	log.Info("settleVolumeRewards finish", "start", cycleStart, "end", cycleEnd, "missing", missVolumeCycles)
 	return missVolumeCycles, nil
 }
 
@@ -251,14 +276,14 @@ func (runner *distributeRunner) sendVolumeRewards(rewards *big.Int, start, end u
 	log.Info("start send volume reward", "option", opt.String())
 	err = ByVolume(opt)
 	if err != nil {
-		log.Error("send volume reward failed", "err", err)
+		log.Error("send volume reward failed", start, "end", end, "rewards", rewards, "err", err)
 		return 0, err
 	}
 	log.Info("send volume reward success", "start", start, "end", end, "rewards", rewards)
 	return opt.noVolumes, err
 }
 
-func (runner *distributeRunner) sendLiquidRewards(rewards *big.Int, start, end uint64) error {
+func (runner *distributeRunner) sendLiquidRewards(rewards *big.Int, start, end uint64, inputFiles []string) error {
 	if len(runner.liquidExchanges) == 0 {
 		return nil
 	}
@@ -274,11 +299,13 @@ func (runner *distributeRunner) sendLiquidRewards(rewards *big.Int, start, end u
 		RewardToken:        runner.rewardToken,
 		DryRun:             true,
 		UseTimeMeasurement: runner.useTimeMeasurement,
+		ArchiveMode:        runner.isArchiveMode,
+		InputFiles:         inputFiles,
 	}
 	log.Info("start send liquid reward", "option", opt.String())
 	err := ByLiquidity(opt)
 	if err != nil {
-		log.Error("send liquid reward failed", "err", err)
+		log.Error("send liquid reward failed", "start", start, "end", end, "rewards", rewards, "err", err)
 		return err
 	}
 	log.Info("send liquid reward success", "start", start, "end", end, "rewards", rewards)
@@ -351,8 +378,8 @@ func getBuildTxArgs(distCfg *params.DistributeConfig) (*BuildTxArgs, error) {
 }
 
 // CalcRewards calc rewards
-func CalcRewards(startHeight, endHeight, sampleHeight uint64, calcType string) error {
-	log.Info("[CalcRewards] call", "startHeight", startHeight, "endHeight", endHeight, "sampleHeight", sampleHeight, "calcType", calcType)
+func CalcRewards(startHeight, endHeight, sampleHeight uint64, calcType string, inputs []string) error {
+	log.Info("[CalcRewards] call", "startHeight", startHeight, "endHeight", endHeight, "sampleHeight", sampleHeight, "calcType", calcType, "inputs", inputs)
 	distCfg := params.GetConfig().Distribute
 
 	log.Info("[CalcRewards] start job", "config", distCfg)
@@ -377,41 +404,58 @@ func CalcRewards(startHeight, endHeight, sampleHeight uint64, calcType string) e
 	calcLiquidRewards := calcType == CalcLiquidRewards || calcType == CalcBothRewards
 
 	if calcVolumeRewards {
-		missingCycles := uint64(0)
-		if !runner.quickSettleVolumeRewards {
-			waitCycleEnd("tradeWhole", startHeight, endHeight, runner.stable, 60*time.Second, runner.useTimeMeasurement)
-			missingCycles, err = runner.sendVolumeRewards(runner.totalVolumeRewards, startHeight, endHeight)
-			if err != nil {
-				return err
-			}
-		} else {
-			step := runner.byVolumeCycleLen
-			var missing uint64
-			for start := startHeight; start < endHeight; start += step {
-				waitCycleEnd("trade", start, start+step, runner.stable, 20*time.Second, runner.useTimeMeasurement)
-				missing, err = runner.sendVolumeRewards(runner.byVolumeCycleRewards, start, start+step)
-				if err != nil {
-					return err
-				}
-				missingCycles += missing
-			}
-		}
-		if missingCycles != 0 {
-			log.Warn("found missing volume cycles", "start", startHeight, "end", endHeight, "missing", missingCycles)
+		err = runner.calcVolumeRewards(startHeight, endHeight)
+		if err != nil {
+			return err
 		}
 		log.Info("calc volume rewards success", "start", startHeight, "end", endHeight)
 	}
 
 	if calcLiquidRewards {
-		waitCycleEnd("liquid", startHeight, endHeight, runner.stable, 60*time.Second, runner.useTimeMeasurement)
 		runner.sampleHeight = sampleHeight
-		err = runner.sendLiquidRewards(runner.byLiquidCycleRewards, startHeight, endHeight)
+		err = runner.calcLiquidRewards(startHeight, endHeight, inputs)
 		if err != nil {
 			return err
 		}
-		log.Info("calc liquid rewards success", "start", startHeight, "end", endHeight)
+		log.Info("calc liquid rewards success", "start", startHeight, "end", endHeight, "sampleHeight", sampleHeight, "archiveMode", runner.isArchiveMode)
 	}
 
+	return nil
+}
+
+func (runner *distributeRunner) calcLiquidRewards(startHeight, endHeight uint64, inputs []string) (err error) {
+	if runner.sampleHeight != 0 && runner.isArchiveMode {
+		waitCycleEnd("liquid", startHeight, runner.sampleHeight, runner.stable, 60*time.Second, runner.useTimeMeasurement)
+	}
+	if len(inputs) != 0 && len(inputs) != len(runner.liquidExchanges) {
+		return fmt.Errorf("count of input files %v and liquid exchanges %v are not equal", len(inputs), len(runner.liquidExchanges))
+	}
+	return runner.sendLiquidRewards(runner.byLiquidCycleRewards, startHeight, endHeight, inputs)
+}
+
+func (runner *distributeRunner) calcVolumeRewards(startHeight, endHeight uint64) (err error) {
+	missingCycles := uint64(0)
+	if !runner.quickSettleVolumeRewards {
+		waitCycleEnd("tradeWhole", startHeight, endHeight, runner.stable, 60*time.Second, runner.useTimeMeasurement)
+		missingCycles, err = runner.sendVolumeRewards(runner.totalVolumeRewards, startHeight, endHeight)
+		if err != nil {
+			return err
+		}
+	} else {
+		step := runner.byVolumeCycleLen
+		var missing uint64
+		for start := startHeight; start < endHeight; start += step {
+			waitCycleEnd("trade", start, start+step, runner.stable, 20*time.Second, runner.useTimeMeasurement)
+			missing, err = runner.sendVolumeRewards(runner.byVolumeCycleRewards, start, start+step)
+			if err != nil {
+				return err
+			}
+			missingCycles += missing
+		}
+	}
+	if missingCycles != 0 {
+		log.Warn("found missing volume cycles", "start", startHeight, "end", endHeight, "missing", missingCycles)
+	}
 	return nil
 }
 
@@ -446,7 +490,7 @@ func (runner *distributeRunner) checkStartEndHeight(startHeight, endHeight uint6
 }
 
 func (runner *distributeRunner) checkSampleHeight(sampleHeight, startHeight, endHeight uint64) error {
-	if sampleHeight == 0 {
+	if sampleHeight == 0 || !runner.isArchiveMode {
 		return nil
 	}
 	if sampleHeight >= startHeight && sampleHeight < endHeight {

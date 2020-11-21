@@ -37,7 +37,8 @@ func IsAccountExist(account common.Address, accounts []common.Address) bool {
 
 // FindBlockByTimestamp find block by timestamp
 func FindBlockByTimestamp(timestamp uint64) *types.Header {
-	var blockNumber, hi, lo *big.Int
+	var blockNumber *big.Int
+	var high, low uint64
 
 	for blockNumber == nil {
 		header := capi.LoopGetBlockHeader(blockNumber)
@@ -48,7 +49,7 @@ func FindBlockByTimestamp(timestamp uint64) *types.Header {
 			continue
 		}
 		blockNumber = header.Number
-		hi = blockNumber
+		high = blockNumber.Uint64()
 	}
 
 	avgBlockTime := params.GetAverageBlockTime()
@@ -60,8 +61,8 @@ func FindBlockByTimestamp(timestamp uint64) *types.Header {
 			return header
 		}
 		if headerTime > timestamp {
-			hi = blockNumber
-			if hi.Sign() == 0 {
+			high = blockNumber.Uint64()
+			if high == 0 {
 				return header
 			}
 			countOfBlocks := (headerTime-timestamp)/avgBlockTime + 1
@@ -70,28 +71,29 @@ func FindBlockByTimestamp(timestamp uint64) *types.Header {
 				blockNumber = big.NewInt(0)
 			}
 		} else {
-			lo = blockNumber
+			low = blockNumber.Uint64()
 			break
 		}
 	}
 
-	return binarySearch(timestamp, hi, lo)
+	header := binarySearch(timestamp, high, low)
+	log.Debug("FindBlockByTimestamp finished", "timestamp", timestamp, "block", header.Number, "blockTimestamp", header.Time, "high", high, "low", low)
+	return header
 }
 
-func binarySearch(timestamp uint64, hi, lo *big.Int) *types.Header {
-	for lo.Cmp(hi) < 0 {
-		mid := new(big.Int).Add(lo, hi)
-		mid.Div(mid, big.NewInt(2))
-		header := capi.LoopGetBlockHeader(mid)
+func binarySearch(timestamp, high, low uint64) *types.Header {
+	for low < high {
+		mid := (low + high) / 2
+		header := capi.LoopGetBlockHeader(new(big.Int).SetUint64(mid))
 		headerTime := header.Time.Uint64()
 		if headerTime == timestamp {
 			return header
 		}
 		if headerTime > timestamp {
-			hi = mid
+			high = mid
 		} else {
-			lo = new(big.Int).Add(mid, big.NewInt(1))
+			low = mid - 1
 		}
 	}
-	return capi.LoopGetBlockHeader(lo)
+	return capi.LoopGetBlockHeader(new(big.Int).SetUint64(low))
 }

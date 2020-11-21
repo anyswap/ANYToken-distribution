@@ -80,7 +80,7 @@ func (opt *Option) divideVolumeRewardsByExchange(accountStats []mongodb.AccountS
 	}
 
 	preCycleStart, preCycleEnd := calcPrevCycleSttEnd(opt.StartHeight, opt.UseTimeMeasurement)
-	sampleHeight := calcSampleHeightImpl(preCycleStart, preCycleEnd, opt.UseTimeMeasurement)
+	sampleHeight := CalcRandomSampleHeight(preCycleStart, preCycleEnd, opt.UseTimeMeasurement)
 	blockNumber := new(big.Int).SetUint64(sampleHeight)
 	log.Info("divideVolumeRewards",
 		"start", opt.StartHeight, "end", opt.EndHeight,

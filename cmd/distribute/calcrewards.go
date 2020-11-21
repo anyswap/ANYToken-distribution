@@ -20,6 +20,7 @@ calculate rewards by config file
 			utils.StartHeightFlag,
 			utils.EndHeightFlag,
 			utils.SampleFlag,
+			utils.InputFileSliceFlag,
 			calcTypeFlag,
 		},
 	}
@@ -60,5 +61,7 @@ func calcRewards(ctx *cli.Context) error {
 	distributer.SetAPICaller(capi)
 	defer capi.CloseClient()
 
-	return distributer.CalcRewards(startHeight, endHeight, sampleHeight, calcType)
+	inputs := ctx.StringSlice(utils.InputFileSliceFlag.Name)
+
+	return distributer.CalcRewards(startHeight, endHeight, sampleHeight, calcType, inputs)
 }

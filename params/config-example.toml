@@ -20,26 +20,27 @@ UpdateVolume = true # switch to update volume per day
 
 [Distribute]
 Enable = false
+ArchiveMode = false
 
 RewardToken = "0xC20b5E92E1ce63Af6FE537491f75C19016ea5fb4"
-StartHeight = 2510000
-StableHeight = 30
-
-ByLiquidCycle = 6600
 ByLiquidRewards = "16500000000000000000000"
-
-ByVolumeCycle = 100
 ByVolumeRewards = "250000000000000000000"
 
-QuickSettleVolumeRewards = false
-DustRewardThreshold = "100000000000000"
+# use block height measurement
+StartHeight = 2510000
+StableHeight = 30
+ByLiquidCycle = 6600
+ByVolumeCycle = 100
 
 # use time measurement instead of block height
-UseTimeMeasurement = false
+UseTimeMeasurement = true
 StartTimestamp = 1605088800   # unix timestamp
 StableDuration = 300          # unit of seconds
 ByLiquidCycleDuration = 86400 # unit of seconds
 ByVolumeCycleDuration = 1800  # unit of seconds
+
+QuickSettleVolumeRewards = false
+DustRewardThreshold = "100000000000000"
 
 [[Exchanges]]
 Pairs = "ANY"

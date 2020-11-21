@@ -4,7 +4,6 @@ import (
 	"math/big"
 	"math/rand"
 	"strings"
-	"time"
 
 	"github.com/anyswap/ANYToken-distribution/log"
 	"github.com/anyswap/ANYToken-distribution/mongodb"
@@ -49,17 +48,12 @@ func ByLiquidity(opt *Option) error {
 	return opt.dispatchRewards(accountStats)
 }
 
-func (opt *Option) getLiquidityBalances(accounts [][]common.Address) (accountStats []mongodb.AccountStatSlice) {
-	accountStats = opt.updateLiquidityBalances(accounts)
-	return accountStats
-}
-
-func (opt *Option) updateLiquidityBalances(accountsSlice [][]common.Address) (accountStats []mongodb.AccountStatSlice) {
+func (opt *Option) getLiquidityBalances(accountsSlice [][]common.Address) (accountStats []mongodb.AccountStatSlice) {
 	accountStats = make([]mongodb.AccountStatSlice, len(opt.Exchanges))
 	for i, exchange := range opt.Exchanges {
 		accounts := accountsSlice[i]
 		WriteLiquiditySubject(exchange, opt.StartHeight, opt.EndHeight, len(accounts))
-		stats, _ := opt.updateLiquidityBalance(exchange, accounts)
+		stats, _ := opt.getLiquidityBalancesOfExchange(exchange, accounts)
 		totalLiquids := stats.CalcTotalShare()
 		WriteLiquiditySummary(exchange, opt.StartHeight, opt.EndHeight, len(stats), totalLiquids, opt.TotalValue)
 		for _, stat := range stats {
@@ -70,13 +64,21 @@ func (opt *Option) updateLiquidityBalances(accountsSlice [][]common.Address) (ac
 	return accountStats
 }
 
-func (opt *Option) updateLiquidityBalance(exchange string, accounts []common.Address) (accountStats mongodb.AccountStatSlice, complete bool) {
+func (opt *Option) getLiquidityBalancesOfExchange(exchange string, accounts []common.Address) (accountStats mongodb.AccountStatSlice, complete bool) {
 	exchangeAddr := common.HexToAddress(exchange)
 
 	finStatMap := make(map[common.Address]*mongodb.AccountStat)
 
 	height := opt.SampleHeight
-	blockNumber := new(big.Int).SetUint64(height)
+	var blockNumber *big.Int
+	if !opt.ArchiveMode {
+		latestBlock := capi.LoopGetLatestBlockHeader()
+		height = latestBlock.Number.Uint64()
+		blockNumber = nil // use latest block in non archive mode
+		log.Warn("get liquidity balance in non archive mode", "latest", height)
+	} else {
+		blockNumber = new(big.Int).SetUint64(height)
+	}
 	totalSupply := capi.LoopGetExchangeLiquidity(exchangeAddr, blockNumber)
 	exCoinBalance := capi.LoopGetCoinBalance(exchangeAddr, blockNumber)
 	log.Info("get exchange liquidity and coin balance", "totalSupply", totalSupply, "exCoinBalance", exCoinBalance, "blockNumber", blockNumber)
@@ -128,53 +130,38 @@ func (opt *Option) updateLiquidityBalance(exchange string, accounts []common.Add
 			}
 		}
 	}
-	if totalLiquid.Cmp(totalSupply) == 0 {
-		log.Info("[byliquid] account list is complete", "exchange", exchange, "height", blockNumber, "totalsupply", totalSupply)
+	diffLiquid := new(big.Int).Sub(totalSupply, totalLiquid)
+	diffLiquid = diffLiquid.Abs(diffLiquid)
+	if new(big.Int).Mul(diffLiquid, big.NewInt(20)).Cmp(totalLiquid) <= 0 { // allow 5% diff
 		complete = true
-	} else if !complete {
-		log.Warn("[byliquid] account list is not complete", "exchange", exchange, "height", blockNumber, "totalsupply", totalSupply, "totalLiquid", totalLiquid)
-		time.Sleep(time.Second)
 	}
-	leftValue := new(big.Int).Sub(exCoinBalance, totalCoinBalance)
-	distLeftValue(finStatMap, leftValue)
+	log.Info("[byliquid] check if account list is complete", "exchange", exchange, "smaple", height, "totalsupply", totalSupply, "totalLiquid", totalLiquid, "diffLiquid", diffLiquid)
 
 	return mongodb.ConvertToSortedSlice(finStatMap), complete
 }
 
-func distLeftValue(finStatMap map[common.Address]*mongodb.AccountStat, leftValue *big.Int) {
-	if leftValue.Sign() <= 0 {
-		return
-	}
-	stats := mongodb.ConvertToSortedSlice(finStatMap)
-	if len(stats) == 0 {
-		return
-	}
-	numAccounts := big.NewInt(int64(len(stats)))
-	avg := new(big.Int).Div(leftValue, numAccounts)
-	mod := new(big.Int).Mod(leftValue, numAccounts).Uint64()
-	for i, stat := range stats {
-		share := stat.Share
-		if avg.Sign() > 0 {
-			share.Add(share, avg)
-		}
-		if uint64(i) < mod {
-			share.Add(share, big.NewInt(1))
-		}
-	}
-}
-
 // CalcSampleHeight calc sample height
 func (opt *Option) CalcSampleHeight() {
-	if opt.SampleHeight != 0 {
+	if opt.SampleHeight != 0 || !opt.ArchiveMode {
 		return
 	}
-	start := opt.StartHeight
-	end := opt.EndHeight
-	opt.SampleHeight = calcSampleHeightImpl(start, end, opt.UseTimeMeasurement)
-	log.Info("calc sample height result", "start", start, "end", end, "sample", opt.SampleHeight)
+	opt.SampleHeight = CalcRandomSampleHeight(opt.StartHeight, opt.EndHeight, opt.UseTimeMeasurement)
 }
 
-func calcSampleHeightImpl(start, end uint64, useTimeMeasurement bool) (height uint64) {
+// CalcRandomSampleHeight calc random sample height base on start
+func CalcRandomSampleHeight(start, end uint64, useTimeMeasurement bool) (sampleHeight uint64) {
+	sample := CalcRandomSample(start, end, useTimeMeasurement)
+	if useTimeMeasurement {
+		sampleHeight = getBlockHeightByTime(sample)
+	} else {
+		sampleHeight = sample
+	}
+	log.Info("calc random sample height result", "start", start, "end", end, "useTimeMeasurement", useTimeMeasurement, "sample", sample, "sampleHeight", sampleHeight)
+	return sampleHeight
+}
+
+// CalcRandomSample calc random sample (height or timestamp) base on start
+func CalcRandomSample(start, end uint64, useTimeMeasurement bool) (sample uint64) {
 	head := (end - start) / 3
 	tail := end - start - head
 	startHeight := start
@@ -182,7 +169,9 @@ func calcSampleHeightImpl(start, end uint64, useTimeMeasurement bool) (height ui
 		startHeight = getBlockHeightByTime(start)
 	}
 	randTail := getRandNumber(startHeight, tail)
-	return start + head + randTail
+	sample = start + head + randTail
+	log.Info("calc random sample height or timestamp result", "start", start, "end", end, "useTimeMeasurement", useTimeMeasurement, "sample", sample)
+	return sample
 }
 
 // nolint:gosec // use of weak random number generator math/rand intentionally

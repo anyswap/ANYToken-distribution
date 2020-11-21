@@ -238,6 +238,11 @@ var (
 		Name:  "usetime",
 		Usage: "use timestamp instead of block height",
 	}
+	// ArchiveModeFlag --archivemode
+	ArchiveModeFlag = &cli.BoolFlag{
+		Name:  "archivemode",
+		Usage: "is archive mode",
+	}
 )
 
 // SyncArguments command line arguments

@@ -38,6 +38,7 @@ distribute rewards by liquidity
 			utils.BatchCountFlag,
 			utils.BatchIntervalFlag,
 			utils.UseTimeMeasurementFlag,
+			utils.ArchiveModeFlag,
 		},
 	}
 )

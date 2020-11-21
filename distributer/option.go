@@ -33,13 +33,15 @@ type Option struct {
 	SampleHeight uint64 `json:",omitempty"`
 	SaveDB       bool
 	DryRun       bool
+	ArchiveMode  bool
 
 	BatchCount    uint64
 	BatchInterval uint64
 
 	// if use time measurement,
-	// then StartHeight/EndHeight/SampleHeight are unix timestamp,
+	// then StartHeight/EndHeight are unix timestamp,
 	// and StableHeight/StepCount are time duration of seconds.
+	// SampleHeight is always block heights, not timestamp
 	UseTimeMeasurement bool
 
 	byWhat    string
@@ -98,10 +100,10 @@ func (opt *Option) GetChainID() *big.Int {
 func (opt *Option) String() string {
 	return fmt.Sprintf("%v TotalValue %v StartHeight %v EndHeight %v StableHeight %v"+
 		" StepCount %v StepReward %v SampleHeight %v Exchanges %v Weights %v"+
-		" RewardToken %v DryRun %v SaveDB %v Sender %v ChainID %v",
+		" RewardToken %v DryRun %v SaveDB %v ArchiveMode %v Sender %v ChainID %v",
 		opt.byWhat, opt.TotalValue, opt.StartHeight, opt.EndHeight, opt.StableHeight,
 		opt.StepCount, opt.StepReward, opt.SampleHeight, opt.Exchanges, opt.Weights,
-		opt.RewardToken, opt.DryRun, opt.SaveDB,
+		opt.RewardToken, opt.DryRun, opt.SaveDB, opt.ArchiveMode,
 		opt.GetSender().String(), opt.GetChainID(),
 	)
 }
@@ -179,6 +181,7 @@ func (opt *Option) checkSteps() (err error) {
 }
 
 func (opt *Option) checkAndInit() (err error) {
+	log.Info("checkAndInit start")
 	err = opt.CheckBasic()
 	if err != nil {
 		return err
@@ -199,6 +202,7 @@ func (opt *Option) checkAndInit() (err error) {
 	if err != nil {
 		return err
 	}
+	log.Info("checkAndInit success")
 	return nil
 }
 
@@ -214,7 +218,7 @@ func (opt *Option) CheckStable() error {
 	if !opt.DryRun {
 		return fmt.Errorf("[check option] latest %v is lower than end %v plus stable %v", latest, opt.EndHeight, opt.StableHeight)
 	}
-	if opt.byWhat == byLiquidMethodID && opt.SampleHeight == 0 {
+	if opt.byWhat == byLiquidMethodID && opt.SampleHeight == 0 && opt.ArchiveMode {
 		return fmt.Errorf("[check option] latest %v is lower than end %v plus sable %v, please specify '--sample' option in dry run", latest, opt.EndHeight, opt.StableHeight)
 	}
 	log.Warn("[check option] block not satisfied, but ignore in dry run", "latest", latest, "end", opt.EndHeight, "stable", opt.StableHeight)

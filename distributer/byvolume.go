@@ -80,11 +80,20 @@ func (opt *Option) divideVolumeRewardsByExchange(accountStats []mongodb.AccountS
 	}
 
 	preCycleStart, preCycleEnd := calcPrevCycleSttEnd(opt.StartHeight, opt.UseTimeMeasurement)
-	sampleHeight := CalcRandomSampleHeight(preCycleStart, preCycleEnd, opt.UseTimeMeasurement)
-	blockNumber := new(big.Int).SetUint64(sampleHeight)
-	log.Info("divideVolumeRewards",
+
+	var sampleHeight uint64
+	var sampleBlockNumber *big.Int
+	if !opt.ArchiveMode {
+		latestBlock := capi.LoopGetLatestBlockHeader()
+		sampleHeight = latestBlock.Number.Uint64()
+		sampleBlockNumber = nil // use latest block in non archive mode
+	} else {
+		sampleHeight = CalcRandomSampleHeight(preCycleStart, preCycleEnd, opt.UseTimeMeasurement)
+		sampleBlockNumber = new(big.Int).SetUint64(sampleHeight)
+	}
+	log.Info("divideVolumeRewards", "archiveMode", opt.ArchiveMode,
 		"start", opt.StartHeight, "end", opt.EndHeight,
-		"preCycleStart", preCycleStart, "preCycleEnd", preCycleEnd, "sampleHeight", blockNumber)
+		"preCycleStart", preCycleStart, "preCycleEnd", preCycleEnd, "sampleHeight", sampleHeight)
 
 	exchangeShares := make([]*big.Int, len(opt.Exchanges))
 	for i, exchange := range opt.Exchanges {
@@ -95,27 +104,28 @@ func (opt *Option) divideVolumeRewardsByExchange(accountStats []mongodb.AccountS
 		}
 
 		// use exchange's liquidity (represent by coin) as upper limit
-		exCoinBalance := capi.LoopGetCoinBalance(common.HexToAddress(exchange), blockNumber)
+		exCoinBalance := capi.LoopGetCoinBalance(common.HexToAddress(exchange), sampleBlockNumber)
 		if opt.EndHeight-opt.StartHeight != preCycleEnd-preCycleStart {
 			exCoinBalance.Mul(exCoinBalance, new(big.Int).SetUint64(opt.EndHeight-opt.StartHeight))
 			exCoinBalance.Div(exCoinBalance, new(big.Int).SetUint64(preCycleEnd-preCycleStart))
 		}
 		var truncated bool
-		if sumShare.Cmp(exCoinBalance) > 0 {
-			sumShare = exCoinBalance
+		totalShare := new(big.Int).Set(sumShare)
+		if totalShare.Cmp(exCoinBalance) > 0 {
+			totalShare.Set(exCoinBalance)
 			truncated = true
 		}
 
 		weight := uint64(1)
 		if len(opt.Weights) > i && opt.Weights[i] > 1 {
 			weight = opt.Weights[i]
-			sumShare.Mul(sumShare, new(big.Int).SetUint64(weight))
+			totalShare.Mul(totalShare, new(big.Int).SetUint64(weight))
 		}
 
-		exchangeShares[i] = sumShare
-		log.Info("divide volume rewards by exchange",
-			"start", opt.StartHeight, "end", opt.EndHeight, "sampleHeight", blockNumber,
-			"exchange", exchange, "weight", weight, "totalShare", sumShare,
+		exchangeShares[i] = totalShare
+		log.Info("divide volume rewards by exchange", "archiveMode", opt.ArchiveMode,
+			"start", opt.StartHeight, "end", opt.EndHeight, "sampleHeight", sampleHeight,
+			"exchange", exchange, "weight", weight, "totalShare", totalShare, "sumShare", sumShare,
 			"upperLimit", exCoinBalance, "truncated", truncated)
 	}
 	return mongodb.DivideRewards(totalReward, exchangeShares)

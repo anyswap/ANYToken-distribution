@@ -196,40 +196,46 @@ func waitNodeSyncFinish() {
 func (runner *distributeRunner) run() {
 	waitNodeSyncFinish()
 	syncer.WaitSyncToLatest()
-	liquidCycleStart := calcCurCycleStart(runner.start, runner.stable, runner.byLiquidCycleLen, runner.useTimeMeasurement)
+	curCycleStart := calcCurCycleStart(runner.start, runner.stable, runner.byLiquidCycleLen, runner.useTimeMeasurement)
 
-	var wg sync.WaitGroup
-
-	if len(runner.tradeExchanges) > 0 {
-		wg.Add(1)
-		go func() {
-			for {
-				curCycleEnd := liquidCycleStart + runner.byLiquidCycleLen
-				_, _ = runner.settleVolumeRewards(liquidCycleStart, curCycleEnd)
-				// start next cycle
-				liquidCycleStart = curCycleEnd
-				log.Info("start next volume cycle", "start", liquidCycleStart)
-			}
-		}()
-	}
-
-	if len(runner.liquidExchanges) > 0 {
-		wg.Add(1)
-		go func() {
-			for {
-				curCycleEnd := liquidCycleStart + runner.byLiquidCycleLen
-				sampleHeight := CalcRandomSample(liquidCycleStart, curCycleEnd, runner.useTimeMeasurement)
-				waitCycleEnd("liquid", liquidCycleStart, sampleHeight, runner.stable, 60*time.Second, runner.useTimeMeasurement)
-				_ = runner.sendLiquidRewards(runner.byLiquidCycleRewards, liquidCycleStart, curCycleEnd, nil)
-				waitCycleEnd("liquid", liquidCycleStart, curCycleEnd, runner.stable, 60*time.Second, runner.useTimeMeasurement)
-				// start next cycle
-				liquidCycleStart = curCycleEnd
-				log.Info("start next liquid cycle", "start", liquidCycleStart)
-			}
-		}()
-	}
-
+	wg := new(sync.WaitGroup)
+	wg.Add(2)
+	go runner.runVolumeDistribute(wg, curCycleStart)
+	go runner.runLiquidDistribute(wg, curCycleStart)
 	wg.Wait()
+}
+
+func (runner *distributeRunner) runVolumeDistribute(wg *sync.WaitGroup, curCycleStart uint64) {
+	defer wg.Done()
+	if len(runner.tradeExchanges) == 0 {
+		return
+	}
+	log.Info("start volume reward distribution", "start", curCycleStart)
+	for {
+		curCycleEnd := curCycleStart + runner.byLiquidCycleLen
+		_, _ = runner.settleVolumeRewards(curCycleStart, curCycleEnd)
+		// start next cycle
+		curCycleStart = curCycleEnd
+		log.Info("start next volume cycle", "start", curCycleStart)
+	}
+}
+
+func (runner *distributeRunner) runLiquidDistribute(wg *sync.WaitGroup, curCycleStart uint64) {
+	defer wg.Done()
+	if len(runner.liquidExchanges) == 0 {
+		return
+	}
+	log.Info("start liquid reward distribution", "start", curCycleStart)
+	for {
+		curCycleEnd := curCycleStart + runner.byLiquidCycleLen
+		sampleHeight := CalcRandomSample(curCycleStart, curCycleEnd, runner.useTimeMeasurement)
+		waitCycleEnd("liquid", curCycleStart, sampleHeight, runner.stable, 60*time.Second, runner.useTimeMeasurement)
+		_ = runner.sendLiquidRewards(runner.byLiquidCycleRewards, curCycleStart, curCycleEnd, nil)
+		waitCycleEnd("liquid", curCycleStart, curCycleEnd, runner.stable, 60*time.Second, runner.useTimeMeasurement)
+		// start next cycle
+		curCycleStart = curCycleEnd
+		log.Info("start next liquid cycle", "start", curCycleStart)
+	}
 }
 
 func (runner *distributeRunner) settleVolumeRewards(cycleStart, cycleEnd uint64) (uint64, error) {
@@ -350,6 +356,7 @@ func calcCurCycleStart(start, stable, cycleLen uint64, useTimeMeasurement bool) 
 	latest := calcLatestBlockNumberOrTimestamp(useTimeMeasurement)
 	cycles := (latest - start - stable) / cycleLen
 	curCycleStart := start + cycles*cycleLen
+	log.Info("calcCurCycleStart", "start", curCycleStart, "latest", latest)
 	return curCycleStart
 }
 

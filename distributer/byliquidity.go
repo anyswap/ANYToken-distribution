@@ -162,6 +162,7 @@ func CalcRandomSampleHeight(start, end uint64, useTimeMeasurement bool) (sampleH
 
 // CalcRandomSample calc random sample (height or timestamp) base on start
 func CalcRandomSample(start, end uint64, useTimeMeasurement bool) (sample uint64) {
+	log.Info("start calc random sample height or timestamp", "start", start, "end", end, "useTimeMeasurement", useTimeMeasurement)
 	head := (end - start) / 3
 	tail := end - start - head
 	startHeight := start
@@ -176,13 +177,13 @@ func CalcRandomSample(start, end uint64, useTimeMeasurement bool) (sample uint64
 
 // nolint:gosec // use of weak random number generator math/rand intentionally
 func getRandNumber(seedBlock, max uint64) (number uint64) {
-	log.Info("start get random number", "seedBlock", seedBlock, "max", max)
+	log.Info("start get random number for sample", "seedBlock", seedBlock, "max", max)
 	header := capi.LoopGetBlockHeader(new(big.Int).SetUint64(seedBlock))
 	log.Info("get seed block hash success", "hash", header.Hash().String())
 	seadHash := common.Keccak256Hash(header.Hash().Bytes(), header.Number.Bytes(), []byte("anyswap"))
 	rand.Seed(new(big.Int).SetBytes(seadHash.Bytes()).Int64())
 	number = uint64(rand.Intn(int(max)))
-	log.Info("get random numbers success", "seedBlock", seedBlock, "max", max, "number", number)
+	log.Info("get random numbers for sample success", "seedBlock", seedBlock, "max", max, "number", number)
 	return number
 }
 

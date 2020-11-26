@@ -37,6 +37,7 @@ func IsAccountExist(account common.Address, accounts []common.Address) bool {
 
 // FindBlockByTimestamp find block by timestamp
 func FindBlockByTimestamp(timestamp uint64) *types.Header {
+	log.Info("FindBlockByTimestamp start", "timestamp", timestamp)
 	var blockNumber *big.Int
 	var high, low uint64
 
@@ -77,7 +78,7 @@ func FindBlockByTimestamp(timestamp uint64) *types.Header {
 	}
 
 	header := binarySearch(timestamp, high, low)
-	log.Debug("FindBlockByTimestamp finished", "timestamp", timestamp, "block", header.Number, "blockTimestamp", header.Time, "high", high, "low", low)
+	log.Info("FindBlockByTimestamp finished", "timestamp", timestamp, "block", header.Number, "blockTimestamp", header.Time, "high", high, "low", low)
 	return header
 }
 
@@ -92,7 +93,7 @@ func binarySearch(timestamp, high, low uint64) *types.Header {
 		if headerTime > timestamp {
 			high = mid
 		} else {
-			low = mid - 1
+			low = mid + 1
 		}
 	}
 	return capi.LoopGetBlockHeader(new(big.Int).SetUint64(low))

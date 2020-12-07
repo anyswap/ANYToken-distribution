@@ -2,6 +2,7 @@ package callapi
 
 import (
 	"math/big"
+	"time"
 
 	"github.com/anyswap/ANYToken-distribution/log"
 	"github.com/fsn-dev/fsn-go-sdk/efsn/common"
@@ -29,4 +30,15 @@ func (c *APICaller) GetRegisteredNodeID(stakeContract, account common.Address, b
 		return "", err
 	}
 	return UnpackABIEncodedStringInIndex(res, 2)
+}
+
+// LoopGetStakeAmount loop get stake amount
+func (c *APICaller) LoopGetStakeAmount(stakeContract, account common.Address, blockNumber *big.Int) *big.Int {
+	for {
+		stakeAmount, err := c.GetStakeAmount(stakeContract, account, blockNumber)
+		if err == nil {
+			return stakeAmount
+		}
+		time.Sleep(c.rpcRetryInterval)
+	}
 }

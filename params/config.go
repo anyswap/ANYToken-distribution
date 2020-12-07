@@ -13,9 +13,11 @@ import (
 
 const defaultBlockTime uint64 = 13
 
-var config = &Config{}
+var (
+	config = &Config{}
 
-var factoryAddresses []common.Address
+	factoryAddresses []common.Address
+)
 
 // Config config
 type Config struct {
@@ -25,6 +27,7 @@ type Config struct {
 	Distribute *DistributeConfig
 	Exchanges  []*ExchangeConfig
 	Factories  []string
+	Stake      *StakeConfig
 }
 
 // MongoDBConfig mongodb config
@@ -39,6 +42,16 @@ type MongoDBConfig struct {
 type GatewayConfig struct {
 	APIAddress       string
 	AverageBlockTime uint64
+}
+
+// StakeConfig struct
+type StakeConfig struct {
+	Contract string
+	Points   []uint64 // whole unit
+	Percents []uint64
+	Stakers  []string
+
+	stakersMap map[common.Address]struct{}
 }
 
 // GetAverageBlockTime average block time
@@ -211,6 +224,10 @@ func LoadConfig(configFile string) *Config {
 	if err := CheckConfig(); err != nil {
 		log.Fatalf("Check config failed. %v", err)
 	}
+
+	if tmpConfig.Stake != nil {
+		tmpConfig.Stake.initStakersMap()
+	}
 	return tmpConfig
 }
 
@@ -237,4 +254,20 @@ func SetDustRewardThreshold(dustThreshold string) {
 		config.Distribute = &DistributeConfig{}
 	}
 	config.Distribute.DustRewardThreshold = dustThreshold
+}
+
+// IsInStakerList in in staker list
+func IsInStakerList(account common.Address) bool {
+	if config.Stake == nil {
+		return false
+	}
+	_, exist := config.Stake.stakersMap[account]
+	return exist
+}
+
+func (s *StakeConfig) initStakersMap() {
+	s.stakersMap = make(map[common.Address]struct{}, len(s.Stakers))
+	for _, staker := range s.Stakers {
+		s.stakersMap[common.HexToAddress(staker)] = struct{}{}
+	}
 }

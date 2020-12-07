@@ -39,6 +39,10 @@ func CheckConfig() (err error) {
 			return fmt.Errorf("wrong factory address %v", factory)
 		}
 	}
+	err = checkStakeConfig()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -76,6 +80,38 @@ func checkDistributeConfig() error {
 	}
 	if err := dist.check(); err != nil {
 		return err
+	}
+	return nil
+}
+
+func checkStakeConfig() error {
+	if config.Stake == nil {
+		return nil
+	}
+	if !common.IsHexAddress(config.Stake.Contract) {
+		return fmt.Errorf("wrong stake contract address %v", config.Stake.Contract)
+	}
+	for _, staker := range config.Stake.Stakers {
+		if !common.IsHexAddress(staker) {
+			return fmt.Errorf("wrong staker address %v", staker)
+		}
+	}
+	if len(config.Stake.Points) != len(config.Stake.Percents) {
+		return fmt.Errorf("count of points and percents not equal")
+	}
+	prev := uint64(0)
+	for _, point := range config.Stake.Points {
+		if point <= prev {
+			return fmt.Errorf("points is not ascending sorted")
+		}
+		prev = point
+	}
+	prev = uint64(0)
+	for _, percent := range config.Stake.Percents {
+		if percent <= prev {
+			return fmt.Errorf("percents is not ascending sorted")
+		}
+		prev = percent
 	}
 	return nil
 }

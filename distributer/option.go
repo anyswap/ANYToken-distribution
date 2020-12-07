@@ -587,7 +587,7 @@ func (opt *Option) updateNoVolumes(noVolumeStarts []uint64) {
 func (opt *Option) GetAccountsAndRewardsFromDB(exchange string) (accountStats mongodb.AccountStatSlice) {
 	step := opt.StepCount
 	if step == 0 {
-		return getSingleCycleRewardsFromDB(opt.TotalValue, exchange, opt.StartHeight, opt.EndHeight, opt.UseTimeMeasurement)
+		return getSingleCycleRewardsFromDB(opt.TotalValue, exchange, opt.StartHeight, opt.EndHeight, opt.UseTimeMeasurement, opt.ArchiveMode)
 	}
 
 	// use map to statistic
@@ -598,7 +598,7 @@ func (opt *Option) GetAccountsAndRewardsFromDB(exchange string) (accountStats mo
 
 	var noVolumeStarts []uint64
 	for start := opt.StartHeight; start < opt.EndHeight; start += step {
-		cycleStats := getSingleCycleRewardsFromDB(stepRewards, exchange, start, start+step, opt.UseTimeMeasurement)
+		cycleStats := getSingleCycleRewardsFromDB(stepRewards, exchange, start, start+step, opt.UseTimeMeasurement, opt.ArchiveMode)
 		if len(cycleStats) == 0 {
 			WriteNoVolumeOutput(exchange, start, start+step)
 			noVolumeStarts = append(noVolumeStarts, start)
@@ -627,10 +627,17 @@ func (opt *Option) GetAccountsAndRewardsFromDB(exchange string) (accountStats mo
 	return accountStats
 }
 
-func getSingleCycleRewardsFromDB(totalRewards *big.Int, exchange string, startHeight, endHeight uint64, useTimestamp bool) mongodb.AccountStatSlice {
+func getSingleCycleRewardsFromDB(totalRewards *big.Int, exchange string, startHeight, endHeight uint64, useTimestamp, archiveMode bool) mongodb.AccountStatSlice {
 	accountStats := mongodb.FindAccountVolumes(exchange, startHeight, endHeight, useTimestamp)
 	if len(accountStats) == 0 {
 		return nil
+	}
+	if params.GetConfig().Stake != nil {
+		var blockNumber *big.Int
+		if archiveMode {
+			blockNumber = new(big.Int).SetUint64(endHeight)
+		}
+		weightedByStakeAmount(accountStats, blockNumber)
 	}
 	accountStats.CalcRewards(totalRewards)
 
@@ -642,6 +649,39 @@ func getSingleCycleRewardsFromDB(totalRewards *big.Int, exchange string, startHe
 	}
 
 	return accountStats
+}
+
+func weightedByStakeAmount(accountStats mongodb.AccountStatSlice, blockNumber *big.Int) {
+	stakeCfg := params.GetConfig().Stake
+	stakeContract := common.HexToAddress(stakeCfg.Contract)
+	for _, stat := range accountStats {
+		if !params.IsInStakerList(stat.Account) {
+			continue
+		}
+		stakeAmount := capi.LoopGetStakeAmount(stakeContract, stat.Account, blockNumber)
+		stakeWholeAmount := stakeAmount.Div(stakeAmount, big.NewInt(1e18)).Uint64()
+		addPercent := calcAddPercentOfStaking(stakeWholeAmount)
+		if addPercent == 0 {
+			continue
+		}
+		added := new(big.Int).Mul(stat.Share, new(big.Int).SetUint64(addPercent))
+		added.Div(added, big.NewInt(100))
+		log.Trace("add weighted volume share by stake", "account", stat.Account.String(),
+			"origin", stat.Share, "added", added, "addPercent", addPercent,
+			"stakeAmount", stakeAmount, "stakeWholeAmount", stakeWholeAmount,
+			"blockNumber", blockNumber)
+		stat.Share.Add(stat.Share, added)
+	}
+}
+
+func calcAddPercentOfStaking(stakeWholeAmount uint64) (percent uint64) {
+	stakeCfg := params.GetConfig().Stake
+	for _, point := range stakeCfg.Points {
+		if stakeWholeAmount >= point {
+			percent = point
+		}
+	}
+	return percent
 }
 
 // GetAccountsAndRewardsFromFile pass line format "<address> <amount>" from input file

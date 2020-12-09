@@ -41,13 +41,29 @@ func ByVolume(opt *Option) error {
 	if totalReward.Sign() <= 0 {
 		return nil
 	}
-	rewards := opt.divideVolumeRewardsByExchange(accountStats, totalReward)
+	var rewards []*big.Int
+	if opt.WeightIsPercentage {
+		rewards = opt.divideVolumeRewardsByPercentage(totalReward)
+	} else {
+		rewards = opt.divideVolumeRewardsByExchange(accountStats, totalReward)
+	}
 	if len(rewards) != len(accountStats) {
 		log.Warn("[byvolume] divided rewards by exchange liquidity failed")
 		return nil
 	}
 	mongodb.CalcRewardsInBatch(accountStats, rewards)
 	return opt.dispatchRewards(accountStats)
+}
+
+func (opt *Option) divideVolumeRewardsByPercentage(totalReward *big.Int) []*big.Int {
+	if len(opt.Weights) == 1 {
+		return []*big.Int{totalReward}
+	}
+	shares := make([]*big.Int, len(opt.Weights))
+	for i, percent := range opt.Weights {
+		shares[i] = new(big.Int).SetUint64(percent)
+	}
+	return mongodb.DivideRewards(totalReward, shares)
 }
 
 func calcPrevCycleSttEnd(height uint64, useTimeMeasurement bool) (preCycleStart, preCycleEnd uint64) {

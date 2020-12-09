@@ -110,6 +110,8 @@ type DistributeConfig struct {
 	StableDuration        uint64 // unit of seconds
 	ByLiquidCycleDuration uint64 // unit of seconds
 	ByVolumeCycleDuration uint64 // unit of seconds
+
+	TradeWeightIsPercentage bool
 }
 
 // IsScanAllExchange is scan all exchange

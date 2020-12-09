@@ -41,6 +41,7 @@ ByVolumeCycleDuration = 1800  # unit of seconds
 
 QuickSettleVolumeRewards = false
 DustRewardThreshold = "100000000000000"
+TradeWeightIsPercentage = false
 
 [[Exchanges]]
 Pairs = "ANY"

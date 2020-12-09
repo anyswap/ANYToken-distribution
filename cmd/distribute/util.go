@@ -73,6 +73,7 @@ func getOptionAndTxArgs(ctx *cli.Context) (*distributer.Option, error) {
 		BatchInterval:      ctx.Uint64(utils.BatchIntervalFlag.Name),
 		UseTimeMeasurement: ctx.Bool(utils.UseTimeMeasurementFlag.Name),
 		ArchiveMode:        ctx.Bool(utils.ArchiveModeFlag.Name),
+		WeightIsPercentage: ctx.Bool(utils.PercentageWeightFlag.Name),
 	}
 
 	if ctx.IsSet(utils.RewardTyepFlag.Name) {

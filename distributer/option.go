@@ -35,6 +35,8 @@ type Option struct {
 	DryRun       bool
 	ArchiveMode  bool
 
+	WeightIsPercentage bool
+
 	BatchCount    uint64
 	BatchInterval uint64
 
@@ -159,6 +161,15 @@ func (opt *Option) checkWeights() error {
 	for i, weight := range opt.Weights {
 		if weight == 0 {
 			return fmt.Errorf("[check option] has zero weight exchange %v", opt.Exchanges[i])
+		}
+	}
+	if opt.WeightIsPercentage {
+		sumWeight := uint64(0)
+		for _, weight := range opt.Weights {
+			sumWeight += weight
+		}
+		if sumWeight != 100 {
+			return fmt.Errorf("[check option] sum of percentage weight is %v, not equal to 100", sumWeight)
 		}
 	}
 	return nil

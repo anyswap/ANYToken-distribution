@@ -243,6 +243,11 @@ var (
 		Name:  "archivemode",
 		Usage: "is archive mode",
 	}
+	// PercentageWeightFlag --percentWeight
+	PercentageWeightFlag = &cli.BoolFlag{
+		Name:  "percentWeight",
+		Usage: "weight is percentage",
+	}
 )
 
 // SyncArguments command line arguments

@@ -100,6 +100,7 @@ type distributeRunner struct {
 	quickSettleVolumeRewards bool
 	useTimeMeasurement       bool
 	isArchiveMode            bool
+	tradeWeightIsPercentage  bool
 
 	byLiquidArgs *BuildTxArgs
 	byVolumeArgs *BuildTxArgs
@@ -152,6 +153,7 @@ func initDistributer(distCfg *params.DistributeConfig) (*distributeRunner, error
 	runner.totalVolumeCycles = runner.byLiquidCycleLen / runner.byVolumeCycleLen
 	runner.totalVolumeRewards = new(big.Int).Mul(runner.byVolumeCycleRewards, new(big.Int).SetUint64(runner.totalVolumeCycles))
 
+	runner.tradeWeightIsPercentage = distCfg.TradeWeightIsPercentage
 	for _, exchange := range params.GetConfig().Exchanges {
 		if exchange.LiquidWeight > 0 {
 			runner.liquidExchanges = append(runner.liquidExchanges, exchange.Exchange)
@@ -278,6 +280,8 @@ func (runner *distributeRunner) sendVolumeRewards(rewards *big.Int, start, end u
 		RewardToken:        runner.rewardToken,
 		DryRun:             true,
 		UseTimeMeasurement: runner.useTimeMeasurement,
+		ArchiveMode:        runner.isArchiveMode,
+		WeightIsPercentage: runner.tradeWeightIsPercentage,
 	}
 	log.Info("start send volume reward", "option", opt.String())
 	err = ByVolume(opt)

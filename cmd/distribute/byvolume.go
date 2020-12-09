@@ -40,6 +40,7 @@ distribute rewards by volume
 			utils.BatchCountFlag,
 			utils.BatchIntervalFlag,
 			utils.UseTimeMeasurementFlag,
+			utils.PercentageWeightFlag,
 		},
 	}
 )

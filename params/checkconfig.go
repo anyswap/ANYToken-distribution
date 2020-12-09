@@ -50,6 +50,7 @@ func checkExchangeConfig() error {
 	pairsMap := make(map[string]struct{})
 	exchangeMap := make(map[string]struct{})
 	tokenMap := make(map[string]struct{})
+	sumTradeWeight := uint64(0)
 	for _, ex := range config.Exchanges {
 		if err := ex.check(); err != nil {
 			return err
@@ -69,6 +70,12 @@ func checkExchangeConfig() error {
 		pairsMap[pairs] = struct{}{}
 		exchangeMap[exchange] = struct{}{}
 		tokenMap[token] = struct{}{}
+		sumTradeWeight += ex.TradeWeight
+	}
+	if config.Distribute.TradeWeightIsPercentage {
+		if !(sumTradeWeight == 100 || sumTradeWeight == 0) {
+			return fmt.Errorf("sum of trade percentage weight is %v, not equal to 100 or 0", sumTradeWeight)
+		}
 	}
 	return nil
 }

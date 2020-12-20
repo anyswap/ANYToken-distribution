@@ -114,7 +114,7 @@ func addExchangeReceipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int,
 func addErc20Receipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, logType string) bool {
 	erc20Address := strings.ToLower(rlog.Address.String())
 	if !(params.IsConfigedToken(erc20Address) || params.IsConfigedExchange(erc20Address)) {
-		if !(params.IsScanAllExchange() && isCachedTokenOrExchange(common.HexToAddress(erc20Address))) {
+		if !(params.IsScanAllExchange() && params.IsInAllTokenAndExchanges(common.HexToAddress(erc20Address))) {
 			return false
 		}
 	}
@@ -158,7 +158,7 @@ func recordAccounts(exchange, pairs, account string) {
 
 func recordTokenAccounts(token, account string) {
 	if params.IsConfigedExchange(token) ||
-		(params.IsScanAllExchange() && isCachedExchange(common.HexToAddress(token))) {
+		(params.IsScanAllExchange() && params.IsInAllExchanges(common.HexToAddress(token))) {
 		exchange := token
 		pairs := params.GetExchangePairs(exchange)
 		recordAccounts(exchange, pairs, account)
@@ -184,11 +184,8 @@ func recordAccountVoumes(mt *mongodb.MgoTransaction, exReceipt *mongodb.Exchange
 		return
 	}
 
-	if !params.IsConfigedExchange(exReceipt.Exchange) {
-		return
-	}
-
-	if params.IsConfigedExchange(exReceipt.Address) { // in case of token to token swap
+	// in case of token to token swap, exclude buyer of exchange
+	if params.IsInAllExchanges(common.HexToAddress(exReceipt.Address)) {
 		return
 	}
 
@@ -228,10 +225,6 @@ func updateVolumes(mt *mongodb.MgoTransaction, exReceipt *mongodb.ExchangeReceip
 	}
 
 	if !(logTopic == topicTokenPurchase || logTopic == topicEthPurchase) {
-		return
-	}
-
-	if !params.IsConfigedExchange(exReceipt.Exchange) {
 		return
 	}
 

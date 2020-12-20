@@ -19,6 +19,12 @@ var (
 	factoryAddresses []common.Address
 )
 
+// all exchanges and tokens of configed factories
+var (
+	AllExchanges = make(map[common.Address]struct{})
+	AllTokens    = make(map[common.Address]struct{})
+)
+
 // Config config
 type Config struct {
 	MongoDB    *MongoDBConfig
@@ -197,6 +203,16 @@ func GetFactories() []common.Address {
 	return factoryAddresses
 }
 
+// IsConfigedFactory is configed factory
+func IsConfigedFactory(factory common.Address) bool {
+	for _, fact := range GetFactories() {
+		if factory == fact {
+			return true
+		}
+	}
+	return false
+}
+
 // GetConfig get config items structure
 func GetConfig() *Config {
 	return config
@@ -233,13 +249,41 @@ func LoadConfig(configFile string) *Config {
 	return tmpConfig
 }
 
+// AddTokenAndExchange add token and exchange
+func AddTokenAndExchange(token, exchange common.Address) {
+	if token == (common.Address{}) || exchange == (common.Address{}) {
+		return
+	}
+	AllTokens[token] = struct{}{}
+	AllExchanges[exchange] = struct{}{}
+}
+
+// IsInAllTokens is exchange token
+func IsInAllTokens(token common.Address) bool {
+	_, exist := AllTokens[token]
+	return exist
+}
+
+// IsInAllExchanges is in all exchanges
+func IsInAllExchanges(exchange common.Address) bool {
+	_, exist := AllExchanges[exchange]
+	return exist
+}
+
+// IsInAllTokenAndExchanges is in all exchanges or tokens
+func IsInAllTokenAndExchanges(address common.Address) bool {
+	return IsInAllTokens(address) || IsInAllExchanges(address)
+}
+
 // IsExcludedRewardAccount is excluded
 func IsExcludedRewardAccount(account common.Address) bool {
-	accountStr := strings.ToLower(account.String())
-	if IsConfigedExchange(accountStr) {
+	if account == (common.Address{}) {
 		return true
 	}
-	return account == (common.Address{})
+	if IsConfigedExchange(account.String()) {
+		return true
+	}
+	return IsInAllExchanges(account)
 }
 
 // GetDustRewardThreshold get dust reward threshold

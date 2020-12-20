@@ -132,6 +132,16 @@ func (c *APICaller) GetExchangeTokenAddress(exchange common.Address) common.Addr
 	return common.BytesToAddress(common.GetData(res, 0, 32))
 }
 
+// GetExchangeFactoryAddress get exchange's factory address
+func (c *APICaller) GetExchangeFactoryAddress(exchange common.Address) common.Address {
+	factoryAddress := common.FromHex("0x966dae0e")
+	res, err := c.CallContract(exchange, factoryAddress, nil)
+	if err != nil {
+		return common.Address{}
+	}
+	return common.BytesToAddress(common.GetData(res, 0, 32))
+}
+
 // GetAccountNonce get account nonce
 func (c *APICaller) GetAccountNonce(account common.Address) (uint64, error) {
 	return c.client.PendingNonceAt(c.context, account)

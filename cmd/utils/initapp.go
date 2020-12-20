@@ -78,7 +78,11 @@ func verifyConfig(capi *callapi.APICaller) error {
 		if token != wantToken {
 			return fmt.Errorf("exchange token mismatch. exchange %v want token %v, but have %v", ex.Exchange, wantToken.String(), ex.Token)
 		}
-		log.Info("verify exchange token success", "exchange", ex.Exchange, "token", ex.Token)
+		factory := capi.GetExchangeFactoryAddress(exchange)
+		if !params.IsConfigedFactory(factory) {
+			return fmt.Errorf("exchange %v 's factory %v is not configed", ex.Exchange, factory.String())
+		}
+		log.Info("verify exchange token success", "exchange", ex.Exchange, "token", ex.Token, "factory", factory.String())
 	}
 	return nil
 }

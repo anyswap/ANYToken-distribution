@@ -184,9 +184,13 @@ func initDistributer(distCfg *params.DistributeConfig) (*distributeRunner, error
 }
 
 func waitNodeSyncFinish() {
+	diffAlmostSyncToHeighest := uint64(100)
 	for {
-		isNodeSyncing := capi.IsNodeSyncing()
-		if !isNodeSyncing {
+		syncProgress := capi.GetSyncProgress()
+		if syncProgress == nil {
+			break
+		}
+		if syncProgress.CurrentBlock+diffAlmostSyncToHeighest > syncProgress.HighestBlock {
 			break
 		}
 		log.Warn("wait node syncing finish in process")
@@ -209,7 +213,8 @@ func (runner *distributeRunner) run() {
 
 func (runner *distributeRunner) runVolumeDistribute(wg *sync.WaitGroup, curCycleStart uint64) {
 	defer wg.Done()
-	if len(runner.tradeExchanges) == 0 {
+	if len(runner.tradeExchanges) == 0 || runner.byVolumeCycleRewards.Sign() <= 0 {
+		log.Info("stop volume reward distribution as no exchange or rewards")
 		return
 	}
 	log.Info("start volume reward distribution", "start", curCycleStart)
@@ -224,7 +229,8 @@ func (runner *distributeRunner) runVolumeDistribute(wg *sync.WaitGroup, curCycle
 
 func (runner *distributeRunner) runLiquidDistribute(wg *sync.WaitGroup, curCycleStart uint64) {
 	defer wg.Done()
-	if len(runner.liquidExchanges) == 0 {
+	if len(runner.liquidExchanges) == 0 || runner.byLiquidCycleRewards.Sign() <= 0 {
+		log.Info("stop liquid reward distribution as no exchange or rewards")
 		return
 	}
 	log.Info("start liquid reward distribution", "start", curCycleStart)
@@ -264,7 +270,7 @@ func (runner *distributeRunner) settleVolumeRewards(cycleStart, cycleEnd uint64)
 }
 
 func (runner *distributeRunner) sendVolumeRewards(rewards *big.Int, start, end uint64) (missVolumeCycles uint64, err error) {
-	if len(runner.tradeExchanges) == 0 {
+	if len(runner.tradeExchanges) == 0 || rewards == nil || rewards.Sign() <= 0 {
 		return 0, nil
 	}
 	opt := &Option{
@@ -294,7 +300,7 @@ func (runner *distributeRunner) sendVolumeRewards(rewards *big.Int, start, end u
 }
 
 func (runner *distributeRunner) sendLiquidRewards(rewards *big.Int, start, end uint64, inputFiles []string) error {
-	if len(runner.liquidExchanges) == 0 {
+	if len(runner.liquidExchanges) == 0 || rewards == nil || rewards.Sign() <= 0 {
 		return nil
 	}
 	opt := &Option{
@@ -328,6 +334,7 @@ func waitCycleEnd(cycleName string, cycleStart, cycleEnd, stable uint64, waitInt
 		syncInfo, err := mongodb.FindLatestSyncInfo()
 		if err != nil {
 			log.Warn("find latest sync info failed", "err", err)
+			time.Sleep(waitInterval)
 			continue
 		}
 		if useTimeMeasurement {

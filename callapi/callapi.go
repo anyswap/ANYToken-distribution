@@ -162,13 +162,13 @@ func (c *APICaller) SuggestGasPrice() (*big.Int, error) {
 	return c.client.SuggestGasPrice(c.context)
 }
 
-// IsNodeSyncing return if full node is in syncing state
-func (c *APICaller) IsNodeSyncing() bool {
+// GetSyncProgress get full node syncing state
+func (c *APICaller) GetSyncProgress() *ethereum.SyncProgress {
 	for {
 		progress, err := c.client.SyncProgress(c.context)
 		if err == nil {
 			log.Info("call eth_syncing success", "progress", progress)
-			return progress != nil
+			return progress
 		}
 		log.Warn("call eth_syncing failed", "err", err)
 		time.Sleep(c.rpcRetryInterval)

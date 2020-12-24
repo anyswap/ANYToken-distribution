@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/anyswap/ANYToken-distribution/cmd/utils"
 	"github.com/anyswap/ANYToken-distribution/distributer"
@@ -38,6 +39,7 @@ send rewards batchly according to verified input file with line format: <address
 			utils.DryRunFlag,
 			utils.BatchCountFlag,
 			utils.BatchIntervalFlag,
+			utils.ScalingValueFlag,
 		},
 	}
 )
@@ -61,6 +63,39 @@ func sendRewards(ctx *cli.Context) error {
 		log.Fatalf("get option error: %v", err)
 	}
 
+	opt.ScalingNumerator, opt.ScalingDenominator = getScalingValue(ctx.String(utils.ScalingValueFlag.Name))
+
 	defer capi.CloseClient()
 	return opt.SendRewardsFromFile()
+}
+
+func getScalingValue(scalingStr string) (numerator, denominator *big.Int) {
+	if scalingStr == "" {
+		return
+	}
+	parts := blankOrCommaSepRegexp.Split(scalingStr, -1)
+	if len(parts) > 2 {
+		log.Fatalf("wrong scaling value '%v'", scalingStr)
+	}
+	var ok bool
+	numerator, ok = new(big.Int).SetString(parts[0], 0)
+	if !ok {
+		log.Fatalf("wrong scaling numerator '%v'", parts[0])
+	}
+	if len(parts) > 1 {
+		denominator, ok = new(big.Int).SetString(parts[1], 0)
+		if !ok || denominator.Sign() == 0 {
+			log.Fatalf("wrong scaling denominator '%v'", parts[1])
+		}
+	} else if numerator.Cmp(big.NewInt(1)) == 0 {
+		numerator = nil
+	}
+	if numerator != nil {
+		log.Info("get scaling value",
+			"scalingStr", scalingStr,
+			"numerator", numerator,
+			"denominator", denominator,
+			"decrease", denominator != nil && numerator.Cmp(denominator) < 0)
+	}
+	return numerator, denominator
 }

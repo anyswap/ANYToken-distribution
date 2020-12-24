@@ -248,6 +248,11 @@ var (
 		Name:  "percentWeight",
 		Usage: "weight is percentage",
 	}
+	// ScalingValueFlag --scaling
+	ScalingValueFlag = &cli.StringFlag{
+		Name:  "scaling",
+		Usage: "scaling value, comma separated interger of numerator and denominator. eg. 80,100 is scaling 80%",
+	}
 )
 
 // SyncArguments command line arguments

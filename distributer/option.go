@@ -46,6 +46,9 @@ type Option struct {
 	// SampleHeight is always block heights, not timestamp
 	UseTimeMeasurement bool
 
+	ScalingNumerator   *big.Int
+	ScalingDenominator *big.Int
+
 	byWhat    string
 	noVolumes uint64
 
@@ -147,6 +150,9 @@ func (opt *Option) CheckBasic() error {
 	}
 	if !common.IsHexAddress(opt.RewardToken) {
 		return fmt.Errorf("[check option] wrong reward token: '%v'", opt.RewardToken)
+	}
+	if opt.ScalingDenominator != nil && opt.ScalingDenominator.Sign() == 0 {
+		return fmt.Errorf("[check option] scaling denominator is zero (divided by zero)")
 	}
 	return nil
 }

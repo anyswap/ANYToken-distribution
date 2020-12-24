@@ -200,6 +200,16 @@ func (opt *Option) checkSendRewardsFromFile(ifile string) (mongodb.AccountStatSl
 		return nil, nil
 	}
 
+	// scaling reward value
+	if opt.ScalingNumerator != nil {
+		for _, stat := range accountStats {
+			stat.Reward.Mul(stat.Reward, opt.ScalingNumerator)
+			if opt.ScalingDenominator != nil {
+				stat.Reward.Div(stat.Reward, opt.ScalingDenominator)
+			}
+		}
+	}
+
 	// assign total value before check balance
 	opt.TotalValue = accountStats.CalcTotalReward()
 	if opt.RewardToken != "" {

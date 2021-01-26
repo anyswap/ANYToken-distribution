@@ -39,6 +39,11 @@ func CheckConfig() (err error) {
 			return fmt.Errorf("wrong factory address %v", factory)
 		}
 	}
+	for _, router := range config.Routers {
+		if !common.IsHexAddress(router) {
+			return fmt.Errorf("wrong router address %v", router)
+		}
+	}
 	err = checkStakeConfig()
 	if err != nil {
 		return err

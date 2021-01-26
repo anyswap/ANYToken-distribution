@@ -20,6 +20,10 @@ var (
 	topicTransfer        = common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
 	topicApproval        = common.HexToHash("0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925")
 	topicCreateExchange  = common.HexToHash("0x9d42cb017eb05bd8944ab536a8b35bc68085931dd5f4356489801453923953f9")
+	// exchange v2 topics
+	topicMint = common.HexToHash("0x4c209b5fc8ad50758f13e2e1088ba56a560dff690a1c6fef26394f4c03821c4f")
+	topicBurn = common.HexToHash("0xdccd412f0b1252819cb1fd330b93224ca42612892bb3f4f789976e6d81936496")
+	topicSwap = common.HexToHash("0xd78ad95fa46c994b6551d0da85fc275fe613ce37657fb8d5e3d130840159d822")
 )
 
 const secondsPerDay = 24 * 3600
@@ -61,6 +65,12 @@ func parseReceipt(mt *mongodb.MgoTransaction, receipt *types.Receipt) (savedb bo
 			save = addErc20Receipt(mt, rlog, idx, "Approval")
 		case topicCreateExchange:
 			addExchanges(rlog)
+		case topicMint:
+			save = addExchangeV2Receipt(mt, rlog, idx, "Mint")
+		case topicBurn:
+			save = addExchangeV2Receipt(mt, rlog, idx, "Burn")
+		case topicSwap:
+			save = addExchangeV2Receipt(mt, rlog, idx, "Swap")
 		}
 		if save {
 			savedb = true
@@ -239,4 +249,60 @@ func updateVolumes(mt *mongodb.MgoTransaction, exReceipt *mongodb.ExchangeReceip
 	_ = mongodb.TryDoTimes("UpdateVolume "+mt.Hash, func() error {
 		return mongodb.UpdateVolumeWithReceipt(exReceipt, mt.BlockHash, mt.BlockNumber, timestamp)
 	})
+}
+
+func addExchangeV2Receipt(mt *mongodb.MgoTransaction, rlog *types.Log, logIdx int, logType string) bool {
+	exchange := strings.ToLower(rlog.Address.String())
+	topics := rlog.Topics
+	data := rlog.Data
+
+	if len(topics) < 2 || len(data) < 64 {
+		return false
+	}
+
+	exReceipt := &mongodb.ExchangeV2Receipt{
+		LogType:  logType,
+		LogIndex: logIdx,
+		Exchange: exchange,
+	}
+
+	exReceipt.Sender = strings.ToLower(common.BytesToAddress(topics[1].Bytes()).String())
+	if !params.IsConfigedRouter(exReceipt.Sender) {
+		return false
+	}
+	if len(topics) == 3 {
+		exReceipt.To = strings.ToLower(common.BytesToAddress(topics[2].Bytes()).String())
+	}
+
+	switch topics[0] {
+	case topicMint:
+		if len(topics) != 2 || len(data) != 64 {
+			return false
+		}
+		exReceipt.Amount0In = new(big.Int).SetBytes(data[0:32]).String()
+		exReceipt.Amount1In = new(big.Int).SetBytes(data[32:64]).String()
+		log.Info("[parse] mint", "exchange", exReceipt.Exchange, "amount0In", exReceipt.Amount0In, "amount1In", exReceipt.Amount1In)
+	case topicBurn:
+		if len(topics) != 3 || len(data) != 64 {
+			return false
+		}
+		exReceipt.Amount0Out = new(big.Int).SetBytes(data[0:32]).String()
+		exReceipt.Amount1Out = new(big.Int).SetBytes(data[32:64]).String()
+		log.Info("[parse] burn", "exchange", exReceipt.Exchange, "amount0Out", exReceipt.Amount0Out, "amount1Out", exReceipt.Amount1Out)
+	case topicSwap:
+		if len(topics) != 3 || len(data) != 128 {
+			return false
+		}
+		exReceipt.Amount0In = new(big.Int).SetBytes(data[0:32]).String()
+		exReceipt.Amount1In = new(big.Int).SetBytes(data[32:64]).String()
+		exReceipt.Amount0Out = new(big.Int).SetBytes(data[64:96]).String()
+		exReceipt.Amount1Out = new(big.Int).SetBytes(data[96:128]).String()
+		log.Info("[parse] swap", "exchange", exReceipt.Exchange, "amount0In", exReceipt.Amount0In, "amount1In", exReceipt.Amount1In, "amount0Out", exReceipt.Amount0Out, "amount1Out", exReceipt.Amount1Out)
+	default:
+		return false
+	}
+
+	mt.ExchangeV2Receipts = append(mt.ExchangeV2Receipts, exReceipt)
+	log.Debug("addExchangeV2Receipt", "receipt", exReceipt)
+	return true
 }

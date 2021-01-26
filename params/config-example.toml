@@ -1,4 +1,5 @@
 Factories = ["0xa12cba22e4c316820bf4883ebb98a3789cf194a3"]
+Router = ["0x479ab92bf721de918f01d455e90540149dbfd9da"]
 
 # modgodb database connection config
 [MongoDB]

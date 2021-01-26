@@ -17,6 +17,7 @@ var (
 	config = &Config{}
 
 	factoryAddresses []common.Address
+	routerAddresses  []common.Address
 )
 
 // all exchanges and tokens of configed factories
@@ -34,6 +35,7 @@ type Config struct {
 	Exchanges  []*ExchangeConfig
 	Factories  []string
 	Stake      *StakeConfig
+	Routers    []string // for exchange v2
 }
 
 // MongoDBConfig mongodb config
@@ -207,6 +209,28 @@ func GetFactories() []common.Address {
 func IsConfigedFactory(factory common.Address) bool {
 	for _, fact := range GetFactories() {
 		if factory == fact {
+			return true
+		}
+	}
+	return false
+}
+
+// GetRouters get routers
+func GetRouters() []common.Address {
+	if routerAddresses == nil {
+		routers := make([]common.Address, len(config.Routers))
+		for i, router := range config.Routers {
+			routers[i] = common.HexToAddress(router)
+		}
+		routerAddresses = routers
+	}
+	return routerAddresses
+}
+
+// IsConfigedRouter return true if router is configed
+func IsConfigedRouter(router string) bool {
+	for _, item := range GetRouters() {
+		if strings.EqualFold(item.String(), router) {
 			return true
 		}
 	}

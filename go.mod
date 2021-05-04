@@ -6,7 +6,7 @@ require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/aristanetworks/goarista v0.0.0-20200609010056-95bcf8053598 // indirect
 	github.com/fastly/go-utils v0.0.0-20180712184237-d95a45783239 // indirect
-	github.com/fsn-dev/fsn-go-sdk v0.0.0-20201127063150-d66d045799f9
+	github.com/fsn-dev/fsn-go-sdk v0.0.0-20210430081410-a6b17c99c3ea
 	github.com/jehiah/go-strftime v0.0.0-20171201141054-1d33003b3869 // indirect
 	github.com/lestrrat-go/file-rotatelogs v0.0.0-20201029035330-b789b39afbd7
 	github.com/lestrrat-go/strftime v1.0.1 // indirect
